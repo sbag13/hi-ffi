@@ -67,14 +67,14 @@ fn write_swift_code(wrapper: &Wrapper) {
         std::fs::create_dir_all(&ffi_module_path).expect("Unable to create Ffi directory");
 
         let c_ffi_package_file = c_ffi_package_path.join("Package.swift");
-        write_to_file(swift_c_ffi_package_definition(), &c_ffi_package_file);
+        write_to_file(swift_c_ffi_package_definition(), c_ffi_package_file);
 
         let ffi_package_file = ffi_package_path.join("Package.swift");
-        write_to_file(swift_ffi_package_definition(), &ffi_package_file);
+        write_to_file(swift_ffi_package_definition(), ffi_package_file);
 
         let module_map = c_ffi_module_path.join("module.modulemap");
         let package_name = std::env::var("CARGO_PKG_NAME").expect("Package name expected");
-        write_to_file(clang_module_map(package_name), &module_map);
+        write_to_file(clang_module_map(package_name), module_map);
 
         write_to_file(swift_c_header_code_base(), &swift_header_path);
 
@@ -134,6 +134,7 @@ fn write_to_file(content: impl Display, path: impl AsRef<Path>) {
     writeln!(file, "{}", content).expect("Unable to write data");
 }
 
+#[cfg(feature = "swift")]
 fn append_to_file(content: impl Display, path: impl AsRef<Path>) {
     let mut file = OpenOptions::new()
         .create(true)

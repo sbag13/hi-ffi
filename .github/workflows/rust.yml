@@ -20,7 +20,13 @@ jobs:
       run: cargo build --verbose
     - name: Run clippy
       run: cargo clippy --all-features
+    - name: Build tests crate
+      run: cd tests && cargo build
     - name: Run c++ example
-      run: cd ./tests/cpp/ && ./test_cpp.sh && cd -
+      run: cd ./tests/cpp/ && ./test_cpp.sh
+    - name: cpp valgrind check
+      uses: Ximaz/valgrind-action@v1.2.0
+      with:
+        binary_path: "./tests/cpp/test"
     - name: Run swift example
-      run: cd ./tests/swift/ && ./test_swift.sh && cd -
+      run: cd ./tests/swift/ && ./test_swift.sh
