@@ -21,6 +21,6 @@ jobs:
     - name: Run clippy
       run: cargo clippy --all-features
     - name: Run c++ example
-      run: cd ./test/cpp/ && ./test_cpp.sh && cd -
+      run: cd ./tests/cpp/ && ./test_cpp.sh && cd -
     - name: Run swift example
-      run: cd ./test/swift/ && ./test_swift.sh && cd -
+      run: cd ./tests/swift/ && ./test_swift.sh && cd -
