@@ -46,7 +46,7 @@ impl From<&StructWrapper> for TokenStream2 {
 
         let mut item_struct = struct_wrapper.original_item_struct.clone();
         item_struct.fields.iter_mut().for_each(|field| {
-            field.attrs.clear(); // TODO remove #[ffi] instead of clear
+            field.attrs.retain(|attr| !attr.path().is_ident("ffi"));
         });
         let struct_definition = quote! {#item_struct};
 

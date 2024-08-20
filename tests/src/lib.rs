@@ -1,10 +1,13 @@
 use stick_to_rust::ffi;
 
+use serde::Serialize;
+
 #[ffi]
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize)]
 struct TestStruct {
     // generate getter and setter
     #[ffi(setter, getter)]
+    #[serde(skip_serializing)] // check if other attributes are preserved
     i32_field: i32,
 
     // generate getter only
@@ -23,7 +26,7 @@ struct TestStruct {
 }
 
 #[ffi]
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize)]
 struct TestStruct2 {
     pub i32_field: i32,
 }

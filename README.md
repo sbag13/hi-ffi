@@ -97,7 +97,5 @@ After building Rust package, the FFI code is generated in `generated_code` direc
 
 # TODO
 
-- cpp tests instead of main
-- push to github
 - pipelines
   - publishing to crates.io
