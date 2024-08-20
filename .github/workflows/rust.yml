@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build-and-test:
 
     runs-on: ubuntu-latest
 
@@ -20,3 +20,7 @@ jobs:
       run: cargo build --verbose
     - name: Run clippy
       run: cargo clippy --all-features
+    - name: Run c++ example
+      run: cd ./test/cpp/ && ./test_cpp.sh && cd -
+    - name: Run swift example
+      run: cd ./test/swift/ && ./test_swift.sh && cd -
