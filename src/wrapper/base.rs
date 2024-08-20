@@ -1,13 +1,13 @@
 use crate::TokenStream2;
 use quote::quote;
 
-pub const SLICE_GET_LEN_FN_NAME: &str = "__stickToRust__$slice_len";
-pub const SLICE_GET_PTR_FN_NAME: &str = "__stickToRust__$slice_ptr";
-pub const SLICE_DROP_FN_NAME: &str = "__stickToRust__$slice_drop";
+pub const SLICE_GET_LEN_FN_NAME: &str = "__hiFfi__$slice_len";
+pub const SLICE_GET_PTR_FN_NAME: &str = "__hiFfi__$slice_ptr";
+pub const SLICE_DROP_FN_NAME: &str = "__hiFfi__$slice_drop";
 
-pub const RUST_STRING_DROP_FN_NAME: &str = "__stickToRust__$rust_string_drop";
-pub const RUST_STRING_DATA_FN_NAME: &str = "__stickToRust__$rust_string_data";
-pub const RUST_STRING_LEN_FN_NAME: &str = "__stickToRust__$rust_string_len";
+pub const RUST_STRING_DROP_FN_NAME: &str = "__hiFfi__$rust_string_drop";
+pub const RUST_STRING_DATA_FN_NAME: &str = "__hiFfi__$rust_string_data";
+pub const RUST_STRING_LEN_FN_NAME: &str = "__hiFfi__$rust_string_len";
 
 pub fn rust_code_base() -> TokenStream2 {
     quote! {

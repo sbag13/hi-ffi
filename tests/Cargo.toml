@@ -7,5 +7,5 @@ edition = "2021"
 crate-type = ["staticlib", "lib"]
 
 [dependencies]
-stick-to-rust = { path = "../", features = ["cpp", "swift"] }
+hi-ffi = { path = "../", features = ["cpp", "swift"] }
 serde = { version = "1.0", features = ["derive"] }

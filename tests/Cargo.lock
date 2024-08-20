@@ -41,15 +41,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "stick-to-rust"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "syn"
 version = "2.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -65,7 +56,16 @@ name = "tests"
 version = "0.1.0"
 dependencies = [
  "serde",
- "stick-to-rust",
+ "hi-ffi",
+]
+
+[[package]]
+name = "hi-ffi"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

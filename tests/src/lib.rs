@@ -1,4 +1,4 @@
-use stick_to_rust::ffi;
+use hi_ffi::ffi;
 
 use serde::Serialize;
 

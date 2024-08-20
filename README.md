@@ -1,4 +1,4 @@
-# Stick To Rust
+# hi-ffi
 
 Tool for generating bindings from Rust code.
 
@@ -8,7 +8,7 @@ Rust glue code and bindings in target languages are generated for Rust code that
 
 ```rust
 #[ffi]
-use stick_to_rust::ffi;
+use hi_ffi::ffi;
 
 #[ffi]
 #[derive(Default, Clone)]
@@ -88,7 +88,7 @@ After building Rust package, the FFI code is generated in `generated_code` direc
 
 ### Modules
 
-`stick_to_rust` contains of the following modules:
+`hi_ffi` contains of the following modules:
 
 - `lib.rs` - main module, creates target files and directories, calls `translator` and `wrapper` modules
 - `translator` - translates Rust code into parsed, intermediate representation; it is target language agnostic

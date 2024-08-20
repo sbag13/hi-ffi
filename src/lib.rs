@@ -17,7 +17,7 @@ mod swift;
 mod translator;
 mod wrapper;
 
-const EXPORTED_SYMBOLS_PREFIX: &str = "__stickToRust__";
+const EXPORTED_SYMBOLS_PREFIX: &str = "__hiFfi__";
 const GEN_CODE_DIR: &str = "./generated_code/";
 const RUST_CODE_DIR: &str = "rust/";
 #[cfg(feature = "cpp")]
