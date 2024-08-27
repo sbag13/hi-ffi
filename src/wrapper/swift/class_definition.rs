@@ -1,11 +1,12 @@
 use std::fmt::Display;
 
 use super::*;
+use crate::wrapper::base::{SLICE_DROP_FN_NAME, SLICE_GET_LEN_FN_NAME, SLICE_GET_PTR_FN_NAME};
 use quote::ToTokens;
 
 pub fn gen_class_header(struct_wrapper: &StructWrapper) -> String {
     let destructor_extern_fn = &struct_wrapper.drop_ext_fn_name;
-    let getters_and_setters = gen_getters_and_setters(struct_wrapper);
+    let getters_and_setters = gen_getters_and_setters_externs(struct_wrapper);
     let default_constructor = gen_default_constructor_ext(struct_wrapper);
 
     format!(
@@ -31,15 +32,15 @@ void* {default_constructor_ext_fn_name}();
     }
 }
 
-fn gen_getters_and_setters(struct_wrapper: &StructWrapper) -> String {
+fn gen_getters_and_setters_externs(struct_wrapper: &StructWrapper) -> String {
     struct_wrapper
         .fields
         .iter()
-        .map(gen_getter_and_setter)
+        .map(gen_getter_and_setter_externs)
         .collect()
 }
 
-fn gen_getter_and_setter(field: &FieldWrapper) -> String {
+fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
     let field_type = &field.field_type.to_token_stream().to_string();
     let (getter, setter) = match field {
         FieldWrapper {
@@ -63,18 +64,29 @@ fn gen_getter_and_setter(field: &FieldWrapper) -> String {
         }
         FieldWrapper {
             wrapper_type: FieldWrapperType::String,
+            setter,
+            getter,
             ..
-        } => {
-            (None, None) // TODO
-        }
+        } => (
+            getter.as_ref().map(|g| map_string_getter_as_extern_fn(g)),
+            setter.as_ref().map(|g| map_string_setter_as_extern_fn(g)),
+        ),
     };
 
     match (getter, setter) {
-        (Some(getter), Some(setter)) => format!("{}\n{}", getter, setter),
-        (Some(getter), None) => getter,
-        (None, Some(setter)) => setter,
+        (Some(getter), Some(setter)) => format!("\n{}\n{}", getter, setter),
+        (Some(getter), None) => format!("\n{}", getter),
+        (None, Some(setter)) => format!("\n{}", setter),
         (None, None) => String::new(),
     }
+}
+
+fn map_string_getter_as_extern_fn(Getter { extern_fn_name, .. }: &Getter) -> String {
+    format!("void* {extern_fn_name}(void*);")
+}
+
+fn map_string_setter_as_extern_fn(Setter { extern_fn_name, .. }: &Setter) -> String {
+    format!("void {extern_fn_name}(void*, const char*, unsigned int);")
 }
 
 fn map_primitive_getter_as_extern_fn(
@@ -149,10 +161,13 @@ fn gen_property(field: &FieldWrapper) -> String {
         }
         FieldWrapper {
             wrapper_type: FieldWrapperType::String,
+            setter,
+            getter,
             ..
-        } => {
-            (None, None) // TODO
-        }
+        } => (
+            getter.as_ref().map(map_string_getter),
+            setter.as_ref().map(map_string_setter),
+        ),
     };
 
     let field_name = &field.field_name;
@@ -204,6 +219,32 @@ fn map_primitive_setter(Setter { extern_fn_name, .. }: &Setter) -> String {
         r#"
         set {{
             {extern_fn_name}(self.rawPtr(), newValue)
+        }}"#,
+    )
+}
+
+fn map_string_getter(Getter { extern_fn_name, .. }: &Getter) -> String {
+    format!(
+        r#"
+        get {{
+            let slice_ptr = {extern_fn_name}(self.rawPtr())
+            let c_str_ptr = {SLICE_GET_PTR_FN_NAME}(slice_ptr)
+            let c_str_len = {SLICE_GET_LEN_FN_NAME}(slice_ptr)
+            let typed_pointer = c_str_ptr!.assumingMemoryBound(to: UInt8.self)
+            let bytes: UnsafeBufferPointer<UInt8> = UnsafeBufferPointer(start: typed_pointer, count: Int(c_str_len))
+            let result = String(bytes: bytes, encoding: .utf8)!
+            {SLICE_DROP_FN_NAME}(slice_ptr)
+            return result
+        }}"#,
+    )
+}
+
+fn map_string_setter(Setter { extern_fn_name, .. }: &Setter) -> String {
+    format!(
+        r#"
+        set {{
+            let str_ptr = newValue.utf8CString.withUnsafeBufferPointer({{ ptr in return UnsafeMutableRawPointer(mutating: ptr.baseAddress!) }})
+            {extern_fn_name}(self.rawPtr(), str_ptr, UInt32(newValue.utf8CString.count))
         }}"#,
     )
 }

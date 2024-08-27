@@ -7,7 +7,6 @@ Tool for generating bindings from Rust code.
 Rust glue code and bindings in target languages are generated for Rust code that is marked with the `#[ffi]` macro.
 
 ```rust
-#[ffi]
 use hi_ffi::ffi;
 
 #[ffi]

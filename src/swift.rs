@@ -58,8 +58,12 @@ typedef float f32;
 typedef double f64;
 
 void* {RUST_STRING_DATA_FN_NAME}(void* self);
-int {RUST_STRING_LEN_FN_NAME}(void* self);
+unsigned int {RUST_STRING_LEN_FN_NAME}(void* self);
 void {RUST_STRING_DROP_FN_NAME}(void* self);
+
+void* {SLICE_GET_PTR_FN_NAME}(void* self);
+unsigned int {SLICE_GET_LEN_FN_NAME}(void* self);
+void {SLICE_DROP_FN_NAME}(void* self);
 "#
     )
 }

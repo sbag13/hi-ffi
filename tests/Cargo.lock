@@ -3,6 +3,15 @@
 version = 3
 
 [[package]]
+name = "hi-ffi"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -55,17 +64,8 @@ dependencies = [
 name = "tests"
 version = "0.1.0"
 dependencies = [
- "serde",
  "hi-ffi",
-]
-
-[[package]]
-name = "hi-ffi"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
+ "serde",
 ]
 
 [[package]]
