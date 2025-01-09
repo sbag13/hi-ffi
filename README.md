@@ -54,8 +54,8 @@ After building Rust package, the FFI code is generated in `generated_code` direc
 | --------- | ------------------------ | --- | ----- |
 | structs   | primitive setters        | ✅   | ✅     |
 |           | primitive getters        | ✅   | ✅     |
-|           | string setters           | ✅   | ❌     |
-|           | string getters           | ✅   | ❌     |
+|           | string setters           | ✅   | ✅     |
+|           | string getters           | ✅   | ✅     |
 |           | struct getters           | ✅   | ❌     |
 |           | struct setters           | ✅   | ❌     |
 |           | default constructor      | ✅   | ✅     |
