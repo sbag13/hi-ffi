@@ -50,38 +50,45 @@ After building Rust package, the FFI code is generated in `generated_code` direc
 
 ## Supported Features
 
-|           |                          | c++ | swift |
-| --------- | ------------------------ | --- | ----- |
-| structs   | primitive setters        | ✅   | ✅     |
-|           | primitive getters        | ✅   | ✅     |
-|           | string setters           | ✅   | ✅     |
-|           | string getters           | ✅   | ✅     |
-|           | struct getters           | ✅   | ❌     |
-|           | struct setters           | ✅   | ❌     |
-|           | default constructor      | ✅   | ✅     |
-|           |
-| methods   | primitive arguments      | ❌   | ❌     |
-|           | string arguments         | ❌   | ❌     |
-|           | primitive return         | ❌   | ❌     |
-|           | string return            | ❌   | ❌     |
-|           | struct arguments         | ❌   | ❌     |
-|           | struct return            | ❌   | ❌     |
-|           |
-| functions | primitive arguments      | ✅   | ✅     |
-|           | string arguments         | ✅   | ✅     |
-|           | primitive return         | ✅   | ✅     |
-|           | string return            | ✅   | ✅     |
-|           | str return               | ❌   | ❌     |
-|           | struct arguments         | ❌   | ❌     |
-|           | struct return            | ❌   | ❌     |
-|           |
-| enums     | primitive enums          | ❌   | ❌     |
-|           | variants with primitives | ❌   | ❌     |
-|           | variants with strings    | ❌   | ❌     |
-|           | variants with structs    | ❌   | ❌     |
-|           |
-| vector    | primitives vector        | ❌   | ❌     |
-|           | strings vector           | ❌   | ❌     |
+|                |                          | c++ | swift |
+| -------------- | ------------------------ | --- | ----- |
+| structs        | primitive setters        | ✅   | ✅     |
+|                | primitive getters        | ✅   | ✅     |
+|                | string setters           | ✅   | ✅     |
+|                | string getters           | ✅   | ✅     |
+|                | struct getters           | ✅   | ❌     |
+|                | struct setters           | ✅   | ❌     |
+|                | default constructor      | ✅   | ✅     |
+|                |
+| methods        | primitive arguments      | ✅   | ❌     |
+|                | string arguments         | ✅   | ❌     |
+|                | primitive return         | ✅   | ❌     |
+|                | string return            | ✅   | ❌     |
+|                | struct arguments         | ❌   | ❌     |
+|                | struct return            | ❌   | ❌     |
+|                |
+| static methods | primitive arguments      | ✅   | ❌     |
+|                | string arguments         | ✅   | ❌     |
+|                | primitive return         | ✅   | ❌     |
+|                | string return            | ✅   | ❌     |
+|                | struct arguments         | ❌   | ❌     |
+|                | struct return            | ❌   | ❌     |
+|                |
+| functions      | primitive arguments      | ✅   | ✅     |
+|                | string arguments         | ✅   | ✅     |
+|                | primitive return         | ✅   | ✅     |
+|                | string return            | ✅   | ✅     |
+|                | str return               | ❌   | ❌     |
+|                | struct arguments         | ❌   | ❌     |
+|                | struct return            | ❌   | ❌     |
+|                |
+| enums          | primitive enums          | ❌   | ❌     |
+|                | variants with primitives | ❌   | ❌     |
+|                | variants with strings    | ❌   | ❌     |
+|                | variants with structs    | ❌   | ❌     |
+|                |
+| vector         | primitives vector        | ❌   | ❌     |
+|                | strings vector           | ❌   | ❌     |
 
 ## Development
 

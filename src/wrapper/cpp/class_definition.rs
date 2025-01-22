@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    fmt::{format, Display},
-};
+use std::{collections::HashSet, fmt::Display};
 
 use quote::ToTokens;
 
@@ -31,19 +28,30 @@ pub fn gen_class_definition_parts_from_impl_block(
                 let method_name = &method_wrapper.name;
                 let extern_function_name = &method_wrapper.extern_function_name;
 
-                let method = format!(
-                    r#"
-    void {method_name}() {{
-        {extern_function_name}(this->self);
-    }}
-"#
-                );
+                let MappedCppFunctionArgsTokens {
+                    cpp_args,
+                    arg_names,
+                    arg_casts,
+                    wrapper_args,
+                } = map_args(method_wrapper.args.iter());
 
-                let extern_fn = format!(
-                    r#"
-    void {extern_function_name}(void*);"#
-                );
+                let return_types = map_return_type(&method_wrapper.return_wrapper);
 
+                let method = method_definition(
+                    method_name,
+                    extern_function_name,
+                    method_wrapper.is_static,
+                    &cpp_args,
+                    &arg_names,
+                    &arg_casts,
+                    &return_types,
+                );
+                let extern_fn = method_extern_fn(
+                    extern_function_name,
+                    method_wrapper.is_static,
+                    &wrapper_args,
+                    &return_types.ext_return_type,
+                );
                 let include = String::new();
 
                 methods.push_str(&method);
@@ -71,6 +79,66 @@ extern "C" {{
         ),
         method_definitions,
     }
+}
+
+fn method_extern_fn(
+    extern_function_name: impl Display,
+    is_static: bool,
+    wrapper_args: &str,
+    ext_return_type: &str,
+) -> String {
+    let wrapper_args = if !is_static {
+        if !wrapper_args.is_empty() {
+            format!("void* self, {}", wrapper_args)
+        } else {
+            "void* self".to_string()
+        }
+    } else {
+        wrapper_args.to_string()
+    };
+
+    format!(
+        r#"
+    {ext_return_type} {extern_function_name}({wrapper_args});"#
+    )
+}
+
+fn method_definition(
+    method_name: impl Display,
+    extern_function_name: impl Display,
+    is_static: bool,
+    cpp_args: &str,
+    arg_names: &str,
+    arg_casts: &str,
+    return_types: &ReturnTypes,
+) -> String {
+    let arg_names = if is_static {
+        arg_names.to_string()
+    } else {
+        if arg_names.is_empty() {
+            "this->self".to_string()
+        } else {
+            format!("this->self, {}", arg_names)
+        }
+    };
+
+    let ReturnTypes {
+        ext_return_type,
+        return_type,
+        return_cast,
+    } = return_types;
+
+    let static_keyword = if is_static { "static " } else { "" };
+
+    format!(
+        r#"
+{static_keyword}{return_type} {method_name}({cpp_args}) {{
+{arg_casts}
+    {ext_return_type} result = {extern_function_name}({arg_names});
+{return_cast}
+}}
+"#
+    )
 }
 
 pub fn gen_class_definition_parts_from_struct(struct_wrapper: &StructWrapper) -> ClassHeaderParts {

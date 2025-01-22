@@ -27,7 +27,7 @@ pub fn translate_function(item_struct: ItemFn) -> Wrapper {
     }
 }
 
-fn return_wrapper(output: &syn::ReturnType) -> Option<FunctionReturnWrapper> {
+pub fn return_wrapper(output: &syn::ReturnType) -> Option<FunctionReturnWrapper> {
     match output {
         syn::ReturnType::Default => None,
         syn::ReturnType::Type(_, ty) => {
@@ -54,7 +54,7 @@ fn return_wrapper(output: &syn::ReturnType) -> Option<FunctionReturnWrapper> {
     }
 }
 
-fn map_arg(arg: &FnArg) -> FunctionArgWrapper {
+pub fn map_arg(arg: &FnArg) -> FunctionArgWrapper {
     match arg {
         syn::FnArg::Receiver(_) => panic!("Receiver argument is not supported"),
         syn::FnArg::Typed(pat_type) => {

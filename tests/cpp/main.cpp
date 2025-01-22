@@ -48,6 +48,17 @@ int main()
 
     // Struct impl block
     test_struct.public_method();
+    TestStruct::static_method();
+    test_struct.public_method_taking_primitives(5, true);
+    TestStruct::static_method_taking_primitives(6, false);
+    test_struct.public_method_taking_string("Hello, Rust!");
+    TestStruct::static_method_taking_string("Hello, Rust!");
+    assert(test_struct.public_method_returning_primitive() == 24);
+    assert(TestStruct::static_method_returning_primitive() == 22);
+    std::cout << test_struct.public_method_returning_string() << std::endl;
+    std::cout << TestStruct::static_method_returning_string() << std::endl;
+    test_struct.combo_method("str1", "str2", true);
+    TestStruct::static_combo_method("str1", "str2", true);
 
     // Functions
     simple_function();

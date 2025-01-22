@@ -39,45 +39,70 @@ impl TestStruct {
     //         }
     //     }
 
-    // TODO static method
-
-    pub fn public_method(&self) {}
+    pub fn public_method(&self) {
+        println!("Rust: Public method called");
+    }
 
     // private method is skipped
     fn private_method(&self) {}
 
-    //     pub fn public_method_taking_primitives(&self, i: i32, b: bool) {
-    //         println!("Rust: Public method called: i = {i}, b = {b}");
-    //     }
+    pub fn public_method_taking_primitives(&self, i: i32, b: bool) {
+        println!("Rust: Public method called: i = {i}, b = {b}");
+    }
 
-    //     pub fn public_method_taking_string(&self, s: String) {
-    //         println!("Rust: Public method called: s = {s}");
-    //     }
+    pub fn public_method_taking_string(&self, s: String) {
+        println!("Rust: Public method called: s = {s}");
+    }
 
-    //     pub fn public_method_taking_struct(&self, s: TestStruct2) {
-    //         println!("Rust: Public method called: s = {s:?}");
-    //     }
+    // pub fn public_method_taking_struct(&self, s: TestStruct2) {
+    //     println!("Rust: Public method called: s = {s:?}");
+    // }
 
-    //     pub fn public_method_returning_primitive(&self) -> i32 {
-    //         42
-    //     }
+    pub fn public_method_returning_primitive(&self) -> i32 {
+        24
+    }
 
-    //     pub fn public_method_returning_string(&self) -> String {
-    //         "String returned from Rust method".to_string()
-    //     }
+    pub fn public_method_returning_string(&self) -> String {
+        "String returned from Rust method".to_string()
+    }
 
     //     pub fn public_method_returning_struct(&self) -> TestStruct2 {
     //         TestStruct2::default()
     //     }
 
-    //     pub fn combo_method(&self, str1: String, str2: String, b: bool, obj: TestStruct2) -> String {
-    //         println!("{str1} {str2} {b} {obj:?}");
-    //         if b {
-    //             str1
-    //         } else {
-    //             str2
-    //         }
-    //     }
+    pub fn combo_method(&self, str1: String, str2: String, b: bool) -> String {
+        println!("{str1} {str2} {b}");
+        if b {
+            str1
+        } else {
+            str2
+        }
+    }
+
+    // static method
+    pub fn static_method() {
+        println!("Rust: Static public method called");
+    }
+    pub fn static_method_taking_primitives(i: i32, b: bool) {
+        println!("Rust: Static public method called: i = {i}, b = {b}");
+    }
+    pub fn static_method_taking_string(s: String) {
+        println!("Rust: Static public method called: s = {s}");
+    }
+    pub fn static_method_returning_primitive() -> i32 {
+        22
+    }
+    pub fn static_method_returning_string() -> String {
+        "String returned from Rust static method".to_string()
+    }
+    pub fn static_combo_method(str1: String, str2: String, b: bool) -> String {
+        println!("{str1} {str2} {b}");
+        if b {
+            str1
+        } else {
+            str2
+        }
+    }
 }
 
 #[ffi]
@@ -125,6 +150,16 @@ fn combo_function(str1: String, str2: String, b: bool) -> String {
         str2
     }
 }
+
+// #[ffi]
+// fn function_taking_struct(s: TestStruct2) {
+//     println!("Rust: Function with struct arg called: s = {s:?}");
+// }
+
+// #[ffi]
+// fn function_returning_struct() -> TestStruct2 {
+//     TestStruct2::default()
+// }
 
 // Having Drop defined causes still reachable resources in valgrind report
 impl Drop for TestStruct {
