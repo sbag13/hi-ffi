@@ -1,10 +1,79 @@
-use std::{collections::HashSet, fmt::Display};
+use std::{
+    collections::HashSet,
+    fmt::{format, Display},
+};
 
 use quote::ToTokens;
 
 use super::*;
 
-pub fn gen_class_definition(struct_wrapper: &StructWrapper) -> String {
+pub const INCLUDES_MARKER: &str = "// includes";
+pub const EXTERN_FNS_MARKER: &str = "// extern fns";
+pub const METHOD_DEFINITIONS_MARKER: &str = "// methods definitions";
+
+pub struct ClassHeaderParts {
+    pub class_definition: String,
+    pub includes: String,
+    pub extern_fns: String,
+    pub method_definitions: String,
+}
+
+pub fn gen_class_definition_parts_from_impl_block(
+    impl_block_wrapper: &ImplBlockWrapper,
+) -> ClassHeaderParts {
+    let (method_definitions, extern_fns, includes) = impl_block_wrapper
+        .methods
+        .iter()
+        .filter(|method| method.public)
+        .fold(
+            (String::new(), String::new(), HashSet::new()),
+            |(mut methods, mut externs, mut includes), method_wrapper| {
+                let method_name = &method_wrapper.name;
+                let extern_function_name = &method_wrapper.extern_function_name;
+
+                let method = format!(
+                    r#"
+    void {method_name}() {{
+        {extern_function_name}(this->self);
+    }}
+"#
+                );
+
+                let extern_fn = format!(
+                    r#"
+    void {extern_function_name}(void*);"#
+                );
+
+                let include = String::new();
+
+                methods.push_str(&method);
+                externs.push_str(&extern_fn);
+                includes.insert(include);
+
+                (methods, externs, includes)
+            },
+        );
+
+    let includes = includes.into_iter().fold(String::new(), |mut acc, i| {
+        acc.push_str(&i);
+        acc
+    });
+
+    ClassHeaderParts {
+        class_definition: gen_empty_class_definition(&impl_block_wrapper.struct_name),
+        includes,
+        extern_fns: format!(
+            r#"
+extern "C" {{
+{extern_fns}
+}}
+"#
+        ),
+        method_definitions,
+    }
+}
+
+pub fn gen_class_definition_parts_from_struct(struct_wrapper: &StructWrapper) -> ClassHeaderParts {
     let class_name = &struct_wrapper.name;
     let (method_definitions, extern_fns, includes) =
         struct_wrapper.fields.iter().map(map_fields).fold(
@@ -53,30 +122,47 @@ pub fn gen_class_definition(struct_wrapper: &StructWrapper) -> String {
     let move_constructor = move_constructor_definition(struct_wrapper);
     let clone_extern_fn = clone_ext_fn(struct_wrapper);
 
-    format!(
-        r#"
-#ifndef {class_name}__def
-#define {class_name}__def
-
-#include "base.h"
-{includes}
-
+    ClassHeaderParts {
+        class_definition: gen_empty_class_definition(class_name),
+        includes,
+        extern_fns: format!(
+            r#"
 extern "C" {{
 {extern_fns}
 {default_constructor_extern_fn}
 {destructor_extern_fn}
 {clone_extern_fn}
 }}
-
-class {class_name} {{
-    void* self = nullptr;
-public:
+"#
+        ),
+        method_definitions: format!(
+            r#"
 {pointer_constructor_definition}
 {copy_constructor}
 {move_constructor}
 {default_constructor_definition}
 {destructor_definition}
 {method_definitions}
+"#
+        ),
+    }
+}
+
+fn gen_empty_class_definition(class_name: impl Display) -> String {
+    format!(
+        r#"
+#ifndef {class_name}__def
+#define {class_name}__def
+
+#include "base.h"
+
+{INCLUDES_MARKER}
+{EXTERN_FNS_MARKER}
+
+// Class definition
+class {class_name} {{
+    void* self = nullptr;
+public:
 
     void* self_ptr() {{
         return self;
@@ -84,6 +170,8 @@ public:
     void set_self_ptr(void* ptr) {{
         self = ptr;
     }}
+
+    {METHOD_DEFINITIONS_MARKER}
 }};
 
 #endif

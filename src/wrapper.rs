@@ -1,13 +1,15 @@
 use std::fmt::Debug;
 
+use impl_block_wrapper::ImplBlockWrapper;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
 pub mod base;
 #[cfg(feature = "cpp")]
-mod cpp;
+pub mod cpp;
 pub mod function_wrapper;
+pub mod impl_block_wrapper;
 pub mod struct_wrapper;
 #[cfg(feature = "swift")]
 mod swift;
@@ -30,6 +32,9 @@ impl Wrapper {
         match &self.parsed {
             ParsedWrapper::Struct(struct_wrapper) => struct_wrapper.name.to_string(),
             ParsedWrapper::Function(function_wrapper) => function_wrapper.name.to_string(),
+            ParsedWrapper::ImplBlock(impl_block_wrapper) => {
+                impl_block_wrapper.struct_name.to_string()
+            }
         }
     }
 }
@@ -51,6 +56,16 @@ impl From<&Wrapper> for TokenStream2 {
                     #tokens
                 }
             }
+            Wrapper {
+                parsed: ParsedWrapper::ImplBlock(impl_block_wrapper),
+                original_definition,
+            } => {
+                let tokens: TokenStream2 = impl_block_wrapper.into();
+                quote! {
+                    #original_definition
+                    #tokens
+                }
+            }
         }
     }
 }
@@ -59,6 +74,7 @@ impl From<&Wrapper> for TokenStream2 {
 pub enum ParsedWrapper {
     Struct(StructWrapper),
     Function(FunctionWrapper),
+    ImplBlock(ImplBlockWrapper),
 }
 
 impl From<Wrapper> for TokenStream {

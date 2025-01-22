@@ -46,6 +46,9 @@ int main()
     std::cout << "struct setter test: " << test_struct.get_struct_field().get_i32_field() << std::endl;
     assert(test_struct.get_struct_field().get_i32_field() == 44);
 
+    // Struct impl block
+    test_struct.public_method();
+
     // Functions
     simple_function();
     function_with_primitive_args(3, true);

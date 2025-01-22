@@ -25,54 +25,59 @@ struct TestStruct {
     struct_field: TestStruct2,
 }
 
+// TODO
 #[ffi]
 impl TestStruct {
-    #[ffi(constructor)]
-    fn new() -> Self {
-        Self {
-            i32_field: 42,
-            bool_field: true,
-            string_field: "Hello from Rust".to_string(),
-            _skip_field: 0,
-            struct_field: TestStruct2::default(),
-        }
-    }
+    //     #[ffi(constructor)]
+    //     fn new() -> Self {
+    //         Self {
+    //             i32_field: 42,
+    //             bool_field: true,
+    //             string_field: "Hello from Rust".to_string(),
+    //             _skip_field: 0,
+    //             struct_field: TestStruct2::default(),
+    //         }
+    //     }
 
-    #[ffi]
-    fn non_public_method(&self) {}
+    // TODO static method
 
-    pub fn public_method_taking_primitives(&self, i: i32, b: bool) {
-        println!("Rust: Public method called: i = {i}, b = {b}");
-    }
+    pub fn public_method(&self) {}
 
-    pub fn public_method_taking_string(&self, s: String) {
-        println!("Rust: Public method called: s = {s}");
-    }
+    // private method is skipped
+    fn private_method(&self) {}
 
-    pub fn public_method_taking_struct(&self, s: TestStruct2) {
-        println!("Rust: Public method called: s = {s:?}");
-    }
+    //     pub fn public_method_taking_primitives(&self, i: i32, b: bool) {
+    //         println!("Rust: Public method called: i = {i}, b = {b}");
+    //     }
 
-    pub fn public_method_returning_primitive(&self) -> i32 {
-        42
-    }
+    //     pub fn public_method_taking_string(&self, s: String) {
+    //         println!("Rust: Public method called: s = {s}");
+    //     }
 
-    pub fn public_method_returning_string(&self) -> String {
-        "String returned from Rust method".to_string()
-    }
+    //     pub fn public_method_taking_struct(&self, s: TestStruct2) {
+    //         println!("Rust: Public method called: s = {s:?}");
+    //     }
 
-    pub fn public_method_returning_struct(&self) -> TestStruct2 {
-        TestStruct2::default()
-    }
+    //     pub fn public_method_returning_primitive(&self) -> i32 {
+    //         42
+    //     }
 
-    pub fn combo_method(&self, str1: String, str2: String, b: bool, obj: TestStruct2) -> String {
-        println!("{str1} {str2} {b} {obj:?}");
-        if b {
-            str1
-        } else {
-            str2
-        }
-    }
+    //     pub fn public_method_returning_string(&self) -> String {
+    //         "String returned from Rust method".to_string()
+    //     }
+
+    //     pub fn public_method_returning_struct(&self) -> TestStruct2 {
+    //         TestStruct2::default()
+    //     }
+
+    //     pub fn combo_method(&self, str1: String, str2: String, b: bool, obj: TestStruct2) -> String {
+    //         println!("{str1} {str2} {b} {obj:?}");
+    //         if b {
+    //             str1
+    //         } else {
+    //             str2
+    //         }
+    //     }
 }
 
 #[ffi]

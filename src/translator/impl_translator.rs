@@ -1,7 +1,44 @@
+use std::ops::Deref;
+
+use quote::ToTokens;
 use syn::ItemImpl;
 
-use crate::wrapper::Wrapper;
+use crate::wrapper::{impl_block_wrapper::MethodWrapper, Wrapper};
+
+use super::{impl_block_wrapper::ImplBlockWrapper, ParsedWrapper};
 
 pub fn translate_impl(item_impl: ItemImpl) -> Wrapper {
-    todo!("impl translator not implemented")
+    let struct_name = if let syn::Type::Path(path) = item_impl.self_ty.deref() {
+        if let Some(ident) = path.path.get_ident() {
+            ident.to_owned()
+        } else {
+            panic!("No ident found")
+        }
+    } else {
+        panic!("Self type is not a path")
+    };
+
+    let methods = item_impl
+        .items
+        .iter()
+        .map(|item| {
+            if let syn::ImplItem::Fn(method) = item {
+                MethodWrapper {
+                    name: method.sig.ident.clone(),
+                    extern_function_name: format!("{}_{}", struct_name, method.sig.ident),
+                    public: matches!(method.vis, syn::Visibility::Public(_)),
+                }
+            } else {
+                panic!("Unsupported impl item")
+            }
+        })
+        .collect();
+
+    dbg!(Wrapper {
+        original_definition: item_impl.into_token_stream(),
+        parsed: ParsedWrapper::ImplBlock(ImplBlockWrapper {
+            struct_name,
+            methods,
+        }),
+    })
 }

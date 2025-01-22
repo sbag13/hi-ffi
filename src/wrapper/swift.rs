@@ -22,6 +22,10 @@ impl Wrapper {
                 header: gen_function_header(function_wrapper),
                 source: gen_function_definition(function_wrapper),
             },
+            ParsedWrapper::ImplBlock(impl_block_wrapper) => SwiftFiles {
+                header: "".to_string(), // TODO
+                source: "".to_string(), // TODO
+            },
         }
     }
 }
