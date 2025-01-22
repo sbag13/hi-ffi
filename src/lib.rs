@@ -55,7 +55,14 @@ pub fn ffi(_attr: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[cfg(feature = "swift")]
+static SWIFT_CLASS_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+#[cfg(feature = "swift")]
 fn write_swift_code(wrapper: &Wrapper) {
+    use crate::wrapper::SwiftCode;
+    use wrapper::swift::class_definition::gen_empty_class_definition;
+
     let swift_path = Path::new(GEN_CODE_DIR).join(SWIFT_CODE_DIR);
     std::fs::create_dir_all(&swift_path).expect("Unable to create swift directory");
 
@@ -89,13 +96,28 @@ fn write_swift_code(wrapper: &Wrapper) {
         create_file(swift_code_base(), swift_code_base_path);
     });
 
-    let crate::wrapper::SwiftFiles { header, source } = wrapper.swift();
+    let swift_code = wrapper.swift();
 
-    append_to_file(header, swift_header_path);
+    append_to_file(swift_code.header(), swift_header_path);
 
     let source_file_name = format!("{}.swift", wrapper.name());
     let source_path = ffi_module_path.join(source_file_name);
-    create_file(source, source_path);
+
+    match swift_code {
+        SwiftCode::Class { source, .. } => {
+            let mut locked_set = SWIFT_CLASS_GENERATED.lock().expect("Mutex lock failed");
+            if locked_set.insert(source_path.clone()) {
+                create_file(gen_empty_class_definition(wrapper.name()), &source_path);
+            }
+
+            insert_after(
+                crate::wrapper::swift::class_definition::METHOD_DEFINITIONS_MARKER,
+                source,
+                &source_path,
+            );
+        }
+        SwiftCode::Function { source, .. } => create_file(source, &source_path),
+    }
 }
 
 static RUST_STRUCT_WRAPPER_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =

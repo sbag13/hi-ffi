@@ -4,6 +4,8 @@ use super::*;
 use crate::wrapper::base::{SLICE_DROP_FN_NAME, SLICE_GET_LEN_FN_NAME, SLICE_GET_PTR_FN_NAME};
 use quote::ToTokens;
 
+pub const METHOD_DEFINITIONS_MARKER: &str = "// class method definitions";
+
 pub fn gen_class_header(struct_wrapper: &StructWrapper) -> String {
     let destructor_extern_fn = &struct_wrapper.drop_ext_fn_name;
     let getters_and_setters = gen_getters_and_setters_externs(struct_wrapper);
@@ -103,21 +105,28 @@ fn map_primitive_setter_as_extern_fn(
     format!("void {extern_fn_name}(void*, {field_type});")
 }
 
-pub fn gen_class_definition(struct_wrapper: &StructWrapper) -> String {
-    let class_name = &struct_wrapper.name;
+pub fn gen_empty_class_definition(class_name: impl Display) -> String {
+    format!(
+        r#"
+public class {class_name}: Opaque {{
+    {METHOD_DEFINITIONS_MARKER}
+}}
+"#
+    )
+}
+
+pub fn gen_class_methods_from_struct(struct_wrapper: &StructWrapper) -> String {
     let destructor_extern_fn = &struct_wrapper.drop_ext_fn_name;
     let props = gen_props(struct_wrapper);
     let default_constructor = gen_default_constructor(struct_wrapper);
 
     format!(
         r#"
-public class {class_name}: Opaque {{
     deinit {{
         {destructor_extern_fn}(self.rawPtr());
     }}
 {default_constructor}
 {props}
-}}
 "#
     )
 }

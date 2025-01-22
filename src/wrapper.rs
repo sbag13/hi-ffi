@@ -12,7 +12,7 @@ pub mod function_wrapper;
 pub mod impl_block_wrapper;
 pub mod struct_wrapper;
 #[cfg(feature = "swift")]
-mod swift;
+pub mod swift;
 
 #[cfg(feature = "cpp")]
 pub use cpp::*;
