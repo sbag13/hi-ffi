@@ -68,8 +68,8 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
             getter,
             ..
         } => (
-            getter.as_ref().map(|g| map_string_getter_as_extern_fn(g)),
-            setter.as_ref().map(|g| map_string_setter_as_extern_fn(g)),
+            getter.as_ref().map(map_string_getter_as_extern_fn),
+            setter.as_ref().map(map_string_setter_as_extern_fn),
         ),
     };
 

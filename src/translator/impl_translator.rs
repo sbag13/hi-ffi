@@ -6,6 +6,7 @@ use syn::ItemImpl;
 use crate::{
     translator::map_arg,
     wrapper::{impl_block_wrapper::MethodWrapper, Wrapper},
+    EXPORTED_SYMBOLS_PREFIX,
 };
 
 use super::{impl_block_wrapper::ImplBlockWrapper, return_wrapper, ParsedWrapper};
@@ -28,7 +29,10 @@ pub fn translate_impl(item_impl: ItemImpl) -> Wrapper {
             if let syn::ImplItem::Fn(method) = item {
                 MethodWrapper {
                     name: method.sig.ident.clone(),
-                    extern_function_name: format!("{}_{}", struct_name, method.sig.ident),
+                    extern_function_name: format!(
+                        "{EXPORTED_SYMBOLS_PREFIX}_{}_{}",
+                        struct_name, method.sig.ident
+                    ),
                     public: matches!(method.vis, syn::Visibility::Public(_)),
                     is_static: method.sig.receiver().is_none(),
                     args: method

@@ -114,12 +114,10 @@ fn method_definition(
 ) -> String {
     let arg_names = if is_static {
         arg_names.to_string()
+    } else if arg_names.is_empty() {
+        "this->self".to_string()
     } else {
-        if arg_names.is_empty() {
-            "this->self".to_string()
-        } else {
-            format!("this->self, {}", arg_names)
-        }
+        format!("this->self, {}", arg_names)
     };
 
     let ReturnTypes {

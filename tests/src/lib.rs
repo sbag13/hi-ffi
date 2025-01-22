@@ -44,6 +44,7 @@ impl TestStruct {
     }
 
     // private method is skipped
+    #[allow(dead_code)]
     fn private_method(&self) {}
 
     pub fn public_method_taking_primitives(&self, i: i32, b: bool) {

@@ -4,7 +4,6 @@ use std::{fmt::Display, fs::OpenOptions, io::Write, path::Path, sync::Once};
 use cpp::cpp_code_base;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-#[cfg(feature = "cpp")]
 use std::{
     collections::HashSet,
     path::PathBuf,
@@ -14,7 +13,9 @@ use std::{
 use swift::*;
 use syn::{parse_macro_input, Item};
 use translator::translate;
-use wrapper::{base::rust_code_base, CppHeader, Wrapper};
+#[cfg(feature = "cpp")]
+use wrapper::cpp::CppHeader;
+use wrapper::{base::rust_code_base, Wrapper};
 
 #[cfg(feature = "cpp")]
 mod cpp;
@@ -97,7 +98,6 @@ fn write_swift_code(wrapper: &Wrapper) {
     create_file(source, source_path);
 }
 
-#[cfg(feature = "cpp")]
 static RUST_STRUCT_WRAPPER_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
@@ -182,6 +182,7 @@ fn write_header(header: CppHeader, path: impl AsRef<Path>) {
     }
 }
 
+#[cfg(feature = "cpp")]
 fn insert_after(marker: &str, content: impl Display, path: impl AsRef<Path>) {
     let content = format!("{}", content);
     let file_content = std::fs::read_to_string(path.as_ref()).expect("Unable to read file");
