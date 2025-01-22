@@ -33,7 +33,7 @@ impl Wrapper {
                 header: CppHeader::Class(gen_class_definition_parts_from_impl_block(
                     impl_block_wrapper,
                 )),
-                source: None, // TODO
+                source: None,
             },
         }
     }
