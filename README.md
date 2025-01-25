@@ -1,6 +1,6 @@
 # hi-ffi
 
-Tool for generating bindings from Rust code.
+Tool for generating bindings to Rust code.
 
 ## How To Use
 
@@ -45,43 +45,56 @@ After building Rust package, the FFI code is generated in `generated_code` direc
 
 ### Language specific examples:
 
-- C++ - [README.md](tests/cpp/README.md)
-- Swift - [README.md](tests/swift/README.md)
+The following examples are built on top of the Rust code defined [here](./tests/src/lib.rs).
+
+- C++:
+  -  [README.md](tests/cpp/README.md)
+  -  [main.cpp](tests/cpp/main.cpp)
+- Swift 
+  -  [README.md](tests/swift/README.md)
+  -  [main.swift](tests/swift/ModuleTest/Sources/ModuleTest/main.swift)
 
 ## Supported Features
 
-|           |                          | c++ | swift |
-| --------- | ------------------------ | --- | ----- |
-| structs   | primitive setters        | ✅   | ✅     |
-|           | primitive getters        | ✅   | ✅     |
-|           | string setters           | ✅   | ❌     |
-|           | string getters           | ✅   | ❌     |
-|           | struct getters           | ✅   | ❌     |
-|           | struct setters           | ✅   | ❌     |
-|           | default constructor      | ✅   | ✅     |
-|           |
-| methods   | primitive arguments      | ❌   | ❌     |
-|           | string arguments         | ❌   | ❌     |
-|           | primitive return         | ❌   | ❌     |
-|           | string return            | ❌   | ❌     |
-|           | struct arguments         | ❌   | ❌     |
-|           | struct return            | ❌   | ❌     |
-|           |
-| functions | primitive arguments      | ✅   | ✅     |
-|           | string arguments         | ✅   | ✅     |
-|           | primitive return         | ✅   | ✅     |
-|           | string return            | ✅   | ✅     |
-|           | str return               | ❌   | ❌     |
-|           | struct arguments         | ❌   | ❌     |
-|           | struct return            | ❌   | ❌     |
-|           |
-| enums     | primitive enums          | ❌   | ❌     |
-|           | variants with primitives | ❌   | ❌     |
-|           | variants with strings    | ❌   | ❌     |
-|           | variants with structs    | ❌   | ❌     |
-|           |
-| vector    | primitives vector        | ❌   | ❌     |
-|           | strings vector           | ❌   | ❌     |
+|                |                          | c++ | swift |
+| -------------- | ------------------------ | --- | ----- |
+| structs        | primitive setters        | ✅   | ✅     |
+|                | primitive getters        | ✅   | ✅     |
+|                | string setters           | ✅   | ✅     |
+|                | string getters           | ✅   | ✅     |
+|                | struct getters           | ✅   | ❌     |
+|                | struct setters           | ✅   | ❌     |
+|                | default constructor      | ✅   | ✅     |
+|                |
+| methods        | primitive arguments      | ✅   | ✅     |
+|                | string arguments         | ✅   | ✅     |
+|                | primitive return         | ✅   | ✅     |
+|                | string return            | ✅   | ✅     |
+|                | struct arguments         | ❌   | ❌     |
+|                | struct return            | ❌   | ❌     |
+|                |
+| static methods | primitive arguments      | ✅   | ✅     |
+|                | string arguments         | ✅   | ✅     |
+|                | primitive return         | ✅   | ✅     |
+|                | string return            | ✅   | ✅     |
+|                | struct arguments         | ❌   | ❌     |
+|                | struct return            | ❌   | ❌     |
+|                |
+| functions      | primitive arguments      | ✅   | ✅     |
+|                | string arguments         | ✅   | ✅     |
+|                | primitive return         | ✅   | ✅     |
+|                | string return            | ✅   | ✅     |
+|                | str return               | ❌   | ❌     |
+|                | struct arguments         | ❌   | ❌     |
+|                | struct return            | ❌   | ❌     |
+|                |
+| enums          | primitive enums          | ❌   | ❌     |
+|                | variants with primitives | ❌   | ❌     |
+|                | variants with strings    | ❌   | ❌     |
+|                | variants with structs    | ❌   | ❌     |
+|                |
+| vector         | primitives vector        | ❌   | ❌     |
+|                | strings vector           | ❌   | ❌     |
 
 ## Development
 

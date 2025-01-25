@@ -1,10 +1,20 @@
 use std::fmt::Display;
 
-use super::*;
-use crate::wrapper::base::{SLICE_DROP_FN_NAME, SLICE_GET_LEN_FN_NAME, SLICE_GET_PTR_FN_NAME};
+use crate::wrapper::{
+    base::{SLICE_DROP_FN_NAME, SLICE_GET_LEN_FN_NAME, SLICE_GET_PTR_FN_NAME},
+    swift::function_definition::{
+        compose_function_definition, map_args, map_header_declaration_args, map_return_type,
+        ReturnTypes,
+    },
+    FieldWrapper, FieldWrapperType, Getter, ImplBlockWrapper, Setter, StructWrapper,
+};
 use quote::ToTokens;
 
-pub fn gen_class_header(struct_wrapper: &StructWrapper) -> String {
+use super::impl_block_wrapper::MethodWrapper;
+
+pub const METHOD_DEFINITIONS_MARKER: &str = "// class method definitions";
+
+pub fn gen_method_declarations_from_struct(struct_wrapper: &StructWrapper) -> String {
     let destructor_extern_fn = &struct_wrapper.drop_ext_fn_name;
     let getters_and_setters = gen_getters_and_setters_externs(struct_wrapper);
     let default_constructor = gen_default_constructor_ext(struct_wrapper);
@@ -15,6 +25,79 @@ void {destructor_extern_fn}(void*);
 {getters_and_setters}
 {default_constructor}
 "#
+    )
+}
+
+pub fn gen_method_declarations_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -> String {
+    impl_block_wrapper
+        .methods
+        .iter()
+        .filter(|&method| method.public)
+        .map(gen_method_header)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn gen_method_header(method: &MethodWrapper) -> String {
+    let swift_args = map_header_declaration_args(&method.args);
+    let swift_args = if method.is_static {
+        swift_args
+    } else if swift_args.is_empty() {
+        "void* self".to_string()
+    } else {
+        format!("void* self, {}", swift_args)
+    };
+
+    let ReturnTypes {
+        cpp_return_type, ..
+    } = map_return_type(&method.return_wrapper);
+    let extern_fn_name = &method.extern_function_name;
+
+    format!(r#"{cpp_return_type} {extern_fn_name}({swift_args});"#)
+}
+
+pub fn gen_class_methods_definition_from_impl_block(
+    impl_block_wrapper: &ImplBlockWrapper,
+) -> String {
+    impl_block_wrapper
+        .methods
+        .iter()
+        .filter(|&method| method.public)
+        .map(|method| {
+            gen_method_definition(method)
+                .lines()
+                .filter_map(|line| {
+                    if line.is_empty() {
+                        None
+                    } else {
+                        Some(format!("    {}", line))
+                    }
+                })
+                .collect::<Vec<String>>()
+                .join("\n")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn gen_method_definition(method: &MethodWrapper) -> String {
+    let mut mapped_args = map_args(method.args.iter());
+    if !method.is_static {
+        if method.args.is_empty() {
+            mapped_args.args_names = "self.rawPtr()".to_string();
+        } else {
+            mapped_args.args_names = format!("self.rawPtr(), {}", mapped_args.args_names);
+        }
+    }
+
+    let return_types = map_return_type(&method.return_wrapper);
+
+    compose_function_definition(
+        &method.name,
+        &method.extern_function_name,
+        mapped_args,
+        return_types,
+        method.is_static,
     )
 }
 
@@ -68,8 +151,8 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
             getter,
             ..
         } => (
-            getter.as_ref().map(|g| map_string_getter_as_extern_fn(g)),
-            setter.as_ref().map(|g| map_string_setter_as_extern_fn(g)),
+            getter.as_ref().map(map_string_getter_as_extern_fn),
+            setter.as_ref().map(map_string_setter_as_extern_fn),
         ),
     };
 
@@ -103,21 +186,28 @@ fn map_primitive_setter_as_extern_fn(
     format!("void {extern_fn_name}(void*, {field_type});")
 }
 
-pub fn gen_class_definition(struct_wrapper: &StructWrapper) -> String {
-    let class_name = &struct_wrapper.name;
+pub fn gen_empty_class_definition(class_name: impl Display) -> String {
+    format!(
+        r#"
+public class {class_name}: Opaque {{
+    {METHOD_DEFINITIONS_MARKER}
+}}
+"#
+    )
+}
+
+pub fn gen_class_methods_definition_from_struct(struct_wrapper: &StructWrapper) -> String {
     let destructor_extern_fn = &struct_wrapper.drop_ext_fn_name;
     let props = gen_props(struct_wrapper);
     let default_constructor = gen_default_constructor(struct_wrapper);
 
     format!(
         r#"
-public class {class_name}: Opaque {{
     deinit {{
         {destructor_extern_fn}(self.rawPtr());
     }}
 {default_constructor}
 {props}
-}}
 "#
     )
 }

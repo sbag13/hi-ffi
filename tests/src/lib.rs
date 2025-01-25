@@ -3,7 +3,7 @@ use hi_ffi::ffi;
 use serde::Serialize;
 
 #[ffi]
-#[derive(Default, Clone, Serialize)]
+#[derive(Default, Clone, Serialize, Debug)]
 struct TestStruct {
     // generate getter and setter
     #[ffi(setter, getter)]
@@ -25,30 +25,111 @@ struct TestStruct {
     struct_field: TestStruct2,
 }
 
+// TODO
 #[ffi]
-#[derive(Default, Clone, Serialize)]
+impl TestStruct {
+    //     #[ffi(constructor)]
+    //     fn new() -> Self {
+    //         Self {
+    //             i32_field: 42,
+    //             bool_field: true,
+    //             string_field: "Hello from Rust".to_string(),
+    //             _skip_field: 0,
+    //             struct_field: TestStruct2::default(),
+    //         }
+    //     }
+
+    pub fn public_method(&self) {
+        println!("Rust: Public method called");
+    }
+
+    // private method is skipped
+    #[allow(dead_code)]
+    fn private_method(&self) {}
+
+    pub fn public_method_taking_primitives(&self, i: i32, b: bool) {
+        println!("Rust: Public method called: i = {i}, b = {b}");
+    }
+
+    pub fn public_method_taking_string(&self, s: String) {
+        println!("Rust: Public method called: s = {s}");
+    }
+
+    // pub fn public_method_taking_struct(&self, s: TestStruct2) {
+    //     println!("Rust: Public method called: s = {s:?}");
+    // }
+
+    pub fn public_method_returning_primitive(&self) -> i32 {
+        24
+    }
+
+    pub fn public_method_returning_string(&self) -> String {
+        "String returned from Rust method".to_string()
+    }
+
+    //     pub fn public_method_returning_struct(&self) -> TestStruct2 {
+    //         TestStruct2::default()
+    //     }
+
+    pub fn combo_method(&self, str1: String, str2: String, b: bool) -> String {
+        println!("{str1} {str2} {b}");
+        if b {
+            str1
+        } else {
+            str2
+        }
+    }
+
+    // static method
+    pub fn static_method() {
+        println!("Rust: Static public method called");
+    }
+    pub fn static_method_taking_primitives(i: i32, b: bool) {
+        println!("Rust: Static public method called: i = {i}, b = {b}");
+    }
+    pub fn static_method_taking_string(s: String) {
+        println!("Rust: Static public method called: s = {s}");
+    }
+    pub fn static_method_returning_primitive() -> i32 {
+        22
+    }
+    pub fn static_method_returning_string() -> String {
+        "String returned from Rust static method".to_string()
+    }
+    pub fn static_combo_method(str1: String, str2: String, b: bool) -> String {
+        println!("{str1} {str2} {b}");
+        if b {
+            str1
+        } else {
+            str2
+        }
+    }
+}
+
+#[ffi]
+#[derive(Default, Clone, Serialize, Debug)]
 struct TestStruct2 {
     pub i32_field: i32,
 }
 
 #[ffi]
 fn simple_function() {
-    // println!("Rust: Simple function called"); // This line causes still reachable resources in valgrind report
+    println!("Rust: Simple function called"); // This line causes still reachable resources in valgrind report
 }
 
 #[ffi]
-fn function_with_primitive_args(_i: i32, _b: bool) {
-    // println!("Rust: Function with args called: i = {_i}, s = {_b}"); // This line causes still reachable resources in valgrind report
+fn function_with_primitive_args(i: i32, b: bool) {
+    println!("Rust: Function with args called: i = {i}, s = {b}"); // This line causes still reachable resources in valgrind report
 }
 
 #[ffi]
-fn function_with_string_arg(_s: String) {
-    // println!("Rust: Function with string arg called: s = {_s}"); // This line causes still reachable resources in valgrind report
+fn function_with_string_arg(s: String) {
+    println!("Rust: Function with string arg called: s = {s}"); // This line causes still reachable resources in valgrind report
 }
 
 #[ffi]
-fn function_with_primitive_and_string_arg(_i: i32, _b: bool, _s: String) {
-    // println!("Rust: Function with args called: i = {_i}, s = {_b}, s = {_s}"); // This line causes still reachable resources in valgrind report
+fn function_with_primitive_and_string_arg(i: i32, b: bool, s: String) {
+    println!("Rust: Function with args called: i = {i}, s = {b}, s = {s}"); // This line causes still reachable resources in valgrind report
 }
 
 #[ffi]
@@ -71,9 +152,19 @@ fn combo_function(str1: String, str2: String, b: bool) -> String {
     }
 }
 
-// Having Drop defined causes still reachable resources in valgrind report
-// impl Drop for TestStruct {
-//     fn drop(&mut self) {
-//         println!("Dropping TestStruct");
-//     }
+// #[ffi]
+// fn function_taking_struct(s: TestStruct2) {
+//     println!("Rust: Function with struct arg called: s = {s:?}");
 // }
+
+// #[ffi]
+// fn function_returning_struct() -> TestStruct2 {
+//     TestStruct2::default()
+// }
+
+// Having Drop defined causes still reachable resources in valgrind report
+impl Drop for TestStruct {
+    fn drop(&mut self) {
+        println!("Dropping TestStruct");
+    }
+}

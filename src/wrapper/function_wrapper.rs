@@ -11,55 +11,52 @@ pub struct FunctionWrapper {
     pub(crate) return_wrapper: Option<FunctionReturnWrapper>,
 }
 
+pub struct MappedReturnType {
+    pub return_type_sig: TokenStream2,
+    pub result_cast: TokenStream2,
+}
+
+pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> MappedReturnType {
+    match return_wrapper {
+        Some(FunctionReturnWrapper {
+            wrapper_type: FunctionReturnWrapperType::Primitive,
+            return_type,
+        }) => MappedReturnType {
+            return_type_sig: quote! {-> #return_type},
+            result_cast: quote! {result},
+        },
+        Some(FunctionReturnWrapper {
+            wrapper_type: FunctionReturnWrapperType::String,
+            ..
+        }) => MappedReturnType {
+            return_type_sig: quote! {-> *mut String},
+            result_cast: quote! {
+                Box::into_raw(Box::new(result))
+            },
+        },
+        None => MappedReturnType {
+            return_type_sig: quote! {},
+            result_cast: quote! {result},
+        },
+    }
+}
+
 impl From<&FunctionWrapper> for TokenStream2 {
     fn from(function_wrapper: &FunctionWrapper) -> Self {
         let fn_name = &function_wrapper.name;
         let extern_function_name = &function_wrapper.extern_function_name;
         let wrapper_name = format_ident!("ffi_wrapper_{}", fn_name);
 
-        let (mut arg_signatures, mut arg_names, mut arg_casts): (Vec<_>, Vec<_>, Vec<_>) =
-            (Vec::new(), Vec::new(), Vec::new());
-        function_wrapper
-            .args_wrappers
-            .iter()
-            .for_each(|arg| match arg {
-                FunctionArgWrapper {
-                    arg_name,
-                    arg_type,
-                    wrapper_type: FunctionArgWrapperType::Primitive,
-                } => {
-                    arg_signatures.push(quote! {#arg_name: #arg_type});
-                    arg_names.push(quote! {#arg_name});
-                }
-                FunctionArgWrapper {
-                    arg_name,
-                    wrapper_type: FunctionArgWrapperType::String,
-                    ..
-                } => {
-                    arg_signatures.push(quote! {#arg_name: *const i8});
-                    arg_names.push(quote! {#arg_name});
-                    arg_casts.push(quote! {
-                        let #arg_name = unsafe { std::ffi::CStr::from_ptr(#arg_name).to_str().unwrap().to_owned() };
-                    });
-                }
-            });
+        let MappedFunctionArgsTokens {
+            arg_signatures,
+            arg_names,
+            arg_casts,
+        } = map_function_arg_wrappers(function_wrapper.args_wrappers.iter());
 
-        let (return_type_sig, result_cast) = match &function_wrapper.return_wrapper {
-            Some(FunctionReturnWrapper {
-                wrapper_type: FunctionReturnWrapperType::Primitive,
-                return_type,
-            }) => (quote! {-> #return_type}, quote! {result}),
-            Some(FunctionReturnWrapper {
-                wrapper_type: FunctionReturnWrapperType::String,
-                ..
-            }) => (
-                quote! {-> *mut String},
-                quote! {
-                    Box::into_raw(Box::new(result))
-                },
-            ),
-            None => (quote! {}, quote! {result}),
-        };
+        let MappedReturnType {
+            return_type_sig,
+            result_cast,
+        } = map_return_type(&function_wrapper.return_wrapper);
 
         quote! {
             #[doc(hidden)]
@@ -70,6 +67,45 @@ impl From<&FunctionWrapper> for TokenStream2 {
                 #result_cast
             }
         }
+    }
+}
+
+pub struct MappedFunctionArgsTokens {
+    pub arg_signatures: Vec<TokenStream2>,
+    pub arg_names: Vec<TokenStream2>,
+    pub arg_casts: Vec<TokenStream2>,
+}
+pub fn map_function_arg_wrappers<'a>(
+    args: impl Iterator<Item = &'a FunctionArgWrapper>,
+) -> MappedFunctionArgsTokens {
+    let (mut arg_signatures, mut arg_names, mut arg_casts): (Vec<_>, Vec<_>, Vec<_>) =
+        (Vec::new(), Vec::new(), Vec::new());
+    args
+    .for_each(|arg| match arg {
+        FunctionArgWrapper {
+            arg_name,
+            arg_type,
+            wrapper_type: FunctionArgWrapperType::Primitive,
+        } => {
+            arg_signatures.push(quote! {#arg_name: #arg_type});
+            arg_names.push(quote! {#arg_name});
+        }
+        FunctionArgWrapper {
+            arg_name,
+            wrapper_type: FunctionArgWrapperType::String,
+            ..
+        } => {
+            arg_signatures.push(quote! {#arg_name: *const i8});
+            arg_names.push(quote! {#arg_name});
+            arg_casts.push(quote! {
+                let #arg_name = unsafe { std::ffi::CStr::from_ptr(#arg_name).to_str().unwrap().to_owned() };
+            });
+        }
+    });
+    MappedFunctionArgsTokens {
+        arg_signatures,
+        arg_names,
+        arg_casts,
     }
 }
 
