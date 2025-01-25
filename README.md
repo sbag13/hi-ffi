@@ -60,17 +60,17 @@ After building Rust package, the FFI code is generated in `generated_code` direc
 |                | struct setters           | ✅   | ❌     |
 |                | default constructor      | ✅   | ✅     |
 |                |
-| methods        | primitive arguments      | ✅   | ❌     |
-|                | string arguments         | ✅   | ❌     |
-|                | primitive return         | ✅   | ❌     |
-|                | string return            | ✅   | ❌     |
+| methods        | primitive arguments      | ✅   | ✅     |
+|                | string arguments         | ✅   | ✅     |
+|                | primitive return         | ✅   | ✅     |
+|                | string return            | ✅   | ✅     |
 |                | struct arguments         | ❌   | ❌     |
 |                | struct return            | ❌   | ❌     |
 |                |
-| static methods | primitive arguments      | ✅   | ❌     |
-|                | string arguments         | ✅   | ❌     |
-|                | primitive return         | ✅   | ❌     |
-|                | string return            | ✅   | ❌     |
+| static methods | primitive arguments      | ✅   | ✅     |
+|                | string arguments         | ✅   | ✅     |
+|                | primitive return         | ✅   | ✅     |
+|                | string return            | ✅   | ✅     |
 |                | struct arguments         | ❌   | ❌     |
 |                | struct return            | ❌   | ❌     |
 |                |

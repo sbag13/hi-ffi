@@ -1,11 +1,10 @@
+use std::fmt::Display;
+
 use crate::wrapper::*;
 use quote::ToTokens;
 
-pub fn gen_function_header(function_wrapper: &FunctionWrapper) -> String {
-    let extern_fn_name = &function_wrapper.extern_function_name;
-    let swift_args = function_wrapper
-        .args_wrappers
-        .iter()
+pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
+    args.iter()
         .map(|arg| match arg {
             FunctionArgWrapper {
                 arg_name,
@@ -22,25 +21,36 @@ pub fn gen_function_header(function_wrapper: &FunctionWrapper) -> String {
                 format!("void* {arg_name}")
             }
         })
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
-    let swift_args = swift_args.join(", ");
+pub fn gen_function_header(
+    extern_fn_name: &impl Display,
+    args: &[FunctionArgWrapper],
+    return_wrapper: &Option<FunctionReturnWrapper>,
+) -> String {
+    let swift_args = map_header_declaration_args(args);
 
     let ReturnTypes {
         cpp_return_type, ..
-    } = map_return_type(&function_wrapper.return_wrapper);
+    } = map_return_type(return_wrapper);
 
     format!(r#"{cpp_return_type} {extern_fn_name}({swift_args});"#)
 }
 
-pub fn gen_function_definition(function_wrapper: &FunctionWrapper) -> String {
-    let fn_name = function_wrapper.name.to_string();
-    let extern_fn_name = &function_wrapper.extern_function_name;
+pub struct MappedSwiftFunctionArgsTokens {
+    pub args_signatures: String,
+    pub args_names: String,
+    pub args_casts: String,
+}
+
+pub fn map_args<'a>(
+    args: impl Iterator<Item = &'a FunctionArgWrapper>,
+) -> MappedSwiftFunctionArgsTokens {
     let (mut args_signatures, mut args_names, mut args_casts): (Vec<_>, Vec<_>, Vec<_>) =
         (Vec::new(), Vec::new(), Vec::new());
-    function_wrapper
-        .args_wrappers
-        .iter()
+    args
         .for_each(|arg| match arg {
             FunctionArgWrapper {
                 arg_name,
@@ -67,57 +77,77 @@ pub fn gen_function_definition(function_wrapper: &FunctionWrapper) -> String {
     let args_names = args_names.join(", ");
     let args_casts = args_casts.join("\n");
 
-    let ReturnTypes {
-        return_type_sig,
-        result_cast,
-        ..
-    } = map_return_type(&function_wrapper.return_wrapper);
+    MappedSwiftFunctionArgsTokens {
+        args_signatures,
+        args_names,
+        args_casts,
+    }
+}
 
-    let fn_definition = match (return_type_sig, result_cast) {
-        (Some(return_type_sig), Some(result_cast)) => {
-            format!(
-                r#"
-public func {fn_name}({args_signatures}) {return_type_sig}{{
-{args_casts}
-    let result = {extern_fn_name}({args_names})
-{result_cast}
-    return casted_result
-}}"#
-            )
+pub fn compose_function_definition(
+    fn_name: impl Display,
+    extern_fn_name: impl Display,
+    args: MappedSwiftFunctionArgsTokens,
+    return_types: ReturnTypes,
+    is_static: bool,
+) -> String {
+    let static_keyword = if is_static { "static " } else { "" };
+    let return_type_sig = return_types.return_type_sig;
+    let result_cast = return_types.result_cast;
+    let MappedSwiftFunctionArgsTokens {
+        args_signatures,
+        args_names,
+        args_casts,
+    } = args;
+
+    let (body, return_type) = match (return_type_sig.as_ref(), result_cast) {
+        (Some(return_type), Some(result_cast)) => {
+            let body = format!(
+                "    let result = {extern_fn_name}({args_names})
+    {result_cast}
+    return casted_result"
+            );
+            (body, return_type.as_str())
         }
-        (Some(return_type_sig), None) => {
-            format!(
-                r#"
-public func {fn_name}({args_signatures}) {return_type_sig}{{
-{args_casts}
-    return {extern_fn_name}({args_names})
-}}"#
-            )
+        (Some(return_type), None) => {
+            let body = format!("    return {extern_fn_name}({args_names})");
+            (body, return_type.as_str())
         }
         (None, _) => {
-            format!(
-                r#"
-public func {fn_name}({args_signatures}) {{
-{args_casts}
-    {extern_fn_name}({args_names})
-}}"#
-            )
+            let body = format!("    {extern_fn_name}({args_names})");
+            (body, "")
         }
     };
 
     format!(
-        r#"@_exported import CFfiModule
-{fn_definition}"#
+        r#"
+    public {static_keyword}func {fn_name}({args_signatures}) {return_type} {{
+    {args_casts}
+    {body}
+    }}"#
     )
 }
 
-struct ReturnTypes {
-    return_type_sig: Option<String>,
-    cpp_return_type: String,
-    result_cast: Option<String>,
+pub fn gen_function_definition(function: &FunctionWrapper) -> String {
+    let mapped_args = map_args(function.args_wrappers.iter());
+    let return_types = map_return_type(&function.return_wrapper);
+
+    compose_function_definition(
+        &function.name,
+        &function.extern_function_name,
+        mapped_args,
+        return_types,
+        false,
+    )
 }
 
-fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnTypes {
+pub struct ReturnTypes {
+    pub return_type_sig: Option<String>,
+    pub cpp_return_type: String,
+    pub result_cast: Option<String>,
+}
+
+pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnTypes {
     match return_wrapper {
         Some(FunctionReturnWrapper {
             wrapper_type: FunctionReturnWrapperType::Primitive,

@@ -48,6 +48,48 @@ func run () {
     print("Setting string field")
     s.string_field = "Hello, World!"
     print("updated string_field: \(s.string_field)")
+
+    print("Calling simple method")
+    s.public_method()
+
+    print("Calling method with primitives")
+    s.public_method_taking_primitives(1, true)
+
+    print("Calling method with string")
+    s.public_method_taking_string("Hello, World!")
+
+    print("Calling public method returning primitive")
+    let public_method_returning_primitive = s.public_method_returning_primitive()
+    print("public_method_returning_primitive: \(public_method_returning_primitive)")
+
+    print("Calling method returning string")
+    let public_method_returning_string = s.public_method_returning_string()
+    print("public_method_returning_string: \(public_method_returning_string)")
+
+    print("Calling combo method")
+    let combo_method_result = s.combo_method("Combo!", "Don't print me", true)
+    print("combo_method_result: \(combo_method_result)")
+
+    print("Calling simple static method")
+    TestStruct.static_method()
+
+    print("Calling static method with primitives")
+    TestStruct.static_method_taking_primitives(1, true)
+
+    print("Calling static method with string")
+    TestStruct.static_method_taking_string("Hello, World!")
+
+    print("Calling static method returning primitive")
+    let static_method_returning_primitive = TestStruct.static_method_returning_primitive()
+    print("static_method_returning_primitive: \(static_method_returning_primitive)")
+
+    print("Calling static method returning string")
+    let static_method_returning_string = TestStruct.static_method_returning_string()
+    print("static_method_returning_string: \(static_method_returning_string)")
+
+    print("Calling static combo method")
+    let static_combo_method_result = TestStruct.static_combo_method("Combo!", "Don't print me", true)
+    print("static_combo_method_result: \(static_combo_method_result)")
 }
 
 run()

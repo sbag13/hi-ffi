@@ -1,7 +1,10 @@
-use super::*;
+use class_definition::{
+    gen_class_methods_definition_from_impl_block, gen_class_methods_definition_from_struct,
+    gen_method_declarations_from_impl_block, gen_method_declarations_from_struct,
+};
+use function_definition::{gen_function_definition, gen_function_header};
 
-use class_definition::*;
-use function_definition::*;
+use super::*;
 
 pub mod class_definition;
 pub mod function_definition;
@@ -24,16 +27,27 @@ impl Wrapper {
     pub fn swift(&self) -> SwiftCode {
         match &self.parsed {
             ParsedWrapper::Struct(struct_wrapper) => SwiftCode::Class {
-                header: gen_class_header(struct_wrapper),
-                source: gen_class_methods_from_struct(struct_wrapper),
+                header: gen_method_declarations_from_struct(struct_wrapper),
+                source: gen_class_methods_definition_from_struct(struct_wrapper),
             },
-            ParsedWrapper::Function(function_wrapper) => SwiftCode::Function {
-                header: gen_function_header(function_wrapper),
-                source: gen_function_definition(function_wrapper),
-            },
-            ParsedWrapper::ImplBlock(_impl_block_wrapper) => SwiftCode::Class {
-                header: "".to_string(), // TODO
-                source: "".to_string(), // TODO
+            ParsedWrapper::Function(function_wrapper) => {
+                let function_definition = gen_function_definition(function_wrapper);
+                let source = format!(
+                    r#"@_exported import CFfiModule
+{function_definition}"#
+                );
+                SwiftCode::Function {
+                    header: gen_function_header(
+                        &function_wrapper.extern_function_name,
+                        &function_wrapper.args_wrappers,
+                        &function_wrapper.return_wrapper,
+                    ),
+                    source,
+                }
+            }
+            ParsedWrapper::ImplBlock(impl_block_wrapper) => SwiftCode::Class {
+                header: gen_method_declarations_from_impl_block(impl_block_wrapper),
+                source: gen_class_methods_definition_from_impl_block(impl_block_wrapper),
             },
         }
     }
