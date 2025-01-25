@@ -1,6 +1,6 @@
 # hi-ffi
 
-Tool for generating bindings from Rust code.
+Tool for generating bindings to Rust code.
 
 ## How To Use
 
@@ -45,8 +45,14 @@ After building Rust package, the FFI code is generated in `generated_code` direc
 
 ### Language specific examples:
 
-- C++ - [README.md](tests/cpp/README.md)
-- Swift - [README.md](tests/swift/README.md)
+The following examples are built on top of the Rust code defined [here](./tests/src/lib.rs).
+
+- C++:
+  -  [README.md](tests/cpp/README.md)
+  -  [main.cpp](tests/cpp/main.cpp)
+- Swift 
+  -  [README.md](tests/swift/README.md)
+  -  [main.swift](tests/swift/ModuleTest/Sources/ModuleTest/main.swift)
 
 ## Supported Features
 

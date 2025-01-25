@@ -8,6 +8,8 @@ import FfiModule
 func run () {
     print("Swift FFI Test Suite")
 
+    // Functions
+
     simple_function()
     print("simple_function called")
 
@@ -30,6 +32,8 @@ func run () {
 
     print(combo_function("Combo!", "Don't print me", true))
 
+    // Structs basics
+
     print("Creating a struct")
     let s = TestStruct()
 
@@ -48,6 +52,8 @@ func run () {
     print("Setting string field")
     s.string_field = "Hello, World!"
     print("updated string_field: \(s.string_field)")
+
+    // Structs methods from impl block
 
     print("Calling simple method")
     s.public_method()
@@ -69,6 +75,8 @@ func run () {
     print("Calling combo method")
     let combo_method_result = s.combo_method("Combo!", "Don't print me", true)
     print("combo_method_result: \(combo_method_result)")
+
+    // Structs static methods from impl blocks
 
     print("Calling simple static method")
     TestStruct.static_method()
