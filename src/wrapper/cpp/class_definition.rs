@@ -33,6 +33,7 @@ pub fn gen_class_definition_parts_from_impl_block(
                     arg_names,
                     arg_casts,
                     wrapper_args,
+                    includes: arg_includes,
                 } = map_args(method_wrapper.args.iter());
 
                 let return_types = map_return_type(&method_wrapper.return_wrapper);
@@ -52,11 +53,17 @@ pub fn gen_class_definition_parts_from_impl_block(
                     &wrapper_args,
                     &return_types.ext_return_type,
                 );
-                let include = String::new();
 
                 methods.push_str(&method);
                 externs.push_str(&extern_fn);
-                includes.insert(include);
+                // Add includes from arguments
+                for include in arg_includes {
+                    includes.insert(include);
+                }
+                // Add includes from return type
+                if !return_types.return_type_includes.is_empty() {
+                    includes.insert(return_types.return_type_includes);
+                }
 
                 (methods, externs, includes)
             },
@@ -124,6 +131,7 @@ fn method_definition(
         ext_return_type,
         return_type,
         return_cast,
+        return_type_includes: _,
     } = return_types;
 
     let static_keyword = if is_static { "static " } else { "" };
@@ -230,7 +238,7 @@ class {class_name} {{
     void* self = nullptr;
 public:
 
-    void* self_ptr() {{
+    void* self_ptr() const {{
         return self;
     }}
     void set_self_ptr(void* ptr) {{
@@ -410,7 +418,7 @@ fn map_string_setter(
         this->{name}(std::move(value));
     }}"#
         ),
-        extern_fn: format!("    void {extern_fn_name}(void*, char*, size_t);\n"),
+        extern_fn: format!("    void {extern_fn_name}(void*, const char*, size_t);\n"),
         include: String::new(),
     }
 }

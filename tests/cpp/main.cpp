@@ -4,7 +4,10 @@
 #include "function_with_string_arg.h"
 #include "function_return_primitive.h"
 #include "function_return_string.h"
+#include "function_taking_struct.h"
+#include "function_returning_struct.h"
 #include "combo_function.h"
+#include "combo_struct_function.h"
 #include "TestStruct.h"
 #include <iostream>
 #include <cassert>
@@ -51,8 +54,36 @@ int main()
     TestStruct::static_method();
     test_struct.public_method_taking_primitives(5, true);
     TestStruct::static_method_taking_primitives(6, false);
-    test_struct.public_method_taking_string("Hello, Rust!");
-    TestStruct::static_method_taking_string("Hello, Rust!");
+    test_struct.public_method_taking_string(std::string("Hello, Rust!"));
+    TestStruct::static_method_taking_string(std::string("Hello, Rust!"));
+    
+    // Struct methods with struct arguments and return types
+    auto test_struct2_arg = TestStruct2();
+    test_struct2_arg.set_i32_field(100);
+    test_struct.public_method_taking_struct(test_struct2_arg);
+    
+    auto returned_struct = test_struct.public_method_returning_struct();
+    std::cout << "Method returned struct with field: " << returned_struct.get_i32_field() << std::endl;
+    assert(returned_struct.get_i32_field() == 99);
+    
+    // Static methods with struct arguments and return types
+    auto static_arg = TestStruct2();
+    static_arg.set_i32_field(200);
+    TestStruct::static_method_taking_struct(static_arg);
+    
+    auto static_returned = TestStruct::static_method_returning_struct();
+    std::cout << "Static method returned struct with field: " << static_returned.get_i32_field() << std::endl;
+    assert(static_returned.get_i32_field() == 77);
+    
+    // Combo struct method
+    auto combo_arg1 = TestStruct2();
+    combo_arg1.set_i32_field(300);
+    auto combo_arg2 = TestStruct2();
+    combo_arg2.set_i32_field(400);
+    auto combo_result = TestStruct::static_combo_struct_method(combo_arg1, combo_arg2);
+    std::cout << "Combo struct method returned: " << combo_result.get_i32_field() << std::endl;
+    assert(combo_result.get_i32_field() == 300);
+    
     assert(test_struct.public_method_returning_primitive() == 24);
     assert(TestStruct::static_method_returning_primitive() == 22);
     std::cout << test_struct.public_method_returning_string() << std::endl;
@@ -69,6 +100,14 @@ int main()
     assert(function_return_primitive() == 42);
     std::cout << function_return_string() << std::endl;
     assert(function_return_string() == "String returned from Rust");
-    std::cout << combo_function("Combo function!", "Don't print me", true) << std::endl;
-    assert(combo_function("str1", "str2", true) == "str1");
+    std::cout << "Calling function_taking_struct" << std::endl;
+    function_taking_struct(TestStruct2());
+    auto struct2_from_function = function_returning_struct();
+    std::cout << struct2_from_function.get_i32_field() << std::endl;
+    assert(struct2_from_function.get_i32_field() == 48);
+    assert(combo_function("str1", "str2", true, TestStruct()) == "str1");
+    auto s1 = TestStruct();
+    s1.set_i32_field(49);
+    auto combo_struct_function_result = combo_struct_function(s1, TestStruct(), TestStruct2());
+    assert(combo_struct_function_result.get_i32_field() == 49);
 }

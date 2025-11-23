@@ -37,7 +37,7 @@ pub fn return_wrapper(output: &syn::ReturnType) -> Option<FunctionReturnWrapper>
                         "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64"
                         | "u128" | "f32" | "f64" | "bool" => FunctionReturnWrapperType::Primitive,
                         "String" => FunctionReturnWrapperType::String,
-                        _ => panic!("Unsupported type: {}", ident),
+                        _custom_type => FunctionReturnWrapperType::Struct,
                     };
 
                     Some(FunctionReturnWrapper {
@@ -70,7 +70,7 @@ pub fn map_arg(arg: &FnArg) -> FunctionArgWrapper {
                         "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64"
                         | "u128" | "f32" | "f64" | "bool" => FunctionArgWrapperType::Primitive,
                         "String" => FunctionArgWrapperType::String,
-                        _ => panic!("Unsupported type: {}", ident),
+                        _custom_type => FunctionArgWrapperType::Struct,
                     };
 
                     FunctionArgWrapper {

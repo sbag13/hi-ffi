@@ -1,113 +1,167 @@
 # hi-ffi
 
-Tool for generating bindings to Rust code.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 
-## How To Use
+**hi-ffi** is a Rust procedural macro that automatically generates Foreign Function Interface (FFI) bindings for your Rust code, enabling seamless integration with C++ and Swift applications. With minimal annotations, you can expose Rust structs, functions, and methods to other languages without writing boilerplate FFI code.
 
-Rust glue code and bindings in target languages are generated for Rust code that is marked with the `#[ffi]` macro.
+## Features
+
+- 🚀 **Zero Boilerplate**: Generate FFI bindings with a single `#[ffi]` attribute
+- 🔧 **Flexible Configuration**: Control getter/setter generation with field-level attributes
+- 🌐 **Multi-Language Support**: Generate bindings for C++ and Swift
+- 📦 **Type Safety**: Maintain type safety across language boundaries
+- 🎯 **Selective Export**: Choose which fields and methods to expose
+- 🔒 **Memory Safe**: Automatic memory management for cross-language calls
+
+## Installation
+
+Add `hi-ffi` to your `Cargo.toml`:
+
+```toml
+[dependencies]
+hi_ffi = { version = "0.1.0", features = ["cpp", "swift"] }
+```
+
+**Note**: `hi-ffi` is a procedural macro crate. Enable the `cpp` and/or `swift` features based on your target languages.
+
+## Quick Start
+
+### Basic Usage
+
+Annotate your Rust code with `#[ffi]` to generate FFI bindings:
 
 ```rust
 use hi_ffi::ffi;
 
 #[ffi]
 #[derive(Default, Clone)]
-struct TestStruct {
-    // generate getter and setter
+struct Person {
+    // Generate both getter and setter
     #[ffi(setter, getter)]
-    i32_field: i32,
+    age: i32,
 
-    // generate getter only
+    // Generate getter only (read-only)
     #[ffi(getter)]
-    bool_field: bool,
+    name: String,
 
-    // generate getter and setter
-    pub string_field: String,
+    // Public fields automatically get getters and setters
+    pub email: String,
 
-    // don't generate getter and setter
+    // Skip FFI generation for internal fields
     #[ffi(skip)]
-    _skip_field: i32,
-
-    #[ffi(getter, setter)]
-    struct_field: TestStruct2,
+    _internal_id: u64,
 }
 
 #[ffi]
-#[derive(Default, Clone)]
-struct TestStruct2 {
-    pub i32_field: i32,
+fn greet(name: String) -> String {
+    format!("Hello, {}!", name)
 }
-
-#[ffi]
-fn function_with_primitive_and_string_arg(_i: i32, _b: bool, _s: String) {}
 ```
 
-After building Rust package, the FFI code is generated in `generated_code` directory, which then can be embedded into a program written in one of target languages.
-
-### Language specific examples:
-
-The following examples are built on top of the Rust code defined [here](./tests/src/lib.rs).
-
-- C++:
-  -  [README.md](tests/cpp/README.md)
-  -  [main.cpp](tests/cpp/main.cpp)
-- Swift 
-  -  [README.md](tests/swift/README.md)
-  -  [main.swift](tests/swift/ModuleTest/Sources/ModuleTest/main.swift)
+After building your Rust project, FFI bindings are generated in the `generated_code` directory, ready to be integrated into your C++ or Swift projects.
 
 ## Supported Features
 
-|                |                          | c++ | swift |
-| -------------- | ------------------------ | --- | ----- |
-| structs        | primitive setters        | ✅   | ✅     |
-|                | primitive getters        | ✅   | ✅     |
-|                | string setters           | ✅   | ✅     |
-|                | string getters           | ✅   | ✅     |
-|                | struct getters           | ✅   | ❌     |
-|                | struct setters           | ✅   | ❌     |
-|                | default constructor      | ✅   | ✅     |
-|                |
-| methods        | primitive arguments      | ✅   | ✅     |
-|                | string arguments         | ✅   | ✅     |
-|                | primitive return         | ✅   | ✅     |
-|                | string return            | ✅   | ✅     |
-|                | struct arguments         | ❌   | ❌     |
-|                | struct return            | ❌   | ❌     |
-|                |
-| static methods | primitive arguments      | ✅   | ✅     |
-|                | string arguments         | ✅   | ✅     |
-|                | primitive return         | ✅   | ✅     |
-|                | string return            | ✅   | ✅     |
-|                | struct arguments         | ❌   | ❌     |
-|                | struct return            | ❌   | ❌     |
-|                |
-| functions      | primitive arguments      | ✅   | ✅     |
-|                | string arguments         | ✅   | ✅     |
-|                | primitive return         | ✅   | ✅     |
-|                | string return            | ✅   | ✅     |
-|                | str return               | ❌   | ❌     |
-|                | struct arguments         | ❌   | ❌     |
-|                | struct return            | ❌   | ❌     |
-|                |
-| enums          | primitive enums          | ❌   | ❌     |
-|                | variants with primitives | ❌   | ❌     |
-|                | variants with strings    | ❌   | ❌     |
-|                | variants with structs    | ❌   | ❌     |
-|                |
-| vector         | primitives vector        | ❌   | ❌     |
-|                | strings vector           | ❌   | ❌     |
+### Structs
 
-## Development
+| Feature             | C++ | Swift |
+| ------------------- | --- | ----- |
+| Primitive getters   | ✅  | ✅    |
+| Primitive setters   | ✅  | ✅    |
+| String getters      | ✅  | ✅    |
+| String setters      | ✅  | ✅    |
+| Struct getters      | ✅  | ❌    |
+| Struct setters      | ✅  | ❌    |
+| Default constructor | ✅  | ✅    |
 
-### Modules
+### Methods
 
-`hi_ffi` contains of the following modules:
+| Feature             | C++ | Swift |
+| ------------------- | --- | ----- |
+| Primitive arguments | ✅  | ✅    |
+| String arguments    | ✅  | ✅    |
+| Primitive return    | ✅  | ✅    |
+| String return       | ✅  | ✅    |
+| Struct arguments    | ✅  | ❌    |
+| Struct return       | ✅  | ❌    |
 
-- `lib.rs` - main module, creates target files and directories, calls `translator` and `wrapper` modules
-- `translator` - translates Rust code into parsed, intermediate representation; it is target language agnostic
-- `wrapper` - result of translation. it is used for generating Rust glue code (`Into<TokenStream>`) and bindings for every target language
-- language specific base modules (`cpp`, `swift`) - generates base code for each target language
+### Static Methods
 
-# TODO
+| Feature             | C++ | Swift |
+| ------------------- | --- | ----- |
+| Primitive arguments | ✅  | ✅    |
+| String arguments    | ✅  | ✅    |
+| Primitive return    | ✅  | ✅    |
+| String return       | ✅  | ✅    |
+| Struct arguments    | ✅  | ❌    |
+| Struct return       | ✅  | ❌    |
 
-- pipelines
-  - publishing to crates.io
+### Functions
+
+| Feature             | C++ | Swift |
+| ------------------- | --- | ----- |
+| Primitive arguments | ✅  | ✅    |
+| String arguments    | ✅  | ✅    |
+| Primitive return    | ✅  | ✅    |
+| String return       | ✅  | ✅    |
+| Struct arguments    | ✅  | ❌    |
+| Struct return       | ✅  | ❌    |
+| `&str` return       | ❌  | ❌    |
+
+## Language-Specific Examples
+
+Complete working examples are available in the `tests` directory:
+
+- **C++**: See [tests/cpp/README.md](tests/cpp/README.md) and [tests/cpp/main.cpp](tests/cpp/main.cpp)
+- **Swift**: See [tests/swift/README.md](tests/swift/README.md) and [tests/swift/ModuleTest/Sources/ModuleTest/main.swift](tests/swift/ModuleTest/Sources/ModuleTest/main.swift)
+
+These examples demonstrate how to use the generated bindings in real applications.
+
+## Architecture
+
+`hi-ffi` is built with a modular architecture:
+
+- **`lib.rs`** - Main entry point that orchestrates code generation
+- **`translator`** - Parses Rust code into a language-agnostic intermediate representation
+- **`wrapper`** - Generates Rust glue code and target language bindings
+- **Language modules** (`cpp`, `swift`) - Generate language-specific code
+
+The translation process:
+
+1. Parse Rust code marked with `#[ffi]`
+2. Extract type information and method signatures
+3. Generate Rust FFI wrapper functions
+4. Generate target language bindings (C++ headers, Swift code, etc.)
+
+## Generated Code Location
+
+After building your project, generated FFI code is placed in:
+
+```
+generated_code/
+├── rust/          # Rust FFI wrapper functions
+├── cpp/           # C++ headers and implementations
+└── swift/         # Swift package structure
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+## Roadmap
+
+- [ ] Documentation generation
+- [ ] Publishing to crates.io
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+Built with ❤️ using Rust's powerful procedural macro system.
+
+---
+
+**Note**: This project is in active development. All features are experimental and subject to change.
