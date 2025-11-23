@@ -20,6 +20,9 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
             } => {
                 format!("void* {arg_name}")
             }
+            FunctionArgWrapper { .. } => {
+                panic!("Struct arguments are not supported");
+            }
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -71,6 +74,12 @@ pub fn map_args<'a>(
                 args_casts.push(format!(
                     r#"    let casted_{arg_name} = {arg_name}.utf8CString.withUnsafeBufferPointer({{ ptr in return UnsafeMutableRawPointer(mutating: ptr.baseAddress!) }})"#
                 ));
+            }
+
+            FunctionArgWrapper {
+                ..
+            } => {
+                panic!("Struct arguments are not supported");
             }
         });
     let args_signatures = args_signatures.join(", ");
@@ -157,6 +166,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
             cpp_return_type: format!("{}", return_type.to_token_stream()),
             result_cast: None,
         },
+
         Some(FunctionReturnWrapper {
             wrapper_type: FunctionReturnWrapperType::String,
             ..
@@ -167,6 +177,11 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 "    let casted_result = RustString(result!).to_string()".to_string(),
             ),
         },
+
+        Some(FunctionReturnWrapper { .. }) => {
+            panic!("Struct return types are not supported");
+        }
+
         None => ReturnTypes {
             return_type_sig: None,
             cpp_return_type: "void".to_string(),

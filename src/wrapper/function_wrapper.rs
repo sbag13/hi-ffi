@@ -34,6 +34,15 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
                 Box::into_raw(Box::new(result))
             },
         },
+        Some(FunctionReturnWrapper {
+            wrapper_type: FunctionReturnWrapperType::Struct,
+            return_type,
+        }) => MappedReturnType {
+            return_type_sig: quote! {-> *mut #return_type},
+            result_cast: quote! {
+                Box::into_raw(Box::new(result))
+            },
+        },
         None => MappedReturnType {
             return_type_sig: quote! {},
             result_cast: quote! {result},
@@ -101,6 +110,17 @@ pub fn map_function_arg_wrappers<'a>(
                 let #arg_name = unsafe { std::ffi::CStr::from_ptr(#arg_name).to_str().unwrap().to_owned() };
             });
         }
+        FunctionArgWrapper {
+            arg_name,
+            arg_type,
+            wrapper_type: FunctionArgWrapperType::Struct,
+        } => {
+            arg_signatures.push(quote! {#arg_name: *mut #arg_type});
+            arg_names.push(quote! {#arg_name});
+            arg_casts.push(quote! {
+                let #arg_name = unsafe { (*#arg_name).clone() };
+            });
+        }
     });
     MappedFunctionArgsTokens {
         arg_signatures,
@@ -127,6 +147,7 @@ impl Debug for FunctionArgWrapper {
 pub enum FunctionArgWrapperType {
     Primitive,
     String,
+    Struct,
 }
 
 pub struct FunctionReturnWrapper {
@@ -146,4 +167,5 @@ impl Debug for FunctionReturnWrapper {
 pub enum FunctionReturnWrapperType {
     Primitive,
     String,
+    Struct,
 }

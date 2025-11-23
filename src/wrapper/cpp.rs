@@ -54,6 +54,7 @@ struct ReturnTypes {
     ext_return_type: String,
     return_type: String,
     return_cast: String,
+    return_type_includes: String,
 }
 
 fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnTypes {
@@ -65,6 +66,7 @@ fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnType
             ext_return_type: return_type.to_token_stream().to_string(),
             return_type: return_type.to_token_stream().to_string(),
             return_cast: "    return result;".to_string(),
+            return_type_includes: String::new(),
         },
         Some(FunctionReturnWrapper {
             wrapper_type: FunctionReturnWrapperType::String,
@@ -76,11 +78,29 @@ fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnType
     auto rust_str = RustString(result);
     return rust_str.to_string();"
                 .to_string(),
+            return_type_includes: String::new(),
         },
+        Some(FunctionReturnWrapper {
+            wrapper_type: FunctionReturnWrapperType::Struct,
+            return_type,
+        }) => {
+            let struct_type = return_type.to_token_stream().to_string();
+            ReturnTypes {
+                ext_return_type: "void*".to_string(),
+                return_type: struct_type.clone(),
+                return_cast: format!(
+                    "
+    return {}(result);",
+                    struct_type
+                ),
+                return_type_includes: format!("#include \"{struct_type}.h\""),
+            }
+        }
         None => ReturnTypes {
             ext_return_type: "void*".to_string(),
             return_type: "void".to_string(),
             return_cast: "".to_string(),
+            return_type_includes: String::new(),
         },
     }
 }
