@@ -204,7 +204,7 @@ fn write_header(header: CppHeader, path: impl AsRef<Path>) {
     }
 }
 
-#[cfg(feature = "cpp")]
+#[cfg(any(feature = "swift", feature = "cpp"))]
 fn insert_after(marker: &str, content: impl Display, path: impl AsRef<Path>) {
     let content = format!("{}", content);
     let file_content = std::fs::read_to_string(path.as_ref()).expect("Unable to read file");
@@ -229,4 +229,13 @@ fn append_to_file(content: impl Display, path: impl AsRef<Path>) {
         .open(path)
         .expect("Unable to open file");
     writeln!(file, "{}", content).expect("Unable to write data");
+}
+
+#[cfg(any(feature = "swift", feature = "cpp"))]
+fn prepend_each_line_with_n_tabs(s: &str, n: usize) -> String {
+    let tabs = "    ".repeat(n);
+    s.lines()
+        .map(|line| format!("{}{}", tabs, line))
+        .collect::<Vec<_>>()
+        .join("\n")
 }

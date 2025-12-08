@@ -1,103 +1,68 @@
-
-
 import Foundation
 import FfiModule
 
-// TODO assertions
-
-func run () {
-    print("Swift FFI Test Suite")
-
-    // Functions
-
-    simple_function()
-    print("simple_function called")
-
-    print("Calling function_with_primitive_args")
-    function_with_primitive_args(1, true)
-
-    print("Calling function_with_string_arg")
-    function_with_string_arg("Hello, World!")
-
-    print("Calling function_with_primitive_and_string_arg")
-    function_with_primitive_and_string_arg(1, false, "Hello, World!")
-
-    print("Calling function_return_primitive")
-    let primitive_result = function_return_primitive()
-    print("Primitive result: \(primitive_result)")
-
-    print("Calling function_return_string")
-    let str_result = function_return_string()
-    print(str_result)
-
-    print(combo_function("Combo!", "Don't print me", true))
-
-    // Structs basics
-
-    print("Creating a struct")
+func assert_struct_basics() {
     let s = TestStruct()
-
-    print("Getting i32_field")
-    let i32_field = s.i32_field
-    print("i32_field: \(i32_field)")
-
-    print("Setting i32_field")
+    assert(s.i32_field == 0, "Default i32_field should be 0")
     s.i32_field = 42
-    print("i32_field: \(s.i32_field)")
-
-    print("Getting string field")
-    let string_field = s.string_field
-    print("string_field (should be empty): \(string_field)")
-
-    print("Setting string field")
+    assert(s.i32_field == 42, "i32_field should be 42 after set")
+    assert(s.string_field == "", "Default string_field should be empty")
     s.string_field = "Hello, World!"
-    print("updated string_field: \(s.string_field)")
+    assert(s.string_field == "Hello, World!", "string_field should be updated")
+    let new_struct_field = TestStruct2()
+    new_struct_field.i32_field = 999
+    s.struct_field = new_struct_field
+    assert(s.struct_field.i32_field == 999, "struct_field.i32_field should be 999")
+}
 
-    // Structs methods from impl block
+func assert_functions() {
+    simple_function()
+    function_with_primitive_args(1, true)
+    function_with_string_arg("Hello, World!")
+    function_with_primitive_and_string_arg(1, false, "Hello, World!")
+    assert(function_return_primitive() == 42, "function_return_primitive should return 42")
+    assert(function_return_string() == "String returned from Rust", "function_return_string should return correct string")
+    let s = TestStruct()
+    assert(combo_function("Combo!", "Don't print me", true, s) == "Combo!", "combo_function should return correct string")
+    let s2 = function_returning_struct()
+    assert(s2.i32_field == 48, "function_returning_struct should return struct with i32_field 48")
+    function_taking_struct(s2)
+    let combo_struct_result = combo_struct_function(s, TestStruct(), s2)
+    assert(combo_struct_result.i32_field == s.i32_field, "combo_struct_result i32_field should match input")
+}
 
-    print("Calling simple method")
+func assert_struct_methods() {
+    let s = TestStruct()
     s.public_method()
-
-    print("Calling method with primitives")
     s.public_method_taking_primitives(1, true)
-
-    print("Calling method with string")
     s.public_method_taking_string("Hello, World!")
+    let struct_from_method = s.public_method_returning_struct()
+    s.public_method_taking_struct(struct_from_method)
+    assert(s.public_method_returning_primitive() == 24, "public_method_returning_primitive should return 24")
+    assert(s.public_method_returning_string() == "String returned from Rust method", "public_method_returning_string should return correct string")
+    assert(s.combo_method("Combo!", "Don't print me", true) == "Combo!", "combo_method should return correct string")
+}
 
-    print("Calling public method returning primitive")
-    let public_method_returning_primitive = s.public_method_returning_primitive()
-    print("public_method_returning_primitive: \(public_method_returning_primitive)")
-
-    print("Calling method returning string")
-    let public_method_returning_string = s.public_method_returning_string()
-    print("public_method_returning_string: \(public_method_returning_string)")
-
-    print("Calling combo method")
-    let combo_method_result = s.combo_method("Combo!", "Don't print me", true)
-    print("combo_method_result: \(combo_method_result)")
-
-    // Structs static methods from impl blocks
-
-    print("Calling simple static method")
+func assert_struct_static_methods() {
+    let s2 = function_returning_struct()
     TestStruct.static_method()
-
-    print("Calling static method with primitives")
     TestStruct.static_method_taking_primitives(1, true)
-
-    print("Calling static method with string")
     TestStruct.static_method_taking_string("Hello, World!")
+    assert(TestStruct.static_method_returning_primitive() == 22, "static_method_returning_primitive should return 22")
+    assert(TestStruct.static_method_returning_string() == "String returned from Rust static method", "static_method_returning_string should return correct string")
+    let static_struct = TestStruct.static_method_returning_struct()
+    assert(static_struct.i32_field == 77, "static_method_returning_struct should return struct with i32_field 77")
+    let static_combo_struct_result = TestStruct.static_combo_struct_method(s2, static_struct)
+    assert(static_combo_struct_result.i32_field == s2.i32_field, "static_combo_struct_result i32_field should match input")
+    assert(TestStruct.static_combo_method("Combo!", "Don't print me", true) == "Combo!", "static_combo_method should return correct string")
+}
 
-    print("Calling static method returning primitive")
-    let static_method_returning_primitive = TestStruct.static_method_returning_primitive()
-    print("static_method_returning_primitive: \(static_method_returning_primitive)")
-
-    print("Calling static method returning string")
-    let static_method_returning_string = TestStruct.static_method_returning_string()
-    print("static_method_returning_string: \(static_method_returning_string)")
-
-    print("Calling static combo method")
-    let static_combo_method_result = TestStruct.static_combo_method("Combo!", "Don't print me", true)
-    print("static_combo_method_result: \(static_combo_method_result)")
+func run() {
+    assert_struct_basics()
+    assert_functions()
+    assert_struct_methods()
+    assert_struct_static_methods()
+    print("All assertions passed.")
 }
 
 run()

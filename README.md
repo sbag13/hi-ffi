@@ -67,47 +67,47 @@ After building your Rust project, FFI bindings are generated in the `generated_c
 
 | Feature             | C++ | Swift |
 | ------------------- | --- | ----- |
-| Primitive getters   | ✅  | ✅    |
-| Primitive setters   | ✅  | ✅    |
-| String getters      | ✅  | ✅    |
-| String setters      | ✅  | ✅    |
-| Struct getters      | ✅  | ❌    |
-| Struct setters      | ✅  | ❌    |
-| Default constructor | ✅  | ✅    |
+| Primitive getters   | ✅   | ✅     |
+| Primitive setters   | ✅   | ✅     |
+| String getters      | ✅   | ✅     |
+| String setters      | ✅   | ✅     |
+| Struct getters      | ✅   | ✅     |
+| Struct setters      | ✅   | ✅     |
+| Default constructor | ✅   | ✅     |
 
 ### Methods
 
 | Feature             | C++ | Swift |
 | ------------------- | --- | ----- |
-| Primitive arguments | ✅  | ✅    |
-| String arguments    | ✅  | ✅    |
-| Primitive return    | ✅  | ✅    |
-| String return       | ✅  | ✅    |
-| Struct arguments    | ✅  | ❌    |
-| Struct return       | ✅  | ❌    |
+| Primitive arguments | ✅   | ✅     |
+| String arguments    | ✅   | ✅     |
+| Primitive return    | ✅   | ✅     |
+| String return       | ✅   | ✅     |
+| Struct arguments    | ✅   | ✅     |
+| Struct return       | ✅   | ✅     |
 
 ### Static Methods
 
 | Feature             | C++ | Swift |
 | ------------------- | --- | ----- |
-| Primitive arguments | ✅  | ✅    |
-| String arguments    | ✅  | ✅    |
-| Primitive return    | ✅  | ✅    |
-| String return       | ✅  | ✅    |
-| Struct arguments    | ✅  | ❌    |
-| Struct return       | ✅  | ❌    |
+| Primitive arguments | ✅   | ✅     |
+| String arguments    | ✅   | ✅     |
+| Primitive return    | ✅   | ✅     |
+| String return       | ✅   | ✅     |
+| Struct arguments    | ✅   | ✅     |
+| Struct return       | ✅   | ✅     |
 
 ### Functions
 
 | Feature             | C++ | Swift |
 | ------------------- | --- | ----- |
-| Primitive arguments | ✅  | ✅    |
-| String arguments    | ✅  | ✅    |
-| Primitive return    | ✅  | ✅    |
-| String return       | ✅  | ✅    |
-| Struct arguments    | ✅  | ❌    |
-| Struct return       | ✅  | ❌    |
-| `&str` return       | ❌  | ❌    |
+| Primitive arguments | ✅   | ✅     |
+| String arguments    | ✅   | ✅     |
+| Primitive return    | ✅   | ✅     |
+| String return       | ✅   | ✅     |
+| Struct arguments    | ✅   | ✅     |
+| Struct return       | ✅   | ✅     |
+| `&str` return       | ❌   | ❌     |
 
 ## Language-Specific Examples
 

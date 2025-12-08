@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use crate::prepend_each_line_with_n_tabs;
 use crate::wrapper::*;
 use quote::ToTokens;
 
@@ -20,8 +21,12 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
             } => {
                 format!("void* {arg_name}")
             }
-            FunctionArgWrapper { .. } => {
-                panic!("Struct arguments are not supported");
+            FunctionArgWrapper {
+                arg_name,
+                wrapper_type: FunctionArgWrapperType::Struct,
+                ..
+            } => {
+                format!("void* {arg_name}")
             }
         })
         .collect::<Vec<_>>()
@@ -72,15 +77,23 @@ pub fn map_args<'a>(
                 args_signatures.push(format!("_ {arg_name}: String"));
                 args_names.push(format!("casted_{arg_name}"));
                 args_casts.push(format!(
-                    r#"    let casted_{arg_name} = {arg_name}.utf8CString.withUnsafeBufferPointer({{ ptr in return UnsafeMutableRawPointer(mutating: ptr.baseAddress!) }})"#
+                    r#"let casted_{arg_name} = {arg_name}.utf8CString.withUnsafeBufferPointer({{ ptr in return UnsafeMutableRawPointer(mutating: ptr.baseAddress!) }})"#
                 ));
             }
 
             FunctionArgWrapper {
-                ..
+                arg_name,
+                wrapper_type: FunctionArgWrapperType::Struct,
+                arg_type,
             } => {
-                panic!("Struct arguments are not supported");
+                args_signatures.push(format!("_ {arg_name}: {}", arg_type.to_token_stream()));
+                args_names.push(format!("casted_{arg_name}"));
+                args_casts.push(format!(
+                    r#"let casted_{arg_name} = {arg_name}.rawPtr()"#
+                ));
             }
+
+            // No other variants
         });
     let args_signatures = args_signatures.join(", ");
     let args_names = args_names.join(", ");
@@ -112,28 +125,31 @@ pub fn compose_function_definition(
     let (body, return_type) = match (return_type_sig.as_ref(), result_cast) {
         (Some(return_type), Some(result_cast)) => {
             let body = format!(
-                "    let result = {extern_fn_name}({args_names})
-    {result_cast}
-    return casted_result"
+                "let result = {extern_fn_name}({args_names})
+{result_cast}
+return casted_result"
             );
             (body, return_type.as_str())
         }
         (Some(return_type), None) => {
-            let body = format!("    return {extern_fn_name}({args_names})");
+            let body = format!("return {extern_fn_name}({args_names})");
             (body, return_type.as_str())
         }
         (None, _) => {
-            let body = format!("    {extern_fn_name}({args_names})");
+            let body = format!("{extern_fn_name}({args_names})");
             (body, "")
         }
     };
 
+    let args_casts = prepend_each_line_with_n_tabs(&args_casts, 1);
+    let body = prepend_each_line_with_n_tabs(&body, 1);
+
     format!(
         r#"
-    public {static_keyword}func {fn_name}({args_signatures}) {return_type} {{
-    {args_casts}
-    {body}
-    }}"#
+public {static_keyword}func {fn_name}({args_signatures}){return_type} {{
+{args_casts}
+{body}
+}}"#
     )
 }
 
@@ -162,7 +178,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
             wrapper_type: FunctionReturnWrapperType::Primitive,
             return_type,
         }) => ReturnTypes {
-            return_type_sig: Some(format!("-> {} ", return_type.to_token_stream())),
+            return_type_sig: Some(format!(" -> {}", return_type.to_token_stream())),
             cpp_return_type: format!("{}", return_type.to_token_stream()),
             result_cast: None,
         },
@@ -171,16 +187,22 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
             wrapper_type: FunctionReturnWrapperType::String,
             ..
         }) => ReturnTypes {
-            return_type_sig: Some("-> String ".to_string()),
+            return_type_sig: Some(" -> String".to_string()),
             cpp_return_type: "void*".to_string(),
-            result_cast: Some(
-                "    let casted_result = RustString(result!).to_string()".to_string(),
-            ),
+            result_cast: Some("let casted_result = RustString(result!).to_string()".to_string()),
         },
 
-        Some(FunctionReturnWrapper { .. }) => {
-            panic!("Struct return types are not supported");
-        }
+        Some(FunctionReturnWrapper {
+            wrapper_type: FunctionReturnWrapperType::Struct,
+            return_type,
+        }) => ReturnTypes {
+            return_type_sig: Some(format!(" -> {}", return_type.to_token_stream())),
+            cpp_return_type: "void*".to_string(),
+            result_cast: Some(format!(
+                "let casted_result = {}(result!)",
+                return_type.to_token_stream()
+            )),
+        },
 
         None => ReturnTypes {
             return_type_sig: None,
