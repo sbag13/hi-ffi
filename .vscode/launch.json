@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:hi-ffi}/tests/swift/ModuleTest",
+            "name": "Debug ModuleTest (tests/swift/ModuleTest)",
+            "target": "ModuleTest",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug ModuleTest (tests/swift/ModuleTest)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:hi-ffi}/tests/swift/ModuleTest",
+            "name": "Release ModuleTest (tests/swift/ModuleTest)",
+            "target": "ModuleTest",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release ModuleTest (tests/swift/ModuleTest)"
+        }
+    ]
+}

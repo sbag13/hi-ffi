@@ -141,9 +141,23 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
         ),
         FieldWrapper {
             wrapper_type: FieldWrapperType::Custom,
+            getter,
+            setter,
             ..
         } => {
-            (None, None) // TODO
+            let getter_code = getter.as_ref().map(|g| {
+                format!(
+                    "void* {extern_fn_name}(void*);",
+                    extern_fn_name = g.extern_fn_name
+                )
+            });
+            let setter_code = setter.as_ref().map(|s| {
+                format!(
+                    "void {extern_fn_name}(void*, void*);",
+                    extern_fn_name = s.extern_fn_name
+                )
+            });
+            (getter_code, setter_code)
         }
         FieldWrapper {
             wrapper_type: FieldWrapperType::String,
@@ -243,12 +257,20 @@ fn gen_property(field: &FieldWrapper) -> String {
             getter.as_ref().map(map_primitive_getter),
             setter.as_ref().map(map_primitive_setter),
         ),
+
         FieldWrapper {
             wrapper_type: FieldWrapperType::Custom,
+            setter,
+            getter,
+            field_type,
             ..
-        } => {
-            (None, None) // TODO
-        }
+        } => (
+            getter
+                .as_ref()
+                .map(|g| map_custom_getter(g, field_type.to_token_stream())),
+            setter.as_ref().map(map_custom_setter),
+        ),
+
         FieldWrapper {
             wrapper_type: FieldWrapperType::String,
             setter,
@@ -293,6 +315,25 @@ fn gen_property(field: &FieldWrapper) -> String {
         }
         (None, None) => String::new(),
     }
+}
+
+fn map_custom_getter(Getter { extern_fn_name, .. }: &Getter, field_type: impl Display) -> String {
+    format!(
+        r#"
+        get {{
+            let ptr = {extern_fn_name}(self.rawPtr())
+            return {field_type}(ptr!)
+        }}"#,
+    )
+}
+
+fn map_custom_setter(Setter { extern_fn_name, .. }: &Setter) -> String {
+    format!(
+        r#"
+        set {{
+            {extern_fn_name}(self.rawPtr(), newValue.rawPtr())
+        }}"#,
+    )
 }
 
 fn map_primitive_getter(Getter { extern_fn_name, .. }: &Getter) -> String {

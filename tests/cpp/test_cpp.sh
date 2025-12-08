@@ -1,4 +1,4 @@
-g++ ../generated_code/cpp/*.cpp main.cpp \
+g++ ../generated_code/cpp/*.cpp main.cpp assertions.cpp \
     -I ../generated_code/cpp/ \
     -L ../target/debug/ \
     -l tests \
