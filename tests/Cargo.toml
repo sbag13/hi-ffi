@@ -1,11 +1,11 @@
 [package]
+edition = "2021"
 name = "tests"
 version = "0.1.0"
-edition = "2021"
 
 [lib]
-crate-type = ["lib", "staticlib"]
+crate-type = ["cdylib", "lib", "staticlib"]
 
 [dependencies]
-hi-ffi = { path = "../", features = ["swift", "cpp"] }
+hi-ffi = { path = "../", features = ["cpp", "swift"] }
 serde = { version = "1.0", features = ["derive"] }

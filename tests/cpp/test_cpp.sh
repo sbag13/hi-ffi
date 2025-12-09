@@ -1,6 +1,8 @@
+mkdir -p lib
+cp ../target/debug/libtests.a lib/
 g++ ../generated_code/cpp/*.cpp main.cpp assertions.cpp \
     -I ../generated_code/cpp/ \
-    -L ../target/debug/ \
+    -L ./lib \
     -l tests \
     -o test && \
 ./test

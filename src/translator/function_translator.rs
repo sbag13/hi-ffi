@@ -20,7 +20,7 @@ pub fn translate_function(item_struct: ItemFn) -> Wrapper {
         original_definition: quote! {#item_struct},
         parsed: ParsedWrapper::Function(FunctionWrapper {
             name: fn_name.clone(),
-            extern_function_name: format!("{EXPORTED_SYMBOLS_PREFIX}${fn_name}"),
+            extern_function_name: format!("{EXPORTED_SYMBOLS_PREFIX}_{fn_name}"),
             args_wrappers,
             return_wrapper,
         }),
