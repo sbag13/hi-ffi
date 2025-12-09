@@ -69,6 +69,7 @@ impl From<&FunctionWrapper> for TokenStream2 {
 
         quote! {
             #[doc(hidden)]
+            #[no_mangle]
             #[export_name = #extern_function_name]
             pub unsafe extern "C" fn #wrapper_name(#(#arg_signatures,)*) #return_type_sig {
                 #(#arg_casts)*
