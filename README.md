@@ -61,6 +61,16 @@ fn greet(name: String) -> String {
 
 After building your Rust project, FFI bindings are generated in the `generated_code` directory, ready to be integrated into your C++, Swift or Python projects.
 
+## Language-Specific Examples
+
+Complete working examples are available in the `tests` directory:
+
+- **C++**: See [tests/cpp/README.md](tests/cpp/README.md) and [tests/cpp/main.cpp](tests/cpp/main.cpp)
+- **Swift**: See [tests/swift/README.md](tests/swift/README.md) and [tests/swift/ModuleTest/Sources/ModuleTest/main.swift](tests/swift/ModuleTest/Sources/ModuleTest/main.swift)
+- **Python**: See [tests/python/README.md](tests/python/README.md) and [tests/python/main.py](tests/python/main.py)
+
+These examples demonstrate how to use the generated bindings in real applications.
+
 ## Supported Features
 
 ### Structs
@@ -108,16 +118,6 @@ After building your Rust project, FFI bindings are generated in the `generated_c
 | Struct arguments    | ✅   | ✅     | ✅      |
 | Struct return       | ✅   | ✅     | ✅      |
 | `&str` return       | ❌   | ❌     | ❌      |
-
-## Language-Specific Examples
-
-Complete working examples are available in the `tests` directory:
-
-- **C++**: See [tests/cpp/README.md](tests/cpp/README.md) and [tests/cpp/main.cpp](tests/cpp/main.cpp)
-- **Swift**: See [tests/swift/README.md](tests/swift/README.md) and [tests/swift/ModuleTest/Sources/ModuleTest/main.swift](tests/swift/ModuleTest/Sources/ModuleTest/main.swift)
-- **Python**: See [tests/python/README.md](tests/python/README.md) and [tests/python/main.py](tests/python/main.py)
-
-These examples demonstrate how to use the generated bindings in real applications.
 
 ## Architecture
 
