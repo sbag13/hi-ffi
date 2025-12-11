@@ -1,11 +1,7 @@
-use std::fmt::Debug;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
-use proc_macro2::Ident;
-use proc_macro2::TokenStream as TokenStream2;
-use quote::format_ident;
-use quote::quote;
-use quote::ToTokens;
+use proc_macro2::{Ident, TokenStream as TokenStream2};
+use quote::{ToTokens, format_ident, quote};
 use syn::Type;
 
 pub struct StructWrapper {
@@ -64,10 +60,13 @@ fn gen_drop(drop_ext_fn_name: impl ToTokens, class_name: impl ToTokens + Display
     let wrapper_fn_name = format_ident!("{class_name}_drop");
     quote! {
         #[doc(hidden)]
-        #[export_name = #drop_ext_fn_name]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #drop_ext_fn_name)]
         pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name) {
             unsafe {
-                let _ = Box::from_raw(_self);
+                if !_self.is_null() {
+                    let _ = Box::from_raw(_self);
+                }
             }
         }
     }
@@ -80,7 +79,7 @@ fn gen_clone(
     let wrapper_fn_name = format_ident!("{class_name}_clone");
     quote! {
         #[doc(hidden)]
-        #[export_name = #clone_ext_fn_name]
+        #[unsafe(export_name = #clone_ext_fn_name)]
         pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name) -> *mut #class_name {
             unsafe {
                 let cloned: Box<#class_name> = Box::new((*_self).clone());
@@ -99,11 +98,12 @@ fn gen_default_constructor(
         let constructor_name = &default_constructor.constructor_name;
         quote! {
             #[doc(hidden)]
-            #[export_name = #extern_fn_name]
+            #[unsafe(export_name = #extern_fn_name)]
             pub unsafe extern "C" fn #constructor_name() -> *mut #class_name {
                 unsafe {
                     let instance = Box::new(#class_name::default());
-                    Box::into_raw(instance)
+                    let ptr = Box::into_raw(instance);
+                    ptr
                 }
             }
         }
@@ -131,7 +131,7 @@ fn map_primitive_field(
         let wrapper_fn_name = wrapper_fn_name(&class_name, name);
         tokens.extend(quote! {
             #[doc(hidden)]
-            #[export_name = #extern_fn_name]
+            #[unsafe(export_name = #extern_fn_name)]
             pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name) -> #field_type {
                 unsafe {
                     (&*_self).#field_name
@@ -147,7 +147,7 @@ fn map_primitive_field(
         let wrapper_fn_name = wrapper_fn_name(&class_name, name);
         tokens.extend(quote! {
             #[doc(hidden)]
-            #[export_name = #extern_fn_name]
+            #[unsafe(export_name = #extern_fn_name)]
             pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name, value: #field_type) {
                 unsafe {
                     (&mut *_self).#field_name = value;
@@ -176,7 +176,7 @@ fn map_string_field(
         let wrapper_fn_name = wrapper_fn_name(&class_name, name);
         tokens.extend(quote! {
             #[doc(hidden)]
-            #[export_name = #extern_fn_name]
+            #[unsafe(export_name = #extern_fn_name)]
             pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name) -> *mut FfiSlice {
                 unsafe {
                     Box::into_raw(Box::new(FfiSlice {
@@ -195,7 +195,7 @@ fn map_string_field(
         let wrapper_fn_name = wrapper_fn_name(&class_name, name);
         tokens.extend(quote! {
             #[doc(hidden)]
-            #[export_name = #extern_fn_name]
+            #[unsafe(export_name = #extern_fn_name)]
             pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name, ptr: *const i8, _len: usize) {
                 unsafe {
                     let s = std::ffi::CStr::from_ptr(ptr).to_str().unwrap().to_owned();
@@ -226,7 +226,7 @@ fn map_custom_field(
         let wrapper_fn_name = wrapper_fn_name(&class_name, name);
         tokens.extend(quote! {
             #[doc(hidden)]
-            #[export_name = #extern_fn_name]
+            #[unsafe(export_name = #extern_fn_name)]
             pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name) -> *mut #field_type {
                 unsafe {
                     Box::leak(Box::new((&*_self).#field_name.clone()))
@@ -243,7 +243,7 @@ fn map_custom_field(
         let wrapper_fn_name = wrapper_fn_name(&class_name, name);
         tokens.extend(quote! {
             #[doc(hidden)]
-            #[export_name = #extern_fn_name]
+            #[unsafe(export_name = #extern_fn_name)]
             pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name, value: *mut #field_type) {
                 unsafe {
                     (&mut *_self).#field_name = (*value).clone();
@@ -292,7 +292,7 @@ impl Debug for FieldWrapper {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum FieldWrapperType {
     Primitive,
     String,

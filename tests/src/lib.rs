@@ -11,11 +11,17 @@ struct TestStruct {
     i32_field: i32,
 
     // generate getter only
-    #[ffi(getter)]
+    #[ffi(getter, setter)]
     bool_field: bool,
 
     // generate getter and setter
     pub string_field: String,
+
+    // skip setter
+    #[ffi(getter)]
+    _no_setter: i32,
+
+    pub f32_field: f32,
 
     // don't generate getter and setter
     #[ffi(skip)]
@@ -62,6 +68,10 @@ impl TestStruct {
         24
     }
 
+    pub fn public_method_returning_bool(&self) -> bool {
+        true
+    }
+
     pub fn public_method_returning_string(&self) -> String {
         "String returned from Rust method".to_string()
     }
@@ -72,11 +82,7 @@ impl TestStruct {
 
     pub fn combo_method(&self, str1: String, str2: String, b: bool) -> String {
         // println!("{str1} {str2} {b}");
-        if b {
-            str1
-        } else {
-            str2
-        }
+        if b { str1 } else { str2 }
     }
 
     // static method
@@ -103,11 +109,7 @@ impl TestStruct {
     }
     pub fn static_combo_method(str1: String, str2: String, b: bool) -> String {
         // println!("{str1} {str2} {b}");
-        if b {
-            str1
-        } else {
-            str2
-        }
+        if b { str1 } else { str2 }
     }
     pub fn static_combo_struct_method(s1: TestStruct2, _s2: TestStruct2) -> TestStruct2 {
         // println!("Rust: Static combo struct method: s1 = {s1:?}, s2 = {_s2:?}");
@@ -147,6 +149,16 @@ fn function_return_primitive() -> i32 {
 }
 
 #[ffi]
+fn function_return_float() -> f64 {
+    5.21
+}
+
+#[ffi]
+fn function_return_negated_bool(input: bool) -> bool {
+    !input
+}
+
+#[ffi]
 fn function_return_string() -> String {
     "String returned from Rust".to_string()
 }
@@ -154,11 +166,7 @@ fn function_return_string() -> String {
 #[ffi]
 fn combo_function(str1: String, str2: String, b: bool, _s: TestStruct) -> String {
     // println!("{str1} {str2} {b} {_s:?}");
-    if b {
-        str1
-    } else {
-        str2
-    }
+    if b { str1 } else { str2 }
 }
 
 #[ffi]
@@ -181,5 +189,11 @@ fn combo_struct_function(s1: TestStruct, _s2: TestStruct, _s3: TestStruct2) -> T
 impl Drop for TestStruct {
     fn drop(&mut self) {
         // println!("Dropping TestStruct");
+    }
+}
+
+impl Drop for TestStruct2 {
+    fn drop(&mut self) {
+        // println!("Dropping TestStruct2");
     }
 }

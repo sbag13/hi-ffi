@@ -65,7 +65,7 @@ fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnType
         }) => ReturnTypes {
             ext_return_type: return_type.to_token_stream().to_string(),
             return_type: return_type.to_token_stream().to_string(),
-            return_cast: "    return result;".to_string(),
+            return_cast: "return result;".to_string(),
             return_type_includes: String::new(),
         },
         Some(FunctionReturnWrapper {
@@ -75,8 +75,8 @@ fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnType
             ext_return_type: "void*".to_string(),
             return_type: "std::string".to_string(),
             return_cast: "
-    auto rust_str = RustString(result);
-    return rust_str.to_string();"
+auto rust_str = RustString(result);
+return rust_str.to_string();"
                 .to_string(),
             return_type_includes: String::new(),
         },
@@ -90,7 +90,7 @@ fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnType
                 return_type: struct_type.clone(),
                 return_cast: format!(
                     "
-    return {}(result);",
+return {}(result);",
                     struct_type
                 ),
                 return_type_includes: format!("#include \"{struct_type}.h\""),

@@ -2,7 +2,7 @@ use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 
 use crate::wrapper::{
-    map_function_arg_wrappers, map_return_type, MappedFunctionArgsTokens, MappedReturnType,
+    MappedFunctionArgsTokens, MappedReturnType, map_function_arg_wrappers, map_return_type,
 };
 
 use super::{FunctionArgWrapper, FunctionReturnWrapper};
@@ -54,7 +54,7 @@ impl From<&ImplBlockWrapper> for TokenStream2 {
                     };
                     quote! {
                         #[doc(hidden)]
-                        #[export_name = #extern_function_name]
+                        #[unsafe(export_name = #extern_function_name)]
                         pub unsafe extern "C" fn #wrapper_name( #receiver #(#arg_signatures,)*) #return_type_sig {
                             #(#arg_casts)*
                             let result = #target_object #method_name(#(#arg_names,)*);

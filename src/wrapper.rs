@@ -13,13 +13,10 @@ pub mod impl_block_wrapper;
 pub mod struct_wrapper;
 #[cfg(feature = "swift")]
 pub mod swift;
-
-#[cfg(feature = "cpp")]
-pub use cpp::*;
 pub use function_wrapper::*;
 pub use struct_wrapper::*;
-#[cfg(feature = "swift")]
-pub use swift::*;
+#[cfg(feature = "python")]
+pub mod python;
 
 #[derive(Debug)]
 pub struct Wrapper {

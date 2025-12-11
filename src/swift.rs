@@ -1,5 +1,77 @@
 use crate::wrapper::base::*;
+use crate::wrapper::swift::SwiftCode;
+use crate::wrapper::swift::class_definition::gen_empty_class_definition;
+use crate::{GEN_CODE_DIR, Wrapper, append_to_file, create_file, insert_after};
+use std::collections::HashSet;
 use std::fmt::Display;
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex, Once};
+
+const SWIFT_CODE_DIR: &str = "swift/";
+
+static SWIFT_C_HEADER_RECREATED: Once = Once::new();
+
+static SWIFT_CLASS_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+pub(crate) fn write_swift_code(wrapper: &Wrapper) {
+    let swift_path = Path::new(GEN_CODE_DIR).join(SWIFT_CODE_DIR);
+    // TODO remove?
+    std::fs::create_dir_all(&swift_path).expect("Unable to create swift directory");
+
+    let c_ffi_package_path = swift_path.join("CFfiModule");
+    let c_ffi_module_path = c_ffi_package_path.join("Sources/CFfiModule");
+    let ffi_package_path = swift_path.join("FfiModule");
+    let ffi_module_path = ffi_package_path.join("Sources/FfiModule");
+
+    let swift_header_path = c_ffi_module_path.join("ffi_swift.h");
+
+    SWIFT_C_HEADER_RECREATED.call_once(|| {
+        // recreate swift packages
+        let _ = std::fs::remove_dir_all(&swift_path);
+
+        std::fs::create_dir_all(&c_ffi_module_path).expect("Unable to create CFfi directory");
+        std::fs::create_dir_all(&ffi_module_path).expect("Unable to create Ffi directory");
+
+        let c_ffi_package_file = c_ffi_package_path.join("Package.swift");
+        create_file(swift_c_ffi_package_definition(), c_ffi_package_file);
+
+        let ffi_package_file = ffi_package_path.join("Package.swift");
+        create_file(swift_ffi_package_definition(), ffi_package_file);
+
+        let module_map = c_ffi_module_path.join("module.modulemap");
+        let package_name = std::env::var("CARGO_PKG_NAME").expect("Package name expected");
+        create_file(clang_module_map(package_name), module_map);
+
+        create_file(swift_c_header_code_base(), &swift_header_path);
+
+        let swift_code_base_path = ffi_module_path.join("base.swift");
+        create_file(swift_code_base(), swift_code_base_path);
+    });
+
+    let swift_code = wrapper.swift();
+
+    append_to_file(swift_code.header(), swift_header_path);
+
+    let source_file_name = format!("{}.swift", wrapper.name());
+    let source_path = ffi_module_path.join(source_file_name);
+
+    match swift_code {
+        SwiftCode::Class { source, .. } => {
+            let mut locked_set = SWIFT_CLASS_GENERATED.lock().expect("Mutex lock failed");
+            if locked_set.insert(source_path.clone()) {
+                create_file(gen_empty_class_definition(wrapper.name()), &source_path);
+            }
+
+            insert_after(
+                crate::wrapper::swift::class_definition::METHOD_DEFINITIONS_MARKER,
+                source,
+                &source_path,
+            );
+        }
+        SwiftCode::Function { source, .. } => create_file(source, &source_path),
+    }
+}
 
 pub(crate) fn swift_code_base() -> String {
     format!(

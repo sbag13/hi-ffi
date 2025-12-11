@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::wrapper::cpp::*;
+use crate::{prepend_each_line_with_n_tabs, wrapper::cpp::*};
 use quote::ToTokens;
 
 pub struct MappedCppFunctionArgsTokens {
@@ -44,9 +44,7 @@ pub fn map_args<'a>(
             cpp_args.push(format!("std::string&& {arg_name}"));
             wrapper_args.push(format!("const char* {arg_name}"));
             arg_names.push(format!("casted_{arg_name}"));
-            arg_casts.push(format!(
-                r#"    auto casted_{arg_name} = {arg_name}.data();"#
-            ));
+            arg_casts.push(format!(r#"auto casted_{arg_name} = {arg_name}.data();"#));
         }
         FunctionArgWrapper {
             arg_name,
@@ -58,7 +56,7 @@ pub fn map_args<'a>(
             wrapper_args.push(format!("void* {arg_name}"));
             arg_names.push(format!("casted_{arg_name}"));
             arg_casts.push(format!(
-                r#"    auto casted_{arg_name} = {arg_name}.self_ptr();"#
+                r#"auto casted_{arg_name} = {arg_name}.self_ptr();"#
             ));
             includes.insert(format!("#include \"{struct_type}.h\""));
         }
@@ -130,6 +128,9 @@ pub fn gen_function_definition(function_wrapper: &FunctionWrapper) -> String {
         ..
     } = map_return_type(&function_wrapper.return_wrapper);
 
+    let arg_casts = prepend_each_line_with_n_tabs(&arg_casts, 1);
+    let return_casts = prepend_each_line_with_n_tabs(&return_cast, 1);
+
     format!(
         r#"
 #include "{fn_name}.h"
@@ -137,7 +138,7 @@ pub fn gen_function_definition(function_wrapper: &FunctionWrapper) -> String {
 {return_type} {fn_name}({cpp_args}) {{
 {arg_casts}
     {ext_return_type} result = {extern_fn_name}({arg_names});
-{return_cast}
+{return_casts}
 }}
 "#
     )

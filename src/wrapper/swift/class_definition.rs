@@ -1,11 +1,11 @@
 use std::fmt::Display;
 
+use crate::wrapper::base::{SLICE_DROP_FN_NAME, SLICE_GET_LEN_FN_NAME, SLICE_GET_PTR_FN_NAME};
+use crate::wrapper::swift::function_definition::{
+    ReturnTypes, compose_function_definition, map_args, map_header_declaration_args,
+    map_return_type,
+};
 use crate::wrapper::{
-    base::{SLICE_DROP_FN_NAME, SLICE_GET_LEN_FN_NAME, SLICE_GET_PTR_FN_NAME},
-    swift::function_definition::{
-        compose_function_definition, map_args, map_header_declaration_args, map_return_type,
-        ReturnTypes,
-    },
     FieldWrapper, FieldWrapperType, Getter, ImplBlockWrapper, Setter, StructWrapper,
 };
 use quote::ToTokens;
