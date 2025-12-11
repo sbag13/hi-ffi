@@ -30,3 +30,5 @@ jobs:
         binary_path: "./tests/cpp/test"
     - name: Run swift example
       run: cd ./tests/swift/ && ./test_swift.sh
+    - name: Run python example
+      run: cd ./tests/python && python3 main.py

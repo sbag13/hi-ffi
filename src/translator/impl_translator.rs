@@ -3,13 +3,13 @@ use std::ops::Deref;
 use quote::ToTokens;
 use syn::ItemImpl;
 
-use crate::{
-    translator::map_arg,
-    wrapper::{impl_block_wrapper::MethodWrapper, Wrapper},
-    EXPORTED_SYMBOLS_PREFIX,
-};
+use crate::EXPORTED_SYMBOLS_PREFIX;
+use crate::translator::map_arg;
+use crate::wrapper::Wrapper;
+use crate::wrapper::impl_block_wrapper::MethodWrapper;
 
-use super::{impl_block_wrapper::ImplBlockWrapper, return_wrapper, ParsedWrapper};
+use super::impl_block_wrapper::ImplBlockWrapper;
+use super::{ParsedWrapper, return_wrapper};
 
 pub fn translate_impl(item_impl: ItemImpl) -> Wrapper {
     let struct_name = if let syn::Type::Path(path) = item_impl.self_ty.deref() {

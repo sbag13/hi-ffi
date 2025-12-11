@@ -1,6 +1,9 @@
-use std::{collections::HashSet, fmt::Display};
+use std::collections::HashSet;
+use std::fmt::Display;
 
 use quote::ToTokens;
+
+use crate::prepend_each_line_with_n_tabs;
 
 use super::*;
 
@@ -136,13 +139,16 @@ fn method_definition(
 
     let static_keyword = if is_static { "static " } else { "" };
 
+    let arg_casts = prepend_each_line_with_n_tabs(arg_casts, 2);
+    let return_casts = prepend_each_line_with_n_tabs(return_cast, 2);
+
     format!(
         r#"
-{static_keyword}{return_type} {method_name}({cpp_args}) {{
+    {static_keyword}{return_type} {method_name}({cpp_args}) {{
 {arg_casts}
-    {ext_return_type} result = {extern_function_name}({arg_names});
-{return_cast}
-}}
+        {ext_return_type} result = {extern_function_name}({arg_names});
+{return_casts}
+    }}
 "#
     )
 }

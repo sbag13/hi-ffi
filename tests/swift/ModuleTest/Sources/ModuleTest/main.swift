@@ -3,12 +3,23 @@ import FfiModule
 
 func assert_struct_basics() {
     let s = TestStruct()
+
+    assert(s.bool_field == false, "Default bool should be false")
+    s.bool_field = true
+    assert(s.bool_field == true, "bool_field should be true after set")
+
     assert(s.i32_field == 0, "Default i32_field should be 0")
     s.i32_field = 42
     assert(s.i32_field == 42, "i32_field should be 42 after set")
+
+    assert(s.f32_field == 0.0, "Default f32_field should be 0.0")
+    s.f32_field = 3.14
+    assert(s.f32_field == 3.14, "f32_field should be 3.14 after set")
+    
     assert(s.string_field == "", "Default string_field should be empty")
     s.string_field = "Hello, World!"
     assert(s.string_field == "Hello, World!", "string_field should be updated")
+    
     let new_struct_field = TestStruct2()
     new_struct_field.i32_field = 999
     s.struct_field = new_struct_field

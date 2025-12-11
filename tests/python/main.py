@@ -1,9 +1,79 @@
 import ctypes
 import os
+import sys
+
+sys.path.insert(
+    0,
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../generated_code")),
+)
+
+from python_ffi import ffi_init
+from python_ffi import *
+from python_ffi.TestStruct import TestStruct
+from python_ffi.TestStruct2 import TestStruct2
+
 
 ext = "so"  # Change to 'dylib' for MacOS, 'dll' for Windows
 lib_path = os.path.join(
     os.path.dirname(__file__), "..", "target", "debug", f"libtests.{ext}"
 )
 lib = ctypes.CDLL(lib_path)
-lib.__hiFfi___simple_function()
+
+ffi_init(lib)
+
+
+def struct_tests():
+    s = TestStruct()
+
+    # check props
+    assert s.i32_field == 0
+    s.i32_field = 123
+    assert s.i32_field == 123
+
+    assert s.bool_field == False
+    s.bool_field = True
+    assert s.bool_field == True
+
+    assert s.f32_field == 0.0
+    s.f32_field = 3.14
+    assert abs(s.f32_field - 3.14) < 0.0001
+
+    assert s.string_field == ""
+    s.string_field = "Hello, Python!"
+    assert s.string_field == "Hello, Python!"
+
+    assert s.struct_field.i32_field == 0
+    new_struct_field = TestStruct2()
+    new_struct_field.i32_field = 5
+    s.struct_field = new_struct_field
+    assert s.struct_field.i32_field == 5
+
+
+def functions_tests():
+    s = TestStruct()
+
+    # check if doesn't crash
+    simple_function()
+    function_with_primitive_args(48, True)
+    function_with_string_arg("Hello from Python!")
+    function_with_primitive_and_string_arg(99, False, "Another string")
+    function_taking_struct(TestStruct2())
+
+    # assert return values
+    assert function_return_primitive() == 42
+    assert function_return_float() == 5.21
+    assert function_return_string() == "String returned from Rust"
+    assert function_return_negated_bool(True) == False
+    assert function_return_negated_bool(False) == True
+    assert "second" == combo_function("first", "second", False, TestStruct())
+    assert function_returning_struct().i32_field == 48
+
+    s = TestStruct()
+    s.i32_field = 43
+    assert combo_struct_function(s, TestStruct(), TestStruct2()).i32_field == 43
+
+
+if __name__ == "__main__":
+    struct_tests()
+    functions_tests()
+    print("All tests passed!")

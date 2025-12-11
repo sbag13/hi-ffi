@@ -16,10 +16,19 @@
 void assert_structs()
 {
     auto test_struct = TestStruct();
+
     assert(test_struct.get_i32_field() == 0);
     test_struct.set_i32_field(42);
     assert(test_struct.get_i32_field() == 42);
+
+    assert(test_struct.get_f32_field() == 0.0f);
+    test_struct.set_f32_field(3.14f);
+    assert(test_struct.get_f32_field() == 3.14f);
+
     assert(test_struct.get_bool_field() == false);
+    test_struct.set_bool_field(true);
+    assert(test_struct.get_bool_field() == true);
+
     assert(test_struct.get_string_field() == "");
     test_struct.set_string_field("Hello, World!");
     assert(test_struct.get_string_field() == "Hello, World!");
@@ -28,9 +37,11 @@ void assert_structs()
     std::string str = "Hello, C++!";
     test_struct.set_string_field(str);
     assert(test_struct.get_string_field() == "Hello, C++!");
+
     auto test_struct2 = test_struct.get_struct_field();
     test_struct2.set_i32_field(43);
     assert(test_struct2.get_i32_field() == 43);
+
     auto test_struct2_other = TestStruct2();
     test_struct2_other.set_i32_field(44);
     test_struct.set_struct_field(test_struct2_other);

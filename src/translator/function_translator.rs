@@ -3,7 +3,8 @@ use std::ops::Deref;
 use quote::quote;
 use syn::{FnArg, ItemFn};
 
-use crate::{wrapper::*, EXPORTED_SYMBOLS_PREFIX};
+use crate::EXPORTED_SYMBOLS_PREFIX;
+use crate::wrapper::*;
 
 pub fn translate_function(item_struct: ItemFn) -> Wrapper {
     let fn_name = &item_struct.sig.ident;

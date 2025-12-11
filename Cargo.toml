@@ -1,7 +1,11 @@
 [package]
 name = "hi-ffi"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+license = "MIT"
+description = "Procedural macro that automatically generates Foreign Function Interface (FFI)"
+repository = "https://github.com/sbag13/hi-ffi"
+homepage = "https://github.com/sbag13/hi-ffi"
 
 [lib]
 proc-macro = true
@@ -10,6 +14,7 @@ proc-macro = true
 default = []
 cpp = []
 swift = []
+python = []
 
 [dependencies]
 syn = { version = "2.0", features = ["full"] }

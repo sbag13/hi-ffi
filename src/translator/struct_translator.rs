@@ -4,7 +4,8 @@ use std::fmt::Display;
 use quote::{format_ident, quote};
 use syn::ItemStruct;
 
-use crate::{wrapper::*, EXPORTED_SYMBOLS_PREFIX};
+use crate::EXPORTED_SYMBOLS_PREFIX;
+use crate::wrapper::*;
 
 pub fn translate_struct(item_struct: ItemStruct) -> Wrapper {
     let class_name = &item_struct.ident;
@@ -15,8 +16,8 @@ pub fn translate_struct(item_struct: ItemStruct) -> Wrapper {
             name: class_name.clone(),
             fields: fields_wrappers(&item_struct),
             default_constructor: default_constructor(&item_struct),
-            drop_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}${class_name}__drop"),
-            clone_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}${class_name}__clone"),
+            drop_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__drop"),
+            clone_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__clone"),
             original_item_struct: item_struct,
         }),
     }
@@ -70,7 +71,7 @@ fn generate_getter(
 ) -> Option<Getter> {
     if !attrs.skip_attr && (is_public || attrs.getter_attr) {
         Some(Getter {
-            extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}${class_name}__get_{field_name}",),
+            extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__get_{field_name}",),
             name: format_ident!("get_{field_name}"),
         })
     } else {
@@ -86,7 +87,7 @@ fn generate_setter(
 ) -> Option<Setter> {
     if !attrs.skip_attr && (is_public || attrs.setter_attr) {
         Some(Setter {
-            extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}${class_name}__set_{field_name}",),
+            extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__set_{field_name}",),
             name: format_ident!("set_{field_name}"),
         })
     } else {
@@ -143,7 +144,7 @@ fn default_constructor(item_struct: &ItemStruct) -> Option<DefaultConstructor> {
                 if meta.path.is_ident("Default") {
                     default_constructor = Some(DefaultConstructor {
                         extern_fn_name: format!(
-                            "{EXPORTED_SYMBOLS_PREFIX}${class_name}__default",
+                            "{EXPORTED_SYMBOLS_PREFIX}__{class_name}__default",
                             class_name = class_name
                         ),
                         constructor_name: format_ident!("{class_name}__default"),

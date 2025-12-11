@@ -1,6 +1,7 @@
 {
     "rust-analyzer.cargo.features": [
         "cpp",
-        "swift"
+        "swift",
+        "python"
     ],
 }

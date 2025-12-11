@@ -1,6 +1,65 @@
 use crate::wrapper::base::*;
+use crate::wrapper::cpp::{CppFiles, CppHeader};
+use crate::{CPP_CODE_DIR, GEN_CODE_DIR, Wrapper, create_file, insert_after};
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
 
-pub(crate) fn cpp_code_base() -> String {
+pub(crate) fn write_cpp_code(wrapper: &Wrapper) {
+    let cpp_path = Path::new(GEN_CODE_DIR).join(CPP_CODE_DIR);
+    std::fs::create_dir_all(&cpp_path).expect("Unable to create cpp directory");
+
+    let code_base_path = cpp_path.join("base.h");
+    // if !code_base_path.exists() { // TODO: uncomment when stable implementation is ready
+    create_file(cpp_code_base(), code_base_path);
+    // }
+
+    let header_file_name = format!("{}.h", wrapper.name());
+    let source_file_name = format!("{}.cpp", wrapper.name());
+
+    let header_full_path = cpp_path.join(header_file_name);
+    let source_full_path = cpp_path.join(source_file_name);
+
+    let CppFiles { header, source } = wrapper.cpp();
+    write_header(header, header_full_path);
+
+    if let Some(source) = source {
+        create_file(source, source_full_path);
+    }
+}
+
+static CPP_CLASS_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+fn write_header(header: CppHeader, path: impl AsRef<Path>) {
+    match header {
+        CppHeader::Class(class_header_parts) => {
+            let mut locked_set = CPP_CLASS_GENERATED.lock().expect("Mutex lock failed");
+            if locked_set.insert(path.as_ref().into()) {
+                create_file(class_header_parts.class_definition, path.as_ref());
+            }
+
+            insert_after(
+                crate::wrapper::cpp::class_definition::INCLUDES_MARKER,
+                class_header_parts.includes,
+                &path,
+            );
+            insert_after(
+                crate::wrapper::cpp::class_definition::EXTERN_FNS_MARKER,
+                class_header_parts.extern_fns,
+                &path,
+            );
+            insert_after(
+                crate::wrapper::cpp::class_definition::METHOD_DEFINITIONS_MARKER,
+                class_header_parts.method_definitions,
+                &path,
+            );
+        }
+        CppHeader::Function(function_header) => create_file(function_header, path),
+    }
+}
+
+fn cpp_code_base() -> String {
     format!(
         r#"
 #ifndef BASE_H
