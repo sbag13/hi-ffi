@@ -22,6 +22,43 @@ lib = ctypes.CDLL(lib_path)
 ffi_init(lib)
 
 
+def static_methods_tests():
+    TestStruct.static_method()
+    TestStruct.static_method_taking_primitives(48, True)
+    TestStruct.static_method_taking_string("Hello from Python!")
+    TestStruct.static_method_taking_struct(TestStruct2())
+
+    assert TestStruct.static_method_returning_primitive() == 22
+    assert (
+        TestStruct.static_method_returning_string()
+        == "String returned from Rust static method"
+    )
+    assert TestStruct.static_method_returning_struct().i32_field == 77
+    assert TestStruct.static_combo_method("s1", "s2", False) == "s2"
+
+    s1 = TestStruct2()
+    s1.i32_field = 1
+    assert TestStruct.static_combo_struct_method(s1, TestStruct2()).i32_field == 1
+
+
+def methods_tests():
+    s = TestStruct()
+
+    s2 = TestStruct2()
+    s2.i32_field = 6
+
+    s.public_method()
+    s.public_method_taking_primitives(48, True)
+    s.public_method_taking_string("Hello from Python!")
+    s.public_method_taking_struct(s2)
+
+    assert s.public_method_returning_primitive() == 24
+    assert s.public_method_returning_bool() == True
+    assert s.public_method_returning_string() == "String returned from Rust method"
+    assert s.public_method_returning_struct().i32_field == 99
+    assert s.combo_method("str1", "str2", False) == "str2"
+
+
 def struct_tests():
     s = TestStruct()
 
@@ -76,4 +113,6 @@ def functions_tests():
 if __name__ == "__main__":
     struct_tests()
     functions_tests()
+    methods_tests()
+    static_methods_tests()
     print("All tests passed!")

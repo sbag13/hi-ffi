@@ -58,26 +58,27 @@ pub(crate) fn write_python_code(wrapper: &Wrapper) {
         let class_mod_path = python_path.join(format!("{}.py", class_mod.name));
         if !class_mod_path.exists() {
             create_file(format!("{}", class_mod.header), &class_mod_path);
-
-            let mut locked_per_class_imports = PER_CLASS_IMPORTS.lock().expect("Mutex lock failed");
-            let imports_for_class = locked_per_class_imports
-                .entry(class_mod.name.clone())
-                .or_default();
-            let imports_to_add = class_mod
-                .imports
-                .into_iter()
-                .filter(|(k, _)| !imports_for_class.contains_key(k))
-                .collect::<HashMap<_, _>>();
-            prepend_to_file(
-                imports_to_add
-                    .values()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-                &class_mod_path,
-            );
-            imports_for_class.extend(imports_to_add);
         }
+
+        let mut locked_per_class_imports = PER_CLASS_IMPORTS.lock().expect("Mutex lock failed");
+        let imports_for_class = locked_per_class_imports
+            .entry(class_mod.name.clone())
+            .or_default();
+        let imports_to_add = class_mod
+            .imports
+            .into_iter()
+            .filter(|(k, _)| !imports_for_class.contains_key(k))
+            .collect::<HashMap<_, _>>();
+        prepend_to_file(
+            imports_to_add
+                .values()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n"),
+            &class_mod_path,
+        );
+        imports_for_class.extend(imports_to_add);
+
         append_to_file(format!("{}", class_mod.body), &class_mod_path);
     }
 }

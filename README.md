@@ -20,7 +20,7 @@ Add `hi-ffi` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hi_ffi = { version = "0.1.0", features = ["cpp", "swift", "python"] }
+hi_ffi = { version = "0.1", features = ["cpp", "swift", "python"] }
 ```
 
 **Note**: `hi-ffi` is a procedural macro crate. Enable the `cpp` and/or `swift`, `python` features based on your target languages.
@@ -84,6 +84,7 @@ These examples demonstrate how to use the generated bindings in real application
 | Struct getters      | ✅   | ✅     | ✅      |
 | Struct setters      | ✅   | ✅     | ✅      |
 | Default constructor | ✅   | ✅     | ✅      |
+| PartialEq           | ❌   | ❌     | ❌      |
 
 ### Methods
 
@@ -100,12 +101,12 @@ These examples demonstrate how to use the generated bindings in real application
 
 | Feature             | C++ | Swift | Python |
 | ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅   | ✅     | ❌      |
-| String arguments    | ✅   | ✅     | ❌      |
-| Primitive return    | ✅   | ✅     | ❌      |
-| String return       | ✅   | ✅     | ❌      |
-| Struct arguments    | ✅   | ✅     | ❌      |
-| Struct return       | ✅   | ✅     | ❌      |
+| Primitive arguments | ✅   | ✅     | ✅      |
+| String arguments    | ✅   | ✅     | ✅      |
+| Primitive return    | ✅   | ✅     | ✅      |
+| String return       | ✅   | ✅     | ✅      |
+| Struct arguments    | ✅   | ✅     | ✅      |
+| Struct return       | ✅   | ✅     | ✅      |
 
 ### Functions
 
@@ -117,7 +118,19 @@ These examples demonstrate how to use the generated bindings in real application
 | String return       | ✅   | ✅     | ✅      |
 | Struct arguments    | ✅   | ✅     | ✅      |
 | Struct return       | ✅   | ✅     | ✅      |
+| Vec arguments       | ❌   | ❌     | ❌      |
+| Vec return          | ❌   | ❌     | ❌      |
 | `&str` return       | ❌   | ❌     | ❌      |
+
+### Vectors
+
+| Feature   | C++ | Swift | Python |
+| --------- | --- | ----- | ------ |
+| Primitive | ❌   | ❌     | ❌      |
+| String    | ❌   | ❌     | ❌      |
+| Struct    | ❌   | ❌     | ❌      |
+| `&str`    | ❌   | ❌     | ❌      |
+| Traits    | ❌   | ❌     | ❌      |
 
 ## Architecture
 
@@ -153,8 +166,12 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## Roadmap
 
-- [ ] Documentation generation
-- [ ] Publishing to crates.io
+- [ ] Doc strings
+- [ ] Vectors
+- [ ] Enums
+- [ ] Errors
+- [ ] Traits
+- [ ] Async
 
 ## License
 
