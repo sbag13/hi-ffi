@@ -7,6 +7,7 @@ use syn::Type;
 use crate::{Wrapper, wrapper::ParsedWrapper};
 
 mod function;
+mod impl_mod;
 mod struct_mod;
 
 pub struct PythonFiles {
@@ -14,6 +15,7 @@ pub struct PythonFiles {
     pub class_mod: Option<ClassCode>,
 }
 
+#[derive(Debug)]
 pub struct ClassCode {
     pub header: String,
     pub body: String,
@@ -37,9 +39,9 @@ impl Wrapper {
                 fn_code: None,
                 class_mod: Some(struct_mod::gen_class(struct_wrapper)),
             },
-            _ => PythonFiles {
+            ParsedWrapper::ImplBlock(impl_block_wrapper) => PythonFiles {
                 fn_code: None,
-                class_mod: None,
+                class_mod: Some(impl_mod::gen_methods_mod(impl_block_wrapper)),
             },
         }
     }
