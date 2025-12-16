@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
 use crate::python::PYTHON_LIB_GETTER_NAME;
-use crate::wrapper::python::{FunctionCode, result_cast, set_extern_fn_resttype, type_hint};
-use crate::wrapper::{FunctionArgWrapperType, FunctionWrapper};
+use crate::wrapper::python::{
+    FunctionCode, result_cast, set_extern_fn_resttype, type_hint, type_hint_from_str,
+};
+use crate::wrapper::{FunctionWrapper, WrapperType};
 use quote::ToTokens;
 
 pub fn gen_function(function: &FunctionWrapper) -> FunctionCode {
@@ -49,10 +51,13 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
         (vec![], vec![]),
         |(mut casts, mut call_list), arg_wrapper| {
             match &arg_wrapper.wrapper_type {
-                FunctionArgWrapperType::Primitive => {
+                WrapperType::IntegerNumber(_)
+                | WrapperType::Bool
+                | WrapperType::FloatingPointNumber(_) => {
                     call_list.push(arg_wrapper.arg_name.to_string())
                 }
-                FunctionArgWrapperType::String => {
+
+                WrapperType::String => {
                     let cast_line = format!(
                         "casted_{} = ctypes.c_char_p({}.encode(\"utf-8\"))",
                         arg_wrapper.arg_name, arg_wrapper.arg_name
@@ -60,11 +65,16 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
                     casts.push(cast_line);
                     call_list.push(format!("casted_{}", arg_wrapper.arg_name));
                 }
-                FunctionArgWrapperType::Struct { .. } => {
+
+                WrapperType::Struct { .. } => {
                     let arg_name = &arg_wrapper.arg_name;
                     let cast_line = format!("{arg_name}_ptr = {arg_name}.raw_ptr()");
                     casts.push(cast_line);
                     call_list.push(format!("{arg_name}_ptr"));
+                }
+
+                WrapperType::Vec(_) => {
+                    // TODO
                 }
             }
             (casts, call_list)
@@ -78,14 +88,17 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
         |mut acc: HashMap<String, String>, arg_wrapper| {
             let type_name = arg_wrapper.arg_type.to_token_stream().to_string();
             match &arg_wrapper.wrapper_type {
-                FunctionArgWrapperType::Struct => {
+                WrapperType::Struct(_) => {
                     acc.insert(
                         type_name.clone(),
                         format!("from .{type_name} import {type_name}"),
                     );
                 }
-                FunctionArgWrapperType::String => {
+                WrapperType::String => {
                     acc.insert("ctypes".to_string(), "import ctypes".to_string());
+                }
+                WrapperType::Vec(_) => {
+                    acc.insert("List".to_string(), "from typing import List".to_string());
                 }
                 _ => {}
             }
@@ -105,15 +118,18 @@ fn received_args(function: &FunctionWrapper) -> String {
 
 fn arg_receiver(arg_wrapper: &crate::wrapper::FunctionArgWrapper) -> String {
     match &arg_wrapper.wrapper_type {
-        FunctionArgWrapperType::Primitive => {
-            match &arg_wrapper.arg_type.to_token_stream().to_string()[..] {
-                "i32" | "i64" | "u32" | "u64" => format!("{}: int", arg_wrapper.arg_name),
-                "bool" => format!("{}: bool", arg_wrapper.arg_name),
-                _ => format!("{}: float", arg_wrapper.arg_name),
-            }
+        WrapperType::Vec(inner) => {
+            format!(
+                "{}: List[{}]",
+                arg_wrapper.arg_name,
+                type_hint_from_str(&inner.name())
+            )
         }
-        FunctionArgWrapperType::String => format!("{}: str", arg_wrapper.arg_name),
-        FunctionArgWrapperType::Struct { .. } => format!(
+        WrapperType::IntegerNumber(_) => format!("{}: int", arg_wrapper.arg_name),
+        WrapperType::FloatingPointNumber(_) => format!("{}: float", arg_wrapper.arg_name),
+        WrapperType::Bool => format!("{}: bool", arg_wrapper.arg_name),
+        WrapperType::String => format!("{}: str", arg_wrapper.arg_name),
+        WrapperType::Struct { .. } => format!(
             "{}: {}",
             arg_wrapper.arg_name,
             arg_wrapper.arg_type.to_token_stream()

@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, str::FromStr};
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
@@ -19,14 +19,15 @@ pub struct MappedReturnType {
 pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> MappedReturnType {
     match return_wrapper {
         Some(FunctionReturnWrapper {
-            wrapper_type: FunctionReturnWrapperType::Primitive,
+            wrapper_type:
+                WrapperType::IntegerNumber(_) | WrapperType::Bool | WrapperType::FloatingPointNumber(_),
             return_type,
         }) => MappedReturnType {
             return_type_sig: quote! {-> #return_type},
             result_cast: quote! {result},
         },
         Some(FunctionReturnWrapper {
-            wrapper_type: FunctionReturnWrapperType::String,
+            wrapper_type: WrapperType::String,
             ..
         }) => MappedReturnType {
             return_type_sig: quote! {-> *mut String},
@@ -35,7 +36,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
             },
         },
         Some(FunctionReturnWrapper {
-            wrapper_type: FunctionReturnWrapperType::Struct,
+            wrapper_type: WrapperType::Struct(_),
             return_type,
         }) => MappedReturnType {
             return_type_sig: quote! {-> *mut #return_type},
@@ -43,6 +44,10 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
                 Box::into_raw(Box::new(result))
             },
         },
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Vec(_),
+            ..
+        }) => unimplemented!("Vec not supported as return type"),
         None => MappedReturnType {
             return_type_sig: quote! {},
             result_cast: quote! {result},
@@ -95,14 +100,15 @@ pub fn map_function_arg_wrappers<'a>(
         FunctionArgWrapper {
             arg_name,
             arg_type,
-            wrapper_type: FunctionArgWrapperType::Primitive,
+            wrapper_type: WrapperType::IntegerNumber(_) | WrapperType::Bool | WrapperType::FloatingPointNumber(_),
         } => {
             arg_signatures.push(quote! {#arg_name: #arg_type});
             arg_names.push(quote! {#arg_name});
         }
+       
         FunctionArgWrapper {
             arg_name,
-            wrapper_type: FunctionArgWrapperType::String,
+            wrapper_type: WrapperType::String,
             ..
         } => {
             arg_signatures.push(quote! {#arg_name: *const i8});
@@ -111,10 +117,11 @@ pub fn map_function_arg_wrappers<'a>(
                 let #arg_name = unsafe { std::ffi::CStr::from_ptr(#arg_name).to_str().unwrap().to_owned() };
             });
         }
+       
         FunctionArgWrapper {
             arg_name,
             arg_type,
-            wrapper_type: FunctionArgWrapperType::Struct,
+            wrapper_type: WrapperType::Struct(_),
         } => {
             arg_signatures.push(quote! {#arg_name: *mut #arg_type});
             arg_names.push(quote! {#arg_name});
@@ -122,6 +129,20 @@ pub fn map_function_arg_wrappers<'a>(
                 let #arg_name = unsafe { (*#arg_name).clone() };
             });
         }
+
+          FunctionArgWrapper {
+            arg_name,
+            arg_type,
+            wrapper_type: WrapperType::Vec(_),
+        } => {
+            arg_signatures.push(quote! {#arg_name: *mut #arg_type});
+            arg_names.push(quote! {new_vec});
+            arg_casts.push(quote! {
+                let mut new_vec = Vec::new();
+                std::mem::swap(&mut new_vec, unsafe { &mut(*#arg_name)} );
+            });
+        }
+       
     });
     MappedFunctionArgsTokens {
         arg_signatures,
@@ -131,7 +152,7 @@ pub fn map_function_arg_wrappers<'a>(
 }
 
 pub struct FunctionArgWrapper {
-    pub(crate) wrapper_type: FunctionArgWrapperType,
+    pub(crate) wrapper_type: WrapperType,
     pub(crate) arg_name: syn::Ident,
     pub(crate) arg_type: syn::Type,
 }
@@ -144,15 +165,45 @@ impl Debug for FunctionArgWrapper {
     }
 }
 
-#[derive(Debug)]
-pub enum FunctionArgWrapperType {
-    Primitive,
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub enum WrapperType {
+    IntegerNumber(String),
+    FloatingPointNumber(String),
+    Bool,
     String,
-    Struct,
+    Struct(String),
+    Vec(Box<WrapperType>),
+}
+
+impl WrapperType {
+    pub fn name(&self) -> String {
+        match self {
+            WrapperType::IntegerNumber(inner) | WrapperType::FloatingPointNumber(inner) | WrapperType::Struct(inner) => inner.to_owned(),
+            WrapperType::Vec(inner) => format!("vec_of_{}", inner.name()),
+            WrapperType::Bool => "bool".to_string(),
+            WrapperType::String => "String".to_string(),
+    }}
+}
+
+impl FromStr for WrapperType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize"   => {
+                Ok(WrapperType::IntegerNumber(s.to_string()))
+            }
+            "f32" | "f64" => Ok(WrapperType::FloatingPointNumber(s.to_string())),
+            "bool" => Ok(WrapperType::Bool),
+            "String" => Ok(WrapperType::String),
+            "str" => Err("str wrapper not supported".to_string()),
+            struct_name => Ok(WrapperType::Struct(struct_name.to_string())),
+        }
+    }
 }
 
 pub struct FunctionReturnWrapper {
-    pub(crate) wrapper_type: FunctionReturnWrapperType,
+    pub(crate) wrapper_type: WrapperType,
     pub(crate) return_type: syn::Type,
 }
 
@@ -162,11 +213,4 @@ impl Debug for FunctionReturnWrapper {
             .field("wrapper_type", &self.wrapper_type)
             .finish()
     }
-}
-
-#[derive(Debug)]
-pub enum FunctionReturnWrapperType {
-    Primitive,
-    String,
-    Struct,
 }

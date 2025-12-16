@@ -1,9 +1,12 @@
 use crate::wrapper::base::*;
 use crate::wrapper::cpp::{CppFiles, CppHeader};
-use crate::{CPP_CODE_DIR, GEN_CODE_DIR, Wrapper, create_file, insert_after};
+use crate::{CPP_CODE_DIR, GEN_CODE_DIR, ReusableWrapper, Wrapper, create_file, insert_after};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
+
+static CPP_REUSABLE_WRAPPER_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
 
 pub(crate) fn write_cpp_code(wrapper: &Wrapper) {
     let cpp_path = Path::new(GEN_CODE_DIR).join(CPP_CODE_DIR);
@@ -25,6 +28,20 @@ pub(crate) fn write_cpp_code(wrapper: &Wrapper) {
 
     if let Some(source) = source {
         create_file(source, source_full_path);
+    }
+
+    for reusable_wrapper in &wrapper.reusable_wrappers {
+        let file_name = match reusable_wrapper {
+            ReusableWrapper::Vec(inner) => format!("vec_{}.h", inner.name()),
+        };
+        let source_full_path = cpp_path.join(file_name);
+        if CPP_REUSABLE_WRAPPER_GENERATED
+            .lock()
+            .expect("Mutex lock failed during locking for reusable wrapper")
+            .insert(source_full_path.clone())
+        {
+            create_file(reusable_wrapper.cpp(), source_full_path);
+        }
     }
 }
 

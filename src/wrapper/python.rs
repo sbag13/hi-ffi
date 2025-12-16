@@ -51,15 +51,19 @@ fn type_hint(field_type: &syn::Type) -> String {
     match field_type {
         syn::Type::Path(type_path) => {
             let segment = type_path.path.segments.last().unwrap();
-            match segment.ident.to_string().as_str() {
-                "i32" | "i64" | "u32" | "u64" => "int".into(),
-                "f32" | "f64" => "float".into(),
-                "bool" => "bool".into(),
-                "String" => "str".into(),
-                _ => field_type.to_token_stream().to_string(),
-            }
+            type_hint_from_str(segment.ident.to_string().as_str())
         }
         _ => unimplemented!("Type hint not implemented for this type"),
+    }
+}
+
+fn type_hint_from_str(wrapper_name: &str) -> String {
+    match wrapper_name {
+        "i32" | "i64" | "u32" | "u64" => "int".into(),
+        "f32" | "f64" => "float".into(),
+        "bool" => "bool".into(),
+        "String" => "str".into(),
+        other => other.to_string(),
     }
 }
 
@@ -68,7 +72,7 @@ fn result_cast(ty: &Type, result_var_name: &str) -> String {
         syn::Type::Path(type_path) => {
             let segment = type_path.path.segments.last().unwrap();
             match segment.ident.to_string().as_str() {
-                "i32" | "i64" | "u32" | "u64" | "f32" | "f64" => format!("{result_var_name}"),
+                "i32" | "i64" | "u32" | "u64" | "f32" | "f64" => result_var_name.to_string(),
                 "bool" => format!("ctypes.c_byte({result_var_name}).value != 0"),
                 "String" => format!("RustString({result_var_name}).py_str()"),
                 _ => format!("{}({})", ty.to_token_stream(), result_var_name),
@@ -83,7 +87,7 @@ fn arg_cast(ty: &Type, arg_name: &str) -> String {
         syn::Type::Path(type_path) => {
             let segment = type_path.path.segments.last().unwrap();
             match segment.ident.to_string().as_str() {
-                "i32" | "i64" | "u32" | "u64" => format!("{arg_name}"),
+                "i32" | "i64" | "u32" | "u64" => arg_name.to_string(),
                 "f32" => format!("ctypes.c_float({})", arg_name),
                 "f64" => format!("ctypes.c_double({})", arg_name),
                 "bool" => format!("ctypes.c_byte(1 if {} else 0)", arg_name),

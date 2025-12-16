@@ -185,6 +185,29 @@ fn combo_struct_function(s1: TestStruct, _s2: TestStruct, _s3: TestStruct2) -> T
     s1
 }
 
+#[ffi]
+fn function_taking_vec_of_primitives(_vec: Vec<i32>) {
+    // println!(
+    //     "Rust: Function with vector of primitives called: {:?}",
+    //     _vec
+    // );
+}
+
+#[ffi]
+fn function_taking_vec_of_bools(_vec: Vec<bool>) {
+    // println!("Rust: Function with vector of bools called: {:?}", _vec);
+}
+
+#[ffi]
+fn function_taking_vec_of_strings(_vec: Vec<String>) {
+    // println!("Rust: Function with vector of strings called: {:?}", _vec);
+}
+
+#[ffi]
+fn function_taking_vec_of_structs(_vec: Vec<TestStruct>) {
+    // println!("Rust: Function with vector of structs called: {:?}", _vec);
+}
+
 // Having Drop defined causes still reachable resources in valgrind report
 impl Drop for TestStruct {
     fn drop(&mut self) {

@@ -90,12 +90,12 @@ These examples demonstrate how to use the generated bindings in real application
 
 | Feature             | C++ | Swift | Python |
 | ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅   | ✅     | ❌      |
-| String arguments    | ✅   | ✅     | ❌      |
-| Primitive return    | ✅   | ✅     | ❌      |
-| String return       | ✅   | ✅     | ❌      |
-| Struct arguments    | ✅   | ✅     | ❌      |
-| Struct return       | ✅   | ✅     | ❌      |
+| Primitive arguments | ✅   | ✅     | ✅      |
+| String arguments    | ✅   | ✅     | ✅      |
+| Primitive return    | ✅   | ✅     | ✅      |
+| String return       | ✅   | ✅     | ✅      |
+| Struct arguments    | ✅   | ✅     | ✅      |
+| Struct return       | ✅   | ✅     | ✅      |
 
 ### Static Methods
 
@@ -118,7 +118,7 @@ These examples demonstrate how to use the generated bindings in real application
 | String return       | ✅   | ✅     | ✅      |
 | Struct arguments    | ✅   | ✅     | ✅      |
 | Struct return       | ✅   | ✅     | ✅      |
-| Vec arguments       | ❌   | ❌     | ❌      |
+| Vec arguments       | ✅   | ❌     | ❌      |
 | Vec return          | ❌   | ❌     | ❌      |
 | `&str` return       | ❌   | ❌     | ❌      |
 
@@ -126,9 +126,9 @@ These examples demonstrate how to use the generated bindings in real application
 
 | Feature   | C++ | Swift | Python |
 | --------- | --- | ----- | ------ |
-| Primitive | ❌   | ❌     | ❌      |
-| String    | ❌   | ❌     | ❌      |
-| Struct    | ❌   | ❌     | ❌      |
+| Primitive | ✅   | ❌     | ❌      |
+| String    | ✅   | ❌     | ❌      |
+| Struct    | ✅   | ❌     | ❌      |
 | `&str`    | ❌   | ❌     | ❌      |
 | Traits    | ❌   | ❌     | ❌      |
 
