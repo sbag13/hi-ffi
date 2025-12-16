@@ -6,6 +6,7 @@ use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::impl_block_wrapper::ImplBlockWrapper;
 use crate::wrapper::python::{ClassCode, arg_cast, set_extern_fn_resttype, type_hint};
 
+// TODO refactor, split into functions
 pub fn gen_methods_mod(impl_block: &ImplBlockWrapper) -> ClassCode {
     let class_name = impl_block.struct_name.to_string();
 
@@ -31,11 +32,6 @@ class {class_name}:"#
 
         // Build python signature receivers
         let mut py_args_sig: Vec<String> = vec![];
-        if method.is_static {
-            py_args_sig.push("".to_string()); // we'll replace prefix later
-        } else {
-            py_args_sig.push("self".to_string());
-        }
 
         // map args
         let mut call_args: Vec<String> = vec![];
@@ -43,15 +39,12 @@ class {class_name}:"#
         for arg in &method.args {
             let arg_name = arg.arg_name.to_string();
 
-            match arg.arg_type.to_token_stream().to_string().as_str() {
-                "String" => {
-                    imports.insert(
-                        "RustString".to_string(),
-                        "from .global_state import RustString".to_string(),
-                    );
-                }
-                _ => {}
-            };
+            if arg.arg_type.to_token_stream().to_string().as_str() == "String" {
+                imports.insert(
+                    "RustString".to_string(),
+                    "from .global_state import RustString".to_string(),
+                );
+            }
 
             py_args_sig.push(format!("{}: {}", arg_name, type_hint(&arg.arg_type)));
             pre_casts.push(format!(
@@ -83,18 +76,11 @@ class {class_name}:"#
         }
 
         let recv_and_args = if method.is_static {
-            // class method: no self; but keep for future improvement; expose as @staticmethod
-            if py_args_sig.len() > 0 {
-                py_args_sig[0] = String::new();
-            }
-            py_args_sig
-                .iter()
-                .filter(|s| !s.is_empty())
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(", ")
-        } else {
             py_args_sig.join(", ")
+        } else if py_args_sig.is_empty() {
+            "self".to_string()
+        } else {
+            format!("self, {}", py_args_sig.join(", "))
         };
 
         let decorator = if method.is_static {

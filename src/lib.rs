@@ -14,6 +14,8 @@ use translator::translate;
 use wrapper::Wrapper;
 use wrapper::base::rust_code_base;
 
+use crate::wrapper::ReusableWrapper;
+
 #[cfg(feature = "cpp")]
 mod cpp;
 #[cfg(feature = "python")]
@@ -29,7 +31,11 @@ const RUST_CODE_DIR: &str = "rust/";
 #[cfg(feature = "cpp")]
 const CPP_CODE_DIR: &str = "cpp/";
 
-static RUST_CODE_BASE_GENERATED: Once = Once::new();
+static RUST_CODE_BASE_TOKENS_GENERATED: Once = Once::new();
+
+// Tokens of wrapper that should be generated only once
+static RUST_WRAPPER_TOKENS_GENERATED: LazyLock<Mutex<HashSet<ReusableWrapper>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
 
 #[proc_macro_attribute]
 pub fn ffi(_attr: TokenStream, input: TokenStream) -> TokenStream {
@@ -46,12 +52,24 @@ pub fn ffi(_attr: TokenStream, input: TokenStream) -> TokenStream {
 
     let mut tokens: TokenStream2 = (&wrapper).into();
 
-    RUST_CODE_BASE_GENERATED.call_once(|| tokens.extend(rust_code_base()));
+    RUST_CODE_BASE_TOKENS_GENERATED.call_once(|| tokens.extend(rust_code_base()));
+
+    // Generate reusable wrappers, like Vectors with different types inside
+    for reusable_wrapper in &wrapper.reusable_wrappers {
+        if RUST_WRAPPER_TOKENS_GENERATED
+            .lock()
+            .expect("Mutex lock failed during locking for reusable wrapper tokens")
+            .insert(reusable_wrapper.clone())
+        {
+            let wrapper_tokens: TokenStream2 = reusable_wrapper.into();
+            tokens.extend(wrapper_tokens);
+        }
+    }
 
     tokens.into()
 }
 
-static RUST_STRUCT_WRAPPER_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =
+static RUST_WRAPPER_FILE_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
 fn write_rust_code(wrapper: &Wrapper) {
@@ -67,7 +85,7 @@ fn write_rust_code(wrapper: &Wrapper) {
     let full_file_path = rust_path.join(&file_name);
     let rust_tokens: TokenStream2 = wrapper.into();
 
-    if RUST_STRUCT_WRAPPER_GENERATED
+    if RUST_WRAPPER_FILE_GENERATED
         .lock()
         .expect("Mutex lock failed")
         .insert(full_file_path.clone())
@@ -75,6 +93,22 @@ fn write_rust_code(wrapper: &Wrapper) {
         create_file(rust_tokens, full_file_path);
     } else {
         append_to_file(&rust_tokens, full_file_path);
+    }
+
+    // Generate reusable wrappers, like Vectors with different types inside
+    for reusable_wrapper in &wrapper.reusable_wrappers {
+        let file_name = match reusable_wrapper {
+            ReusableWrapper::Vec(inner) => format!("vec_{}.rs", inner.name()),
+        };
+        let full_file_path = rust_path.join(&file_name);
+        if RUST_WRAPPER_FILE_GENERATED
+            .lock()
+            .expect("Mutex lock failed during locking for reusable wrapper")
+            .insert(full_file_path.clone())
+        {
+            let tokens: TokenStream2 = reusable_wrapper.into();
+            create_file(tokens, full_file_path);
+        }
     }
 }
 

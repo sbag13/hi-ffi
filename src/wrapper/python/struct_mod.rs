@@ -167,7 +167,7 @@ fn prop_result_cast(ty: &Type, result_var_name: &str) -> String {
         syn::Type::Path(type_path) => {
             let segment = type_path.path.segments.last().unwrap();
             match segment.ident.to_string().as_str() {
-                "i32" | "i64" | "u32" | "u64" | "f32" | "f64" => format!("{result_var_name}"),
+                "i32" | "i64" | "u32" | "u64" | "f32" | "f64" => result_var_name.to_string(),
                 "bool" => format!("ctypes.c_byte({result_var_name}).value != 0"),
                 "String" => format!("FfiSlice({result_var_name}).py_str()"),
                 _ => format!("{}({})", ty.to_token_stream(), result_var_name),

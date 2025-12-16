@@ -10,24 +10,24 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
             FunctionArgWrapper {
                 arg_name,
                 arg_type,
-                wrapper_type: FunctionArgWrapperType::Primitive,
+                wrapper_type:
+                    WrapperType::IntegerNumber(_)
+                    | WrapperType::Bool
+                    | WrapperType::FloatingPointNumber(_),
             } => {
                 format!("{} {}", arg_type.to_token_stream(), arg_name)
             }
             FunctionArgWrapper {
                 arg_name,
-                wrapper_type: FunctionArgWrapperType::String,
+                wrapper_type: WrapperType::Struct(_) | WrapperType::String,
                 ..
             } => {
                 format!("void* {arg_name}")
             }
             FunctionArgWrapper {
-                arg_name,
-                wrapper_type: FunctionArgWrapperType::Struct,
+                wrapper_type: WrapperType::Vec(_),
                 ..
-            } => {
-                format!("void* {arg_name}")
-            }
+            } => String::new(), // TODO
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -63,7 +63,7 @@ pub fn map_args<'a>(
             FunctionArgWrapper {
                 arg_name,
                 arg_type,
-                wrapper_type: FunctionArgWrapperType::Primitive,
+                wrapper_type: WrapperType::IntegerNumber(_) | WrapperType::Bool | WrapperType::FloatingPointNumber(_),
             } => {
                 args_signatures.push(format!("_ {}: {}", arg_name, arg_type.to_token_stream()));
                 args_names.push(arg_name.to_string());
@@ -71,7 +71,7 @@ pub fn map_args<'a>(
 
             FunctionArgWrapper {
                 arg_name,
-                wrapper_type: FunctionArgWrapperType::String,
+                wrapper_type: WrapperType::String,
                 ..
             } => {
                 args_signatures.push(format!("_ {arg_name}: String"));
@@ -83,7 +83,7 @@ pub fn map_args<'a>(
 
             FunctionArgWrapper {
                 arg_name,
-                wrapper_type: FunctionArgWrapperType::Struct,
+                wrapper_type: WrapperType::Struct(_),
                 arg_type,
             } => {
                 args_signatures.push(format!("_ {arg_name}: {}", arg_type.to_token_stream()));
@@ -92,6 +92,10 @@ pub fn map_args<'a>(
                     r#"let casted_{arg_name} = {arg_name}.rawPtr()"#
                 ));
             }
+
+            FunctionArgWrapper {
+                wrapper_type: WrapperType::Vec(_), ..
+            } => (), // TODO
 
             // No other variants
         });
@@ -175,7 +179,8 @@ pub struct ReturnTypes {
 pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnTypes {
     match return_wrapper {
         Some(FunctionReturnWrapper {
-            wrapper_type: FunctionReturnWrapperType::Primitive,
+            wrapper_type:
+                WrapperType::IntegerNumber(_) | WrapperType::Bool | WrapperType::FloatingPointNumber(_),
             return_type,
         }) => ReturnTypes {
             return_type_sig: Some(format!(" -> {}", return_type.to_token_stream())),
@@ -184,7 +189,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
         },
 
         Some(FunctionReturnWrapper {
-            wrapper_type: FunctionReturnWrapperType::String,
+            wrapper_type: WrapperType::String,
             ..
         }) => ReturnTypes {
             return_type_sig: Some(" -> String".to_string()),
@@ -193,7 +198,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
         },
 
         Some(FunctionReturnWrapper {
-            wrapper_type: FunctionReturnWrapperType::Struct,
+            wrapper_type: WrapperType::Struct(_),
             return_type,
         }) => ReturnTypes {
             return_type_sig: Some(format!(" -> {}", return_type.to_token_stream())),
@@ -203,6 +208,18 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 return_type.to_token_stream()
             )),
         },
+
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Vec(_),
+            ..
+        }) => {
+            // TODO
+            ReturnTypes {
+                return_type_sig: None,                // TODO
+                cpp_return_type: "void*".to_string(), // TODO
+                result_cast: None,                    // TODO
+            }
+        }
 
         None => ReturnTypes {
             return_type_sig: None,

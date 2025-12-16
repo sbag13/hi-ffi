@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Deref};
 
 use crate::{prepend_each_line_with_n_tabs, wrapper::cpp::*};
 use quote::ToTokens;
@@ -6,14 +6,14 @@ use quote::ToTokens;
 pub struct MappedCppFunctionArgsTokens {
     pub cpp_args: String,
     pub wrapper_args: String,
-    pub arg_names: String,
+    pub call_args: String,
     pub arg_casts: String,
     pub includes: HashSet<String>,
 }
 pub fn map_args<'a>(
     args: impl Iterator<Item = &'a FunctionArgWrapper>,
 ) -> MappedCppFunctionArgsTokens {
-    let (mut cpp_args, mut wrapper_args, mut arg_names, mut arg_casts, mut includes): (
+    let (mut cpp_args, mut wrapper_args, mut call_args, mut arg_casts, mut includes): (
         Vec<_>,
         Vec<_>,
         Vec<_>,
@@ -30,48 +30,72 @@ pub fn map_args<'a>(
         FunctionArgWrapper {
             arg_name,
             arg_type,
-            wrapper_type: FunctionArgWrapperType::Primitive,
+            wrapper_type:
+                WrapperType::IntegerNumber(_) | WrapperType::Bool | WrapperType::FloatingPointNumber(_),
         } => {
             cpp_args.push(format!("{} {}", arg_type.to_token_stream(), arg_name));
             wrapper_args.push(format!("{} {}", arg_type.to_token_stream(), arg_name));
-            arg_names.push(arg_name.to_string());
+            call_args.push(arg_name.to_string());
         }
+
         FunctionArgWrapper {
             arg_name,
-            wrapper_type: FunctionArgWrapperType::String,
+            wrapper_type: WrapperType::String,
             ..
         } => {
             cpp_args.push(format!("std::string&& {arg_name}"));
             wrapper_args.push(format!("const char* {arg_name}"));
-            arg_names.push(format!("casted_{arg_name}"));
+            call_args.push(format!("casted_{arg_name}"));
             arg_casts.push(format!(r#"auto casted_{arg_name} = {arg_name}.data();"#));
         }
+
         FunctionArgWrapper {
             arg_name,
             arg_type,
-            wrapper_type: FunctionArgWrapperType::Struct,
+            wrapper_type: WrapperType::Struct(_),
         } => {
-            let struct_type = arg_type.to_token_stream().to_string();
+            let struct_type = arg_type.to_token_stream();
             cpp_args.push(format!("const {struct_type}& {arg_name}"));
             wrapper_args.push(format!("void* {arg_name}"));
-            arg_names.push(format!("casted_{arg_name}"));
+            call_args.push(format!("casted_{arg_name}"));
             arg_casts.push(format!(
                 r#"auto casted_{arg_name} = {arg_name}.self_ptr();"#
             ));
             includes.insert(format!("#include \"{struct_type}.h\""));
         }
+
+        FunctionArgWrapper {
+            wrapper_type: WrapperType::Vec(inner_wrapper),
+            arg_name,
+            ..
+        } => {
+            let inner_type = match inner_wrapper.deref() {
+                WrapperType::String => "std::string",
+                WrapperType::Vec(_) => unimplemented!("Nested vector type not implemented yet"),
+                WrapperType::Bool => "bool",
+                WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.as_str(),
+                WrapperType::Struct(struct_name) => struct_name.as_str()
+            };
+            cpp_args.push(format!("const std::vector<{inner_type}>& {arg_name}"));
+            includes.insert("#include <vector>".to_string());
+            let inner_wrapper_name = inner_wrapper.name();
+            includes.insert(format!(r#"#include "vec_{inner_wrapper_name}.h""#));
+            arg_casts.push(format!("auto casted_{arg_name} = Rust{inner_wrapper_name}Vec::from_std({arg_name});"));
+            call_args.push(format!("casted_{arg_name}.raw_ptr()"));
+            wrapper_args.push(format!("void* {arg_name}"));
+        },
     });
 
     let cpp_args = cpp_args.join(", ");
     let wrapper_args = wrapper_args.join(", ");
-    let arg_names = arg_names.join(", ");
+    let call_args = call_args.join(", ");
     let arg_casts = arg_casts.join("\n");
     let includes = includes.into_iter().collect::<HashSet<_>>();
 
     MappedCppFunctionArgsTokens {
         cpp_args,
         wrapper_args,
-        arg_names,
+        call_args,
         arg_casts,
         includes,
     }
@@ -116,7 +140,7 @@ pub fn gen_function_definition(function_wrapper: &FunctionWrapper) -> String {
     let extern_fn_name = &function_wrapper.extern_function_name;
     let MappedCppFunctionArgsTokens {
         cpp_args,
-        arg_names,
+        call_args: arg_names,
         arg_casts,
         ..
     } = map_args(function_wrapper.args_wrappers.iter());

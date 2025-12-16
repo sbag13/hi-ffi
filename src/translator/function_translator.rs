@@ -1,6 +1,8 @@
-use std::ops::Deref;
-
+use quote::ToTokens;
 use quote::quote;
+use std::ops::Deref;
+use syn::GenericArgument;
+use syn::Type;
 use syn::{FnArg, ItemFn};
 
 use crate::EXPORTED_SYMBOLS_PREFIX;
@@ -15,6 +17,16 @@ pub fn translate_function(item_struct: ItemFn) -> Wrapper {
         .map(map_arg)
         .collect::<Vec<_>>();
 
+    let reusable_wrappers = args_wrappers
+        .iter()
+        .filter_map(|arg_wrapper| match &arg_wrapper.wrapper_type {
+            WrapperType::Vec(inner_wrapper_type) => {
+                Some(ReusableWrapper::Vec(*inner_wrapper_type.clone()))
+            }
+            _ => None,
+        })
+        .collect();
+
     let return_wrapper = return_wrapper(&item_struct.sig.output);
 
     Wrapper {
@@ -25,6 +37,7 @@ pub fn translate_function(item_struct: ItemFn) -> Wrapper {
             args_wrappers,
             return_wrapper,
         }),
+        reusable_wrappers,
     }
 }
 
@@ -34,12 +47,7 @@ pub fn return_wrapper(output: &syn::ReturnType) -> Option<FunctionReturnWrapper>
         syn::ReturnType::Type(_, ty) => {
             if let syn::Type::Path(path) = ty.deref() {
                 if let Some(ident) = path.path.get_ident() {
-                    let wrapper_type = match ident.to_string().as_str() {
-                        "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64"
-                        | "u128" | "f32" | "f64" | "bool" => FunctionReturnWrapperType::Primitive,
-                        "String" => FunctionReturnWrapperType::String,
-                        _custom_type => FunctionReturnWrapperType::Struct,
-                    };
+                    let wrapper_type = ident.to_string().as_str().parse().unwrap();
 
                     Some(FunctionReturnWrapper {
                         wrapper_type,
@@ -65,25 +73,57 @@ pub fn map_arg(arg: &FnArg) -> FunctionArgWrapper {
                 syn::Pat::Ident(ident) => ident.ident.clone(),
                 _ => panic!("Only simple argument names are supported"),
             };
-            if let syn::Type::Path(path) = ty.deref() {
+            let wrapper_type = if let syn::Type::Path(path) = ty.deref() {
                 if let Some(ident) = path.path.get_ident() {
-                    let wrapper_type = match ident.to_string().as_str() {
-                        "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64"
-                        | "u128" | "f32" | "f64" | "bool" => FunctionArgWrapperType::Primitive,
-                        "String" => FunctionArgWrapperType::String,
-                        _custom_type => FunctionArgWrapperType::Struct,
-                    };
-
-                    FunctionArgWrapper {
-                        wrapper_type,
-                        arg_name,
-                        arg_type: ty.deref().clone(),
-                    }
+                    ident.to_string().as_str().parse().unwrap()
                 } else {
-                    panic!("No ident found")
+                    match path.path.segments.first() {
+                        Some(segment) => match segment.ident.to_string().as_str() {
+                            "Vec" => {
+                                let inner_wrapper_type: WrapperType = match &segment.arguments {
+                                    syn::PathArguments::AngleBracketed(args) => {
+                                        let Some(inner_arg) = args.args.first() else {
+                                            panic!("No argument found in Vec arguments");
+                                        };
+                                        match inner_arg {
+                                            GenericArgument::Type(Type::Path(inner_path)) => {
+                                                inner_path
+                                                    .to_token_stream()
+                                                    .to_string()
+                                                    .as_str()
+                                                    .parse()
+                                                    .unwrap()
+                                            }
+                                            _ => panic!("Vector inner arg type must be a path"),
+                                        }
+                                    }
+                                    _ => panic!("Vec arguments not supported"),
+                                };
+
+                                match inner_wrapper_type {
+                                    WrapperType::Vec(_) => {
+                                        panic!("Nested vectors are not supported")
+                                    }
+                                    inner => WrapperType::Vec(Box::new(inner)),
+                                }
+                            }
+                            _ => {
+                                panic!("Unsupported type: {:?}", segment.ident)
+                            }
+                        },
+                        None => {
+                            panic!("No segment found")
+                        }
+                    }
                 }
             } else {
                 panic!("No path found")
+            };
+
+            FunctionArgWrapper {
+                wrapper_type,
+                arg_name,
+                arg_type: ty.deref().clone(),
             }
         }
     }

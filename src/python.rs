@@ -57,7 +57,7 @@ pub(crate) fn write_python_code(wrapper: &Wrapper) {
     if let Some(class_mod) = class_mod {
         let class_mod_path = python_path.join(format!("{}.py", class_mod.name));
         if !class_mod_path.exists() {
-            create_file(format!("{}", class_mod.header), &class_mod_path);
+            create_file(class_mod.header, &class_mod_path);
         }
 
         let mut locked_per_class_imports = PER_CLASS_IMPORTS.lock().expect("Mutex lock failed");
@@ -79,7 +79,7 @@ pub(crate) fn write_python_code(wrapper: &Wrapper) {
         );
         imports_for_class.extend(imports_to_add);
 
-        append_to_file(format!("{}", class_mod.body), &class_mod_path);
+        append_to_file(class_mod.body, &class_mod_path);
     }
 }
 

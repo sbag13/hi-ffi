@@ -33,7 +33,7 @@ pub fn gen_class_definition_parts_from_impl_block(
 
                 let MappedCppFunctionArgsTokens {
                     cpp_args,
-                    arg_names,
+                    call_args: arg_names,
                     arg_casts,
                     wrapper_args,
                     includes: arg_includes,

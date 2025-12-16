@@ -7,6 +7,7 @@ int main()
     assert_struct_impl_block();
     assert_struct_methods_with_structs();
     assert_functions();
+    assert_vectors();
 
     std::cout << "All assertions passed!" << std::endl;
 

@@ -10,8 +10,31 @@
 #include "combo_function.h"
 #include "combo_struct_function.h"
 #include "TestStruct.h"
+#include "function_taking_vec_of_primitives.h"
+#include "function_taking_vec_of_bools.h"
+#include "function_taking_vec_of_strings.h"
+#include "function_taking_vec_of_structs.h"
 #include <iostream>
 #include <cassert>
+
+void assert_vectors()
+{
+    std::vector<i32> v = {1, 2, 3, 4, 5};
+    function_taking_vec_of_primitives(v);
+
+    std::vector<bool> v_bool = {true, false, true, true};
+    function_taking_vec_of_bools(v_bool);
+
+    std::vector<std::string> v_str = {"Hello, Rust!", "Hello, C++!", "Hello, Python!"};
+    function_taking_vec_of_strings(v_str);
+
+    auto s1 = TestStruct();
+    s1.set_i32_field(15);
+    auto s2 = TestStruct();
+    s2.set_i32_field(17);
+    std::vector<TestStruct> v_structs = {s1, s2, TestStruct()};
+    function_taking_vec_of_structs(v_structs);
+}
 
 void assert_structs()
 {

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::ops::Deref;
 
 use quote::ToTokens;
@@ -56,5 +57,6 @@ pub fn translate_impl(item_impl: ItemImpl) -> Wrapper {
             struct_name,
             methods,
         }),
+        reusable_wrappers: HashSet::new(),
     }
 }

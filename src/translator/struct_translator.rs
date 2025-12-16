@@ -1,4 +1,5 @@
 use core::panic;
+use std::collections::HashSet;
 use std::fmt::Display;
 
 use quote::{format_ident, quote};
@@ -20,6 +21,7 @@ pub fn translate_struct(item_struct: ItemStruct) -> Wrapper {
             clone_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__clone"),
             original_item_struct: item_struct,
         }),
+        reusable_wrappers: HashSet::new(),
     }
 }
 
