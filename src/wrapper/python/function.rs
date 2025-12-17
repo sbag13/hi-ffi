@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::python::{
-    FunctionCode, result_cast, set_extern_fn_resttype, type_hint, type_hint_from_str,
+    FunctionCode, result_cast, set_extern_fn_resttype, type_hint, type_hint_from_wrapper_type,
 };
 use crate::wrapper::{FunctionWrapper, WrapperType};
 use quote::ToTokens;
@@ -73,8 +73,16 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
                     call_list.push(format!("{arg_name}_ptr"));
                 }
 
-                WrapperType::Vec(_) => {
-                    // TODO
+                WrapperType::Vec(inner) => {
+                    let arg_name = &arg_wrapper.arg_name;
+                    let inner_type_name = inner.name();
+
+                    // Create a vector wrapper and populate it
+                    let cast_lines = vec![format!(
+                        "casted_{arg_name} = {inner_type_name}Vec.from_list({arg_name})"
+                    )];
+                    casts.extend(cast_lines);
+                    call_list.push(format!("casted_{arg_name}.raw_ptr()"));
                 }
             }
             (casts, call_list)
@@ -83,7 +91,7 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
 }
 
 fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
-    function.args_wrappers.iter().fold(
+    let mut imports = function.args_wrappers.iter().fold(
         HashMap::new(),
         |mut acc: HashMap<String, String>, arg_wrapper| {
             let type_name = arg_wrapper.arg_type.to_token_stream().to_string();
@@ -97,14 +105,30 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                 WrapperType::String => {
                     acc.insert("ctypes".to_string(), "import ctypes".to_string());
                 }
-                WrapperType::Vec(_) => {
+                WrapperType::Vec(inner_type) => {
+                    let inner_type_name = inner_type.name();
                     acc.insert("List".to_string(), "from typing import List".to_string());
+                    acc.insert(
+                        format!("{inner_type_name}Vec"),
+                        format!("from .vec_{inner_type_name} import {inner_type_name}Vec"),
+                    );
                 }
                 _ => {}
             }
             acc
         },
-    )
+    );
+
+    if let Some(return_wrapper) = &function.return_wrapper
+        && let WrapperType::Vec(inner) = &return_wrapper.wrapper_type
+    {
+        imports.insert(
+            format!("{}Vec", inner.name()),
+            format!("from .vec_{} import {}Vec", inner.name(), inner.name()),
+        );
+    }
+
+    imports
 }
 
 fn received_args(function: &FunctionWrapper) -> String {
@@ -122,7 +146,7 @@ fn arg_receiver(arg_wrapper: &crate::wrapper::FunctionArgWrapper) -> String {
             format!(
                 "{}: List[{}]",
                 arg_wrapper.arg_name,
-                type_hint_from_str(&inner.name())
+                type_hint_from_wrapper_type(inner)
             )
         }
         WrapperType::IntegerNumber(_) => format!("{}: int", arg_wrapper.arg_name),

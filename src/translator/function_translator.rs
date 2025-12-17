@@ -17,7 +17,7 @@ pub fn translate_function(item_struct: ItemFn) -> Wrapper {
         .map(map_arg)
         .collect::<Vec<_>>();
 
-    let reusable_wrappers = args_wrappers
+    let mut reusable_wrappers = args_wrappers
         .iter()
         .filter_map(|arg_wrapper| match &arg_wrapper.wrapper_type {
             WrapperType::Vec(inner_wrapper_type) => {
@@ -25,9 +25,14 @@ pub fn translate_function(item_struct: ItemFn) -> Wrapper {
             }
             _ => None,
         })
-        .collect();
+        .collect::<std::collections::HashSet<_>>();
 
     let return_wrapper = return_wrapper(&item_struct.sig.output);
+
+    // Ensure vec reusable wrapper is generated for return vecs too
+    if let Some(FunctionReturnWrapper { wrapper_type: WrapperType::Vec(inner), .. }) = &return_wrapper {
+        reusable_wrappers.insert(ReusableWrapper::Vec(*inner.clone()));
+    }
 
     Wrapper {
         original_definition: quote! {#item_struct},
@@ -45,16 +50,45 @@ pub fn return_wrapper(output: &syn::ReturnType) -> Option<FunctionReturnWrapper>
     match output {
         syn::ReturnType::Default => None,
         syn::ReturnType::Type(_, ty) => {
+            // Support simple idents and generic types like Vec<T>
             if let syn::Type::Path(path) = ty.deref() {
                 if let Some(ident) = path.path.get_ident() {
                     let wrapper_type = ident.to_string().as_str().parse().unwrap();
-
-                    Some(FunctionReturnWrapper {
-                        wrapper_type,
-                        return_type: ty.deref().clone(),
-                    })
+                    Some(FunctionReturnWrapper { wrapper_type, return_type: ty.deref().clone() })
                 } else {
-                    panic!("No ident found in return type")
+                    // Handle non-trivial paths, e.g., Vec<T>
+                    match path.path.segments.first() {
+                        Some(segment) => match segment.ident.to_string().as_str() {
+                            "Vec" => {
+                                let inner_wrapper_type: WrapperType = match &segment.arguments {
+                                    syn::PathArguments::AngleBracketed(args) => {
+                                        let Some(inner_arg) = args.args.first() else {
+                                            panic!("No argument found in Vec return type");
+                                        };
+                                        match inner_arg {
+                                            GenericArgument::Type(Type::Path(inner_path)) => {
+                                                inner_path
+                                                    .to_token_stream()
+                                                    .to_string()
+                                                    .as_str()
+                                                    .parse()
+                                                    .unwrap()
+                                            }
+                                            _ => panic!("Vector inner return type must be a path"),
+                                        }
+                                    }
+                                    _ => panic!("Vec return type arguments not supported"),
+                                };
+                                let wrapper_type = match inner_wrapper_type {
+                                    WrapperType::Vec(_) => panic!("Nested vectors are not supported in return type"),
+                                    inner => WrapperType::Vec(Box::new(inner)),
+                                };
+                                Some(FunctionReturnWrapper { wrapper_type, return_type: ty.deref().clone() })
+                            }
+                            _ => panic!("Unsupported return type: {:?}", segment.ident),
+                        },
+                        None => panic!("No segment found in return type"),
+                    }
                 }
             } else {
                 panic!("No path found in return type")

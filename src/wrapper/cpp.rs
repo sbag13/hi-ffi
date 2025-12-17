@@ -16,7 +16,6 @@ impl ReusableWrapper {
     }
 }
 
-// TODO split to functions
 fn gen_vec_wrapper_cpp(inner: &WrapperType) -> String {
     let wrapper_name = format!("Rust{}Vec", inner.name());
     let inner_name = inner.name();
@@ -38,6 +37,10 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> String {
         format!("{EXPORTED_SYMBOLS_PREFIX}__with_capacity_{inner_name}_vec");
     let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__push_{inner_name}_vec");
 
+    // New externs for reading
+    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__len_{inner_name}_vec");
+    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__get_{inner_name}_vec");
+
     let loop_expressions = match inner {
         WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool => {
             format!("           {push_ext_fn_name}(rust_vec_ptr, elem);")
@@ -56,6 +59,36 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> String {
         _ => String::new(),
     };
 
+    // Element fetch expression per type
+    let elem_fetch = match inner {
+        WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) => {
+            format!("auto elem = {get_ext_fn_name}(this->self, i);")
+        }
+        WrapperType::Bool => {
+            format!("bool elem = {get_ext_fn_name}(this->self, i) != 0;")
+        }
+        WrapperType::String => {
+            // get returns pointer to Rust String heap-allocated; convert to std::string and free via RustString wrapper
+            format!(
+                "auto elem_ptr = {get_ext_fn_name}(this->self, i); RustString rs(elem_ptr); auto elem = rs.to_string();"
+            )
+        }
+        WrapperType::Struct(struct_name) => {
+            format!(
+                "auto elem_ptr = {get_ext_fn_name}(this->self, i); {struct_name} elem(elem_ptr);"
+            )
+        }
+        WrapperType::Vec(_) => unreachable!(),
+    };
+
+    let get_ext_return_type = match inner {
+        WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
+        WrapperType::Bool => "u8".to_string(),
+        WrapperType::String => "void*".to_string(),
+        WrapperType::Struct(_) => "void*".to_string(),
+        WrapperType::Vec(_) => unimplemented!("Vec of vecs not supported yet!"),
+    };
+
     format!(
         r#"
 #ifndef {wrapper_name}__def
@@ -69,6 +102,8 @@ extern "C" {{
     void* {drop_ext_name}(void* self);
     void* {with_capacity_ext_name}(size_t capacity);
     void* {push_ext_fn_name}(void* self, {push_ext_receiver});
+    usize {len_ext_fn_name}(void* self);
+    {get_ext_return_type} {get_ext_fn_name}(void* self, usize index);
 }}
 
 class {wrapper_name} {{
@@ -91,6 +126,19 @@ public:
 {loop_expressions}
         }}
         return {wrapper_name}(rust_vec_ptr);
+    }}
+
+    static {wrapper_name} from_raw(void* raw) {{ return {wrapper_name}(raw); }}
+
+    std::vector<{inner_cpp_name}> to_std() {{
+        std::vector<{inner_cpp_name}> out;
+        auto len = {len_ext_fn_name}(this->self);
+        out.reserve(len);
+        for (usize i = 0; i < len; ++i) {{
+            {elem_fetch}
+            out.push_back(std::move(elem));
+        }}
+        return out;
     }}
 }};
 
@@ -189,9 +237,37 @@ return {}(result);",
             }
         }
         Some(FunctionReturnWrapper {
-            wrapper_type: WrapperType::Vec(_),
+            wrapper_type: WrapperType::Vec(inner),
             ..
-        }) => unimplemented!("Vec of vecs not supported yet as a cpp return type!"),
+        }) => {
+            // Determine C++ inner type
+            let inner_cpp = match inner.as_ref() {
+                WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.clone(),
+                WrapperType::Bool => "bool".to_string(),
+                WrapperType::String => "std::string".to_string(),
+                WrapperType::Struct(name) => name.clone(),
+                WrapperType::Vec(_) => unimplemented!("Nested vectors not supported"),
+            };
+            let rust_vec_name = format!("Rust{}Vec", inner.name());
+            let return_cast = format!(
+                r#"
+auto rust_vec = {rust_vec_name}::from_raw(result);
+return rust_vec.to_std();
+"#
+            );
+            let mut includes = String::from("#include <vector>\n");
+            includes.push_str(&format!("#include \"vec_{}.h\"", inner.name()));
+            if let WrapperType::Struct(inner_struct) = inner.as_ref() {
+                // For struct vector, ensure struct header is included
+                includes.push_str(&format!("\n#include \"{inner_struct}.h\""));
+            }
+            ReturnTypes {
+                ext_return_type: "void*".to_string(),
+                return_type: format!("std::vector<{inner_cpp}>").to_string(),
+                return_cast,
+                return_type_includes: includes,
+            }
+        }
         None => ReturnTypes {
             ext_return_type: "void*".to_string(),
             return_type: "void".to_string(),

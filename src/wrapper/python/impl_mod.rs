@@ -6,7 +6,6 @@ use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::impl_block_wrapper::ImplBlockWrapper;
 use crate::wrapper::python::{ClassCode, arg_cast, set_extern_fn_resttype, type_hint};
 
-// TODO refactor, split into functions
 pub fn gen_methods_mod(impl_block: &ImplBlockWrapper) -> ClassCode {
     let class_name = impl_block.struct_name.to_string();
 
@@ -91,26 +90,17 @@ class {class_name}:"#
 
         let body = format!(
             r#"
-    {decor}def {py_name}({recv_and_args}){ret_hint}:
+    {decorator}def {py_name}({recv_and_args}){ret_hint}:
         {restype_set}
         {pre_casts}
-        result = {lib_get}().{extern_fn_name}({call_target}{call_args})
+        result = {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}({call_target}{call_args})
         {ret_line}"#,
-            decor = decorator,
-            py_name = py_name,
-            recv_and_args = recv_and_args,
-            ret_hint = ret_hint,
-            restype_set = restype_set,
             pre_casts = if pre_casts.is_empty() {
                 "".into()
             } else {
                 pre_casts.join("\n        ")
             },
-            lib_get = PYTHON_LIB_GETTER_NAME,
-            extern_fn_name = extern_fn_name,
-            call_target = call_target,
             call_args = call_args.join(", "),
-            ret_line = ret_line,
         );
 
         body_sections.push(body);
