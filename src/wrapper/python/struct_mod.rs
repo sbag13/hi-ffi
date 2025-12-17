@@ -41,7 +41,10 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
             match field_wrapper.wrapper_type {
                 FieldWrapperType::Custom => {
                     let type_name = field_wrapper.field_type.to_token_stream().to_string();
-                    acc.insert(type_name.clone(), format!("from . import {}", type_name));
+                    acc.insert(
+                        type_name.clone(),
+                        format!("from .{type_name} import {type_name}"),
+                    );
                 }
                 FieldWrapperType::String => {
                     acc.insert(

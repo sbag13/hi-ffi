@@ -162,7 +162,7 @@ pub fn gen_function_definition(function_wrapper: &FunctionWrapper) -> String {
 {return_type} {fn_name}({cpp_args}) {{
 {arg_casts}
     {ext_return_type} result = {extern_fn_name}({arg_names});
-{return_casts}
+    {return_casts}
 }}
 "#
     )

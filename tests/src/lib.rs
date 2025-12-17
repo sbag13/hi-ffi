@@ -3,7 +3,7 @@ use hi_ffi::ffi;
 use serde::Serialize;
 
 #[ffi]
-#[derive(Default, Clone, Serialize, Debug)]
+#[derive(Default, Clone, Serialize, Debug, PartialEq)]
 struct TestStruct {
     // generate getter and setter
     #[ffi(setter, getter)]
@@ -118,7 +118,7 @@ impl TestStruct {
 }
 
 #[ffi]
-#[derive(Default, Clone, Serialize, Debug)]
+#[derive(Default, Clone, Serialize, Debug, PartialEq)]
 struct TestStruct2 {
     pub i32_field: i32,
 }
@@ -186,26 +186,63 @@ fn combo_struct_function(s1: TestStruct, _s2: TestStruct, _s3: TestStruct2) -> T
 }
 
 #[ffi]
-fn function_taking_vec_of_primitives(_vec: Vec<i32>) {
+fn function_taking_vec_of_primitives(vec: Vec<i32>) {
     // println!(
     //     "Rust: Function with vector of primitives called: {:?}",
-    //     _vec
+    //     vec
     // );
+    assert_eq!(vec![1, 2, 3, 4, 5], vec);
 }
 
 #[ffi]
-fn function_taking_vec_of_bools(_vec: Vec<bool>) {
+fn function_taking_vec_of_bools(vec: Vec<bool>) {
     // println!("Rust: Function with vector of bools called: {:?}", _vec);
+    assert_eq!(vec![true, false, true, true], vec);
 }
 
 #[ffi]
-fn function_taking_vec_of_strings(_vec: Vec<String>) {
+fn function_taking_vec_of_strings(vec: Vec<String>) {
     // println!("Rust: Function with vector of strings called: {:?}", _vec);
+    assert_eq!(
+        vec![
+            "Hello, Rust!",
+            "Hello, C++!",
+            "Hello, Python!",
+            "Hello, Swift!"
+        ],
+        vec
+    );
 }
 
 #[ffi]
-fn function_taking_vec_of_structs(_vec: Vec<TestStruct>) {
-    // println!("Rust: Function with vector of structs called: {:?}", _vec);
+fn function_taking_vec_of_structs(vec: Vec<TestStruct>) {
+    // println!("Rust: Function with vector of structs called: {:?}", vec);
+    let mut s1 = TestStruct::default();
+    s1.i32_field = 15;
+    let mut s2 = TestStruct::default();
+    s2.i32_field = 17;
+    let expected = vec![s1, s2];
+    assert_eq!(expected, vec);
+}
+
+#[ffi]
+fn function_returning_vec_of_int() -> Vec<i32> {
+    vec![3, 2, 7, 8]
+}
+
+#[ffi]
+fn function_returning_vec_of_bool() -> Vec<bool> {
+    vec![true, false, true, true]
+}
+
+#[ffi]
+fn function_returning_vec_of_structs() -> Vec<TestStruct2> {
+    vec![TestStruct2 { i32_field: 8 }, TestStruct2 { i32_field: 11 }]
+}
+
+#[ffi]
+fn function_returning_vec_of_string() -> Vec<String> {
+    vec!["Hello".to_string(), "World".to_string(), "Rust".to_string()]
 }
 
 // Having Drop defined causes still reachable resources in valgrind report

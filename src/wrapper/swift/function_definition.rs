@@ -19,15 +19,11 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
             }
             FunctionArgWrapper {
                 arg_name,
-                wrapper_type: WrapperType::Struct(_) | WrapperType::String,
+                wrapper_type: WrapperType::Struct(_) | WrapperType::String | WrapperType::Vec(_),
                 ..
             } => {
                 format!("void* {arg_name}")
             }
-            FunctionArgWrapper {
-                wrapper_type: WrapperType::Vec(_),
-                ..
-            } => String::new(), // TODO
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -94,8 +90,25 @@ pub fn map_args<'a>(
             }
 
             FunctionArgWrapper {
-                wrapper_type: WrapperType::Vec(_), ..
-            } => (), // TODO
+                arg_name,
+                wrapper_type: WrapperType::Vec(inner_type),
+                ..
+            } => {
+                let swift_type = match &**inner_type {
+                    WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool => {
+                        format!("[{}]", inner_type.name())
+                    }
+                    WrapperType::String => "[String]".to_string(),
+                    WrapperType::Struct(name) => format!("[{}]", name),
+                    WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+                };
+                args_signatures.push(format!("_ {arg_name}: {swift_type}"));
+                args_names.push(format!("casted_{arg_name}.rawPtr()"));
+                args_casts.push(format!(
+                    r#"let casted_{arg_name} = Rust{}Vec.fromSwift({arg_name})"#,
+                    inner_type.name()
+                ));
+            }
 
             // No other variants
         });
@@ -210,14 +223,26 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
         },
 
         Some(FunctionReturnWrapper {
-            wrapper_type: WrapperType::Vec(_),
+            wrapper_type: WrapperType::Vec(inner_type),
             ..
         }) => {
-            // TODO
+            let swift_type = match &**inner_type {
+                WrapperType::IntegerNumber(_)
+                | WrapperType::FloatingPointNumber(_)
+                | WrapperType::Bool => {
+                    format!("[{}]", inner_type.name())
+                }
+                WrapperType::String => "[String]".to_string(),
+                WrapperType::Struct(name) => format!("[{}]", name),
+                WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+            };
             ReturnTypes {
-                return_type_sig: None,                // TODO
-                cpp_return_type: "void*".to_string(), // TODO
-                result_cast: None,                    // TODO
+                return_type_sig: Some(format!(" -> {}", swift_type)),
+                cpp_return_type: "void*".to_string(),
+                result_cast: Some(format!(
+                    "let casted_result = Rust{}Vec(result!).toSwift()",
+                    inner_type.name()
+                )),
             }
         }
 

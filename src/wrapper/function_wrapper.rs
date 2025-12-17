@@ -46,8 +46,13 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
         },
         Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::Vec(_),
-            ..
-        }) => unimplemented!("Vec not supported as return type"),
+            return_type,
+        }) => MappedReturnType {
+            return_type_sig: quote! {-> *mut #return_type},
+            result_cast: quote! {
+                Box::into_raw(Box::new(result))
+            },
+        },
         None => MappedReturnType {
             return_type_sig: quote! {},
             result_cast: quote! {result},

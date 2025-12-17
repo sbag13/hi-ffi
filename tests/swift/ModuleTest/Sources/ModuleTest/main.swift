@@ -68,11 +68,50 @@ func assert_struct_static_methods() {
     assert(TestStruct.static_combo_method("Combo!", "Don't print me", true) == "Combo!", "static_combo_method should return correct string")
 }
 
+func assert_vec_functions() {
+    let vec_ints: [i32] = [1, 2, 3, 4, 5]
+    function_taking_vec_of_primitives(vec_ints)
+
+    let vec_bools: [bool] = [true, false, true, true]
+    function_taking_vec_of_bools(vec_bools)
+
+    let vec_strings: [String] = ["Hello, Rust!", "Hello, C++!", "Hello, Python!", "Hello, Swift!"]
+    function_taking_vec_of_strings(vec_strings)
+
+    let s1 = TestStruct()
+    s1.i32_field = 15
+    let s2 = TestStruct()
+    s2.i32_field = 17
+    let vec_structs: [TestStruct] = [s1, s2]
+    function_taking_vec_of_structs(vec_structs)
+    
+    let returned_vec_ints = function_returning_vec_of_int()
+    assert(returned_vec_ints.count == 4)
+    let expected_ints: [i32] = [3, 2, 7, 8]
+    assert(returned_vec_ints == expected_ints)
+
+    let returned_vec_bools = function_returning_vec_of_bool()
+    assert(returned_vec_bools.count == 4)
+    let expected_bools: [bool] = [true, false, true, true]
+    assert(returned_vec_bools == expected_bools)
+
+    let returned_vec_structs = function_returning_vec_of_structs()
+    assert(returned_vec_structs.count == 2)
+    assert(returned_vec_structs[0].i32_field == 8)
+    assert(returned_vec_structs[1].i32_field == 11)
+
+    let returned_vec_strings = function_returning_vec_of_string()
+    assert(returned_vec_strings.count == 3)
+    let expected_strings: [String] = ["Hello", "World", "Rust"]
+    assert(returned_vec_strings == expected_strings)
+}
+
 func run() {
     assert_struct_basics()
     assert_functions()
     assert_struct_methods()
     assert_struct_static_methods()
+    assert_vec_functions()
     print("All assertions passed.")
 }
 

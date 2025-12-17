@@ -110,9 +110,34 @@ def functions_tests():
     assert combo_struct_function(s, TestStruct(), TestStruct2()).i32_field == 43
 
 
+def vector_tests():
+    # Test vector arguments
+    function_taking_vec_of_primitives([1, 2, 3, 4, 5])
+    function_taking_vec_of_bools([True, False, True, True])
+    function_taking_vec_of_strings(["Hello, Rust!", "Hello, C++!", "Hello, Python!", "Hello, Swift!"])
+    
+    # Test vector of structs
+    s1 = TestStruct()
+    s1.i32_field = 15
+    s2 = TestStruct()
+    s2.i32_field = 17
+    function_taking_vec_of_structs([s1, s2])
+
+    # Test vector return values
+    assert function_returning_vec_of_int() == [3, 2, 7, 8]
+    assert function_returning_vec_of_bool() == [True, False, True, True]
+    assert function_returning_vec_of_string() == ["Hello", "World", "Rust"]
+    
+    returned_structs = function_returning_vec_of_structs()
+    assert len(returned_structs) == 2
+    assert returned_structs[0].i32_field == 8
+    assert returned_structs[1].i32_field == 11
+
+
 if __name__ == "__main__":
     struct_tests()
     functions_tests()
     methods_tests()
     static_methods_tests()
+    vector_tests()
     print("All tests passed!")

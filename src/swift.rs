@@ -1,7 +1,8 @@
 use crate::wrapper::base::*;
 use crate::wrapper::swift::SwiftCode;
 use crate::wrapper::swift::class_definition::gen_empty_class_definition;
-use crate::{GEN_CODE_DIR, Wrapper, append_to_file, create_file, insert_after};
+use crate::wrapper::swift::gen_swift_vec_declarations;
+use crate::{GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, insert_after};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -16,8 +17,6 @@ static SWIFT_CLASS_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =
 
 pub(crate) fn write_swift_code(wrapper: &Wrapper) {
     let swift_path = Path::new(GEN_CODE_DIR).join(SWIFT_CODE_DIR);
-    // TODO remove?
-    std::fs::create_dir_all(&swift_path).expect("Unable to create swift directory");
 
     let c_ffi_package_path = swift_path.join("CFfiModule");
     let c_ffi_module_path = c_ffi_package_path.join("Sources/CFfiModule");
@@ -51,7 +50,15 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
 
     let swift_code = wrapper.swift();
 
-    append_to_file(swift_code.header(), swift_header_path);
+    append_to_file(swift_code.header(), &swift_header_path);
+
+    // Add vector function declarations to header
+    for reusable_wrapper in &wrapper.reusable_wrappers {
+        let declarations = match reusable_wrapper {
+            ReusableWrapper::Vec(inner) => gen_swift_vec_declarations(inner),
+        };
+        append_to_file(declarations, &swift_header_path);
+    }
 
     let source_file_name = format!("{}.swift", wrapper.name());
     let source_path = ffi_module_path.join(source_file_name);
@@ -70,6 +77,21 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
             );
         }
         SwiftCode::Function { source, .. } => create_file(source, &source_path),
+    }
+
+    // Generate reusable wrappers, like Vectors with different types inside
+    for reusable_wrapper in &wrapper.reusable_wrappers {
+        let file_name = match reusable_wrapper {
+            ReusableWrapper::Vec(inner) => format!("vec_{}.swift", inner.name()),
+        };
+        let source_full_path = ffi_module_path.join(file_name);
+        if SWIFT_CLASS_GENERATED
+            .lock()
+            .expect("Mutex lock failed during locking for reusable wrapper")
+            .insert(source_full_path.clone())
+        {
+            create_file(reusable_wrapper.swift(), source_full_path);
+        }
     }
 }
 
@@ -115,6 +137,7 @@ pub(crate) fn swift_c_header_code_base() -> String {
         r#"
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -128,6 +151,8 @@ typedef int64_t i64;
 
 typedef float f32;
 typedef double f64;
+
+typedef size_t usize;
 
 void* {RUST_STRING_DATA_FN_NAME}(void* self);
 unsigned int {RUST_STRING_LEN_FN_NAME}(void* self);

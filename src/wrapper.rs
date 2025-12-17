@@ -44,6 +44,14 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
 
     let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__push_{}_vec", inner.name());
     let wrapper_fn_name_push = format_ident!("push_{}_vec", inner.name());
+
+    // New externs for reading returned vectors
+    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__len_{}_vec", inner.name());
+    let wrapper_fn_name_len = format_ident!("len_{}_vec", inner.name());
+
+    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__get_{}_vec", inner.name());
+    let wrapper_fn_name_get = format_ident!("get_{}_vec", inner.name());
+
     let value_receiver: TokenStream2 = match inner {
         WrapperType::IntegerNumber(inner) | WrapperType::FloatingPointNumber(inner) => {
             format!("value: {inner}").parse().unwrap()
@@ -66,6 +74,30 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
     };
 
     let vec_type: TokenStream2 = format!("Vec<{}>", inner.name()).parse().unwrap();
+
+    // Return type for get() depending on inner type
+    let get_return_type: TokenStream2 = match inner {
+        WrapperType::IntegerNumber(inner) | WrapperType::FloatingPointNumber(inner) => {
+            inner.parse().unwrap()
+        }
+        WrapperType::Bool => "bool".parse().unwrap(),
+        WrapperType::String => "*mut std::string::String".parse().unwrap(),
+        WrapperType::Struct(name) => format!("*mut {name}").parse().unwrap(),
+        WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+    };
+
+    let get_body: TokenStream2 = match inner {
+        WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool => {
+            quote! {
+                (&*_self)[index]
+            }
+        }
+        WrapperType::String | WrapperType::Struct(_) => quote! {{
+            let v = (&*_self)[index].clone();
+            Box::into_raw(Box::new(v))
+        }},
+        WrapperType::Vec(_) => unreachable!(),
+    };
 
     quote! {
         #[doc(hidden)]
@@ -95,6 +127,22 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         pub unsafe extern "C" fn #wrapper_fn_name_push(_self: *mut #vec_type, #value_receiver) {
             #value_cast
             (&mut *_self).push(value);
+        }
+
+        // New len extern for reading vectors
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #len_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_len(_self: *mut #vec_type) -> usize {
+            (&*_self).len()
+        }
+
+        // New get extern for reading vectors
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #get_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_get(_self: *mut #vec_type, index: usize) -> #get_return_type {
+            #get_body
         }
     }
 }

@@ -14,6 +14,10 @@
 #include "function_taking_vec_of_bools.h"
 #include "function_taking_vec_of_strings.h"
 #include "function_taking_vec_of_structs.h"
+#include "function_returning_vec_of_int.h"
+#include "function_returning_vec_of_bool.h"
+#include "function_returning_vec_of_structs.h"
+#include "function_returning_vec_of_string.h"
 #include <iostream>
 #include <cassert>
 
@@ -25,15 +29,35 @@ void assert_vectors()
     std::vector<bool> v_bool = {true, false, true, true};
     function_taking_vec_of_bools(v_bool);
 
-    std::vector<std::string> v_str = {"Hello, Rust!", "Hello, C++!", "Hello, Python!"};
+    std::vector<std::string> v_str = {"Hello, Rust!", "Hello, C++!", "Hello, Python!", "Hello, Swift!"};
     function_taking_vec_of_strings(v_str);
 
     auto s1 = TestStruct();
     s1.set_i32_field(15);
     auto s2 = TestStruct();
     s2.set_i32_field(17);
-    std::vector<TestStruct> v_structs = {s1, s2, TestStruct()};
+    std::vector<TestStruct> v_structs = {s1, s2};
     function_taking_vec_of_structs(v_structs);
+
+    auto v_int = function_returning_vec_of_int();
+    assert(v_int.size() == 4);
+    std::vector<i32> expected_ints = {3, 2, 7, 8};
+    assert(v_int == expected_ints);
+
+    auto v_bools = function_returning_vec_of_bool();
+    assert(v_bools.size() == 4);
+    std::vector<bool> expected_bools = {true, false, true, true};
+    assert(v_bools == expected_bools);
+
+    auto returned_structs = function_returning_vec_of_structs();
+    assert(returned_structs.size() == 2);
+    assert(returned_structs[0].get_i32_field() == 8);
+    assert(returned_structs[1].get_i32_field() == 11);
+
+    auto returned_strings = function_returning_vec_of_string();
+    assert(returned_strings.size() == 3);
+    std::vector<std::string> expected_strings = {"Hello", "World", "Rust"};
+    assert(returned_strings == expected_strings);
 }
 
 void assert_structs()

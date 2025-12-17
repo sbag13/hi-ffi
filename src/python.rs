@@ -1,11 +1,11 @@
 use std::{
-    collections::HashMap,
-    path::Path,
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
     sync::{LazyLock, Mutex, Once},
 };
 
 use crate::{
-    GEN_CODE_DIR, Wrapper, append_to_file, create_file, prepend_to_file,
+    GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, prepend_to_file,
     wrapper::python::{FunctionCode, PythonFiles},
 };
 
@@ -18,6 +18,9 @@ static MAIN_FILE_IMPORTS: LazyLock<Mutex<HashMap<String, String>>> =
 
 static PER_CLASS_IMPORTS: LazyLock<Mutex<HashMap<String, HashMap<String, String>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+static WRAPPER_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
 
 pub(crate) fn write_python_code(wrapper: &Wrapper) {
     let python_path = Path::new(GEN_CODE_DIR).join("python_ffi/");
@@ -80,6 +83,20 @@ pub(crate) fn write_python_code(wrapper: &Wrapper) {
         imports_for_class.extend(imports_to_add);
 
         append_to_file(class_mod.body, &class_mod_path);
+    }
+
+    for reusable_wrapper in &wrapper.reusable_wrappers {
+        let file_name = match reusable_wrapper {
+            ReusableWrapper::Vec(inner) => format!("vec_{}.py", inner.name()),
+        };
+        let file_path = python_path.join(file_name);
+        if WRAPPER_GENERATED
+            .lock()
+            .expect("Mutex lock failed")
+            .insert(file_path.clone())
+        {
+            create_file(reusable_wrapper.python(), &file_path);
+        }
     }
 }
 
