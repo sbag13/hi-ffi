@@ -1,6 +1,8 @@
-use std::{collections::HashSet, ops::Deref};
+use std::collections::HashSet;
+use std::ops::Deref;
 
-use crate::{prepend_each_line_with_n_tabs, wrapper::cpp::*};
+use crate::prepend_each_line_with_n_tabs;
+use crate::wrapper::cpp::*;
 use quote::ToTokens;
 
 pub struct MappedCppFunctionArgsTokens {

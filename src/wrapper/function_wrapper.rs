@@ -1,4 +1,5 @@
-use std::{fmt::Debug, str::FromStr};
+use std::fmt::Debug;
+use std::str::FromStr;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
@@ -110,7 +111,6 @@ pub fn map_function_arg_wrappers<'a>(
             arg_signatures.push(quote! {#arg_name: #arg_type});
             arg_names.push(quote! {#arg_name});
         }
-       
         FunctionArgWrapper {
             arg_name,
             wrapper_type: WrapperType::String,
@@ -122,7 +122,6 @@ pub fn map_function_arg_wrappers<'a>(
                 let #arg_name = unsafe { std::ffi::CStr::from_ptr(#arg_name).to_str().unwrap().to_owned() };
             });
         }
-       
         FunctionArgWrapper {
             arg_name,
             arg_type,
@@ -134,8 +133,7 @@ pub fn map_function_arg_wrappers<'a>(
                 let #arg_name = unsafe { (*#arg_name).clone() };
             });
         }
-
-          FunctionArgWrapper {
+        FunctionArgWrapper {
             arg_name,
             arg_type,
             wrapper_type: WrapperType::Vec(_),
@@ -147,7 +145,6 @@ pub fn map_function_arg_wrappers<'a>(
                 std::mem::swap(&mut new_vec, unsafe { &mut(*#arg_name)} );
             });
         }
-       
     });
     MappedFunctionArgsTokens {
         arg_signatures,
@@ -183,11 +180,14 @@ pub enum WrapperType {
 impl WrapperType {
     pub fn name(&self) -> String {
         match self {
-            WrapperType::IntegerNumber(inner) | WrapperType::FloatingPointNumber(inner) | WrapperType::Struct(inner) => inner.to_owned(),
+            WrapperType::IntegerNumber(inner)
+            | WrapperType::FloatingPointNumber(inner)
+            | WrapperType::Struct(inner) => inner.to_owned(),
             WrapperType::Vec(inner) => format!("vec_of_{}", inner.name()),
             WrapperType::Bool => "bool".to_string(),
             WrapperType::String => "String".to_string(),
-    }}
+        }
+    }
 }
 
 impl FromStr for WrapperType {
@@ -195,9 +195,8 @@ impl FromStr for WrapperType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize"   => {
-                Ok(WrapperType::IntegerNumber(s.to_string()))
-            }
+            "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128"
+            | "usize" => Ok(WrapperType::IntegerNumber(s.to_string())),
             "f32" | "f64" => Ok(WrapperType::FloatingPointNumber(s.to_string())),
             "bool" => Ok(WrapperType::Bool),
             "String" => Ok(WrapperType::String),

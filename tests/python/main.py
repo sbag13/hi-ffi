@@ -11,6 +11,9 @@ from python_ffi import ffi_init
 from python_ffi import *
 from python_ffi.TestStruct import TestStruct
 from python_ffi.TestStruct2 import TestStruct2
+from python_ffi.vec_i32 import i32Vec
+from python_ffi.vec_String import StringVec
+from python_ffi.vec_TestStruct2 import TestStruct2Vec
 
 
 ext = "so"  # Change to 'dylib' for MacOS, 'dll' for Windows
@@ -114,8 +117,10 @@ def vector_tests():
     # Test vector arguments
     function_taking_vec_of_primitives([1, 2, 3, 4, 5])
     function_taking_vec_of_bools([True, False, True, True])
-    function_taking_vec_of_strings(["Hello, Rust!", "Hello, C++!", "Hello, Python!", "Hello, Swift!"])
-    
+    function_taking_vec_of_strings(
+        ["Hello, Rust!", "Hello, C++!", "Hello, Python!", "Hello, Swift!"]
+    )
+
     # Test vector of structs
     s1 = TestStruct()
     s1.i32_field = 15
@@ -127,11 +132,93 @@ def vector_tests():
     assert function_returning_vec_of_int() == [3, 2, 7, 8]
     assert function_returning_vec_of_bool() == [True, False, True, True]
     assert function_returning_vec_of_string() == ["Hello", "World", "Rust"]
-    
+
     returned_structs = function_returning_vec_of_structs()
     assert len(returned_structs) == 2
     assert returned_structs[0].i32_field == 8
     assert returned_structs[1].i32_field == 11
+
+
+def vector_methods_tests():
+    print("vector_methods_tests")
+
+    test_struct = TestStruct()
+
+    # Test instance methods with vector arguments (now using native lists)
+    vec_primitives = [1, 2, 3, 4, 5]
+    test_struct.public_method_taking_vec_of_primitives(vec_primitives)
+
+    vec_strings = ["Hello", "World"]
+    test_struct.public_method_taking_vec_of_strings(vec_strings)
+
+    s1 = TestStruct2()
+    s1.i32_field = 42
+    s2 = TestStruct2()
+    s2.i32_field = 24
+    vec_structs = [s1, s2]
+    test_struct.public_method_taking_vec_of_structs(vec_structs)
+
+    # Test static methods with vector arguments (now using native lists)
+    static_vec_primitives = [6, 7, 8, 9, 10]
+    TestStruct.static_method_taking_vec_of_primitives(static_vec_primitives)
+
+    static_vec_strings = ["Static", "Method"]
+    TestStruct.static_method_taking_vec_of_strings(static_vec_strings)
+
+    s3 = TestStruct2()
+    s3.i32_field = 100
+    s4 = TestStruct2()
+    s4.i32_field = 200
+    static_vec_structs = [s3, s4]
+    TestStruct.static_method_taking_vec_of_structs(static_vec_structs)
+
+    # Test instance methods returning vectors
+    returned_primitives = test_struct.public_method_returning_vec_of_primitives()
+    expected_primitives = [10, 20, 30, 40, 50]
+    assert (
+        returned_primitives == expected_primitives
+    ), f"Expected {expected_primitives}, got {returned_primitives}"
+
+    returned_strings = test_struct.public_method_returning_vec_of_strings()
+    expected_strings = ["Method", "Vector", "Return"]
+    assert (
+        returned_strings == expected_strings
+    ), f"Expected {expected_strings}, got {returned_strings}"
+
+    returned_structs = test_struct.public_method_returning_vec_of_structs()
+    assert (
+        len(returned_structs) == 2
+    ), f"Expected 2 structs, got {len(returned_structs)}"
+    assert (
+        returned_structs[0].i32_field == 300
+    ), f"Expected 300, got {returned_structs[0].i32_field}"
+    assert (
+        returned_structs[1].i32_field == 400
+    ), f"Expected 400, got {returned_structs[1].i32_field}"
+
+    # Test static methods returning vectors
+    static_returned_primitives = TestStruct.static_method_returning_vec_of_primitives()
+    static_expected_primitives = [60, 70, 80, 90, 100]
+    assert (
+        static_returned_primitives == static_expected_primitives
+    ), f"Expected {static_expected_primitives}, got {static_returned_primitives}"
+
+    static_returned_strings = TestStruct.static_method_returning_vec_of_strings()
+    static_expected_strings = ["Static", "Method", "Vector"]
+    assert (
+        static_returned_strings == static_expected_strings
+    ), f"Expected {static_expected_strings}, got {static_returned_strings}"
+
+    static_returned_structs = TestStruct.static_method_returning_vec_of_structs()
+    assert (
+        len(static_returned_structs) == 2
+    ), f"Expected 2 structs, got {len(static_returned_structs)}"
+    assert (
+        static_returned_structs[0].i32_field == 500
+    ), f"Expected 500, got {static_returned_structs[0].i32_field}"
+    assert (
+        static_returned_structs[1].i32_field == 600
+    ), f"Expected 600, got {static_returned_structs[1].i32_field}"
 
 
 if __name__ == "__main__":
@@ -140,4 +227,5 @@ if __name__ == "__main__":
     methods_tests()
     static_methods_tests()
     vector_tests()
+    vector_methods_tests()
     print("All tests passed!")

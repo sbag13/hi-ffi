@@ -1,13 +1,9 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
-    sync::{LazyLock, Mutex, Once},
-};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex, Once};
 
-use crate::{
-    GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, prepend_to_file,
-    wrapper::python::{FunctionCode, PythonFiles},
-};
+use crate::wrapper::python::{FunctionCode, PythonFiles};
+use crate::{GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, prepend_to_file};
 
 pub const PYTHON_LIB_GETTER_NAME: &str = "get_ffi_lib";
 pub const FFI_INIT_FUNCTION_NAME: &str = "ffi_init";

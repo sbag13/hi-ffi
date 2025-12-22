@@ -1,7 +1,6 @@
 use crate::wrapper::base::*;
-use crate::wrapper::swift::SwiftCode;
 use crate::wrapper::swift::class_definition::gen_empty_class_definition;
-use crate::wrapper::swift::gen_swift_vec_declarations;
+use crate::wrapper::swift::{SwiftCode, gen_swift_vec_declarations};
 use crate::{GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, insert_after};
 use std::collections::HashSet;
 use std::fmt::Display;
