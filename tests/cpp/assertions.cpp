@@ -127,6 +127,73 @@ void assert_struct_methods_with_structs()
     assert(combo_result.get_i32_field() == 300);
 }
 
+void assert_struct_methods_with_vectors()
+{
+    std::cout << "assert_struct_methods_with_vectors" << std::endl;
+
+    auto test_struct = TestStruct();
+    
+    // Test instance methods with vectors
+    std::vector<i32> vec_primitives = {1, 2, 3, 4, 5};
+    test_struct.public_method_taking_vec_of_primitives(vec_primitives);
+    
+    std::vector<std::string> vec_strings = {"Hello", "World"};
+    test_struct.public_method_taking_vec_of_strings(vec_strings);
+    
+    std::vector<TestStruct2> vec_structs;
+    auto s1 = TestStruct2();
+    s1.set_i32_field(42);
+    auto s2 = TestStruct2();
+    s2.set_i32_field(24);
+    vec_structs.push_back(s1);
+    vec_structs.push_back(s2);
+    test_struct.public_method_taking_vec_of_structs(vec_structs);
+    
+    // Test static methods with vectors
+    std::vector<i32> static_vec_primitives = {6, 7, 8, 9, 10};
+    TestStruct::static_method_taking_vec_of_primitives(static_vec_primitives);
+    
+    std::vector<std::string> static_vec_strings = {"Static", "Method"};
+    TestStruct::static_method_taking_vec_of_strings(static_vec_strings);
+    
+    std::vector<TestStruct2> static_vec_structs;
+    auto s3 = TestStruct2();
+    s3.set_i32_field(100);
+    auto s4 = TestStruct2();
+    s4.set_i32_field(200);
+    static_vec_structs.push_back(s3);
+    static_vec_structs.push_back(s4);
+    TestStruct::static_method_taking_vec_of_structs(static_vec_structs);
+    
+    // Test instance methods returning vectors
+    auto returned_primitives = test_struct.public_method_returning_vec_of_primitives();
+    std::vector<i32> expected_primitives = {10, 20, 30, 40, 50};
+    assert(returned_primitives == expected_primitives);
+    
+    auto returned_strings = test_struct.public_method_returning_vec_of_strings();
+    std::vector<std::string> expected_strings = {"Method", "Vector", "Return"};
+    assert(returned_strings == expected_strings);
+    
+    auto returned_structs = test_struct.public_method_returning_vec_of_structs();
+    assert(returned_structs.size() == 2);
+    assert(returned_structs[0].get_i32_field() == 300);
+    assert(returned_structs[1].get_i32_field() == 400);
+    
+    // Test static methods returning vectors
+    auto static_returned_primitives = TestStruct::static_method_returning_vec_of_primitives();
+    std::vector<i32> static_expected_primitives = {60, 70, 80, 90, 100};
+    assert(static_returned_primitives == static_expected_primitives);
+    
+    auto static_returned_strings = TestStruct::static_method_returning_vec_of_strings();
+    std::vector<std::string> static_expected_strings = {"Static", "Method", "Vector"};
+    assert(static_returned_strings == static_expected_strings);
+    
+    auto static_returned_structs = TestStruct::static_method_returning_vec_of_structs();
+    assert(static_returned_structs.size() == 2);
+    assert(static_returned_structs[0].get_i32_field() == 500);
+    assert(static_returned_structs[1].get_i32_field() == 600);
+}
+
 void assert_functions()
 {
     simple_function();
