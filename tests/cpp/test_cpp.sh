@@ -5,5 +5,9 @@ g++ ../generated_code/cpp/*.cpp main.cpp assertions.cpp \
     -L ./lib \
     -l tests \
     -o test && \
-./test
-# valgrind --error-exitcode=1 --leak-check=full --show-leak-kinds=all ./test
+
+if [ "$1" == "--valgrind" ]; then
+    valgrind --error-exitcode=1 --leak-check=full --show-leak-kinds=all ./test
+else
+    ./test
+fi

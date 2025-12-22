@@ -77,60 +77,67 @@ These examples demonstrate how to use the generated bindings in real application
 
 | Feature             | C++ | Swift | Python |
 | ------------------- | --- | ----- | ------ |
-| Primitive getters   | ✅   | ✅     | ✅      |
-| Primitive setters   | ✅   | ✅     | ✅      |
-| String getters      | ✅   | ✅     | ✅      |
-| String setters      | ✅   | ✅     | ✅      |
-| Struct getters      | ✅   | ✅     | ✅      |
-| Struct setters      | ✅   | ✅     | ✅      |
-| Default constructor | ✅   | ✅     | ✅      |
-| PartialEq           | ❌   | ❌     | ❌      |
+| Primitive getters   | ✅  | ✅    | ✅     |
+| Primitive setters   | ✅  | ✅    | ✅     |
+| String getters      | ✅  | ✅    | ✅     |
+| String setters      | ✅  | ✅    | ✅     |
+| Struct getters      | ✅  | ✅    | ✅     |
+| Struct setters      | ✅  | ✅    | ✅     |
+| Default constructor | ✅  | ✅    | ✅     |
+| PartialEq           | ❌  | ❌    | ❌     |
 
 ### Methods
 
 | Feature             | C++ | Swift | Python |
 | ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅   | ✅     | ✅      |
-| String arguments    | ✅   | ✅     | ✅      |
-| Primitive return    | ✅   | ✅     | ✅      |
-| String return       | ✅   | ✅     | ✅      |
-| Struct arguments    | ✅   | ✅     | ✅      |
-| Struct return       | ✅   | ✅     | ✅      |
+| Primitive arguments | ✅  | ✅    | ✅     |
+| String arguments    | ✅  | ✅    | ✅     |
+| Primitive return    | ✅  | ✅    | ✅     |
+| String return       | ✅  | ✅    | ✅     |
+| Struct arguments    | ✅  | ✅    | ✅     |
+| Struct return       | ✅  | ✅    | ✅     |
 
 ### Static Methods
 
 | Feature             | C++ | Swift | Python |
 | ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅   | ✅     | ✅      |
-| String arguments    | ✅   | ✅     | ✅      |
-| Primitive return    | ✅   | ✅     | ✅      |
-| String return       | ✅   | ✅     | ✅      |
-| Struct arguments    | ✅   | ✅     | ✅      |
-| Struct return       | ✅   | ✅     | ✅      |
+| Primitive arguments | ✅  | ✅    | ✅     |
+| String arguments    | ✅  | ✅    | ✅     |
+| Primitive return    | ✅  | ✅    | ✅     |
+| String return       | ✅  | ✅    | ✅     |
+| Struct arguments    | ✅  | ✅    | ✅     |
+| Struct return       | ✅  | ✅    | ✅     |
 
 ### Functions
 
 | Feature             | C++ | Swift | Python |
 | ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅   | ✅     | ✅      |
-| String arguments    | ✅   | ✅     | ✅      |
-| Primitive return    | ✅   | ✅     | ✅      |
-| String return       | ✅   | ✅     | ✅      |
-| Struct arguments    | ✅   | ✅     | ✅      |
-| Struct return       | ✅   | ✅     | ✅      |
-| Vec arguments       | ✅   | ✅     | ✅      |
-| Vec return          | ✅   | ✅     | ✅      |
-| `&str` return       | ❌   | ❌     | ❌      |
+| Primitive arguments | ✅  | ✅    | ✅     |
+| String arguments    | ✅  | ✅    | ✅     |
+| Primitive return    | ✅  | ✅    | ✅     |
+| String return       | ✅  | ✅    | ✅     |
+| Struct arguments    | ✅  | ✅    | ✅     |
+| Struct return       | ✅  | ✅    | ✅     |
+| Vec arguments       | ✅  | ✅    | ✅     |
+| Vec return          | ✅  | ✅    | ✅     |
+| `&str` return       | ❌  | ❌    | ❌     |
 
 ### Vectors
 
-| Feature   | C++ | Swift | Python |
-| --------- | --- | ----- | ------ |
-| Primitive | ✅   | ✅     | ✅      |
-| String    | ✅   | ✅     | ✅      |
-| Struct    | ✅   | ✅     | ✅      |
-| `&str`    | ❌   | ❌     | ❌      |
-| Traits    | ❌   | ❌     | ❌      |
+| Feature      | C++ | Swift | Python |
+| ------------ | --- | ----- | ------ |
+| Primitive    | ✅  | ✅    | ✅     |
+| String       | ✅  | ✅    | ✅     |
+| Struct       | ✅  | ✅    | ✅     |
+| C-like enums | ❌  | ❌    | ❌     |
+| `&str`       | ❌  | ❌    | ❌     |
+| Traits       | ❌  | ❌    | ❌     |
+
+### Enums
+
+| Feature      | C++ | Swift | Python |
+| ------------ | --- | ----- | ------ |
+| C-like enums | ✅  | ✅    | ✅     |
 
 ## Architecture
 

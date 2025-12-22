@@ -9,6 +9,7 @@ use syn::Type;
 use crate::Wrapper;
 use crate::wrapper::ParsedWrapper;
 
+mod enum_mod;
 mod function;
 mod impl_mod;
 mod struct_mod;
@@ -44,6 +45,7 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
         WrapperType::String => "ctypes.c_char_p(value.encode(\"utf-8\"))".to_string(),
         WrapperType::Struct(_) => "value.raw_ptr()".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Enum(_) => "value.to_ffi()".to_string(),
     };
 
     // Generate result casting for get function
@@ -55,6 +57,9 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
             format!("{}(result)", type_name)
         }
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Enum(_) => {
+            format!("{}.from_ffi(result)", type_name)
+        }
     };
 
     // Generate restype settings for extern functions
@@ -90,11 +95,19 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
             )
         }
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Enum(_) => {
+            format!(
+                "{}().{}.restype = ctypes.c_int",
+                crate::python::PYTHON_LIB_GETTER_NAME,
+                get_ext_fn_name
+            )
+        }
     };
 
     let inner_import = match inner {
         WrapperType::Struct(name) => format!("from .{} import {}", name, name),
         WrapperType::String => "from .global_state import RustString".to_string(),
+        WrapperType::Enum(name) => format!("from .{} import {}", name, name),
         _ => String::new(),
     };
 
@@ -185,6 +198,10 @@ impl Wrapper {
                 fn_code: None,
                 class_mod: Some(impl_mod::gen_methods_mod(impl_block_wrapper)),
             },
+            ParsedWrapper::Enum(enum_wrapper) => PythonFiles {
+                fn_code: None,
+                class_mod: Some(enum_mod::gen_enum_class(enum_wrapper)),
+            },
         }
     }
 }
@@ -222,6 +239,7 @@ fn type_hint_from_wrapper_type(wrapper_type: &crate::wrapper::WrapperType) -> St
         WrapperType::String => "str".into(),
         WrapperType::Struct(name) => name.to_string(),
         WrapperType::Vec(inner) => format!("List[{}]", type_hint_from_wrapper_type(inner)),
+        WrapperType::Enum(name) => name.to_string(),
     }
 }
 
@@ -243,7 +261,13 @@ fn result_cast(ty: &Type, result_var_name: &str) -> String {
                         let inner_type_str = inner_type.to_token_stream().to_string();
                         return format!(r#"{inner_type_str}Vec(result).to_list()"#);
                     }
-                    format!("{}({})", ty.to_token_stream(), result_var_name)
+                    // Check if it's an enum by looking for registered enum types
+                    let type_name = ty.to_token_stream().to_string();
+                    if crate::wrapper::function_wrapper::is_enum_type(&type_name) {
+                        format!("{}.from_ffi({})", type_name, result_var_name)
+                    } else {
+                        format!("{}({})", ty.to_token_stream(), result_var_name)
+                    }
                 }
             }
         }
@@ -272,7 +296,13 @@ fn arg_cast(ty: &Type, arg_name: &str) -> String {
                         let inner_type_name = inner_segment.ident.to_string();
                         format!("{}Vec.from_list({})", inner_type_name, arg_name)
                     } else {
-                        format!("{arg_name}.raw_ptr()")
+                        // Check if it's an enum by looking for registered enum types
+                        let type_name = ty.to_token_stream().to_string();
+                        if crate::wrapper::function_wrapper::is_enum_type(&type_name) {
+                            format!("{}.to_ffi()", arg_name)
+                        } else {
+                            format!("{arg_name}.raw_ptr()")
+                        }
                     }
                 }
             }
@@ -302,11 +332,19 @@ fn set_extern_fn_resttype(ty: &Type, extern_fn_name: &str) -> String {
                             "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p"
                         )
                     } else {
-                        "".to_string()
+                        // Check if it's an enum by looking for registered enum types
+                        let type_name = ty.to_token_stream().to_string();
+                        if crate::wrapper::function_wrapper::is_enum_type(&type_name) {
+                            format!(
+                                "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int"
+                            )
+                        } else {
+                            "".to_string()
+                        }
                     }
                 }
             }
         }
-        _ => unimplemented!("Extern fn restype not implemented for this type"),
+        _ => unimplemented!("Extern fn resttype not implemented for this type"),
     }
 }

@@ -31,6 +31,7 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> String {
         WrapperType::Vec(_) => unimplemented!("CPP: vec of vecs unimplemented!"),
         WrapperType::Bool => "bool value".to_string(),
         WrapperType::String => "const char* value".to_string(), // 2nd arg, len, is ignored for now
+        WrapperType::Enum(name) => format!("{} value", name),
     };
     let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_vec");
     let with_capacity_ext_name =
@@ -78,6 +79,9 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> String {
                 "auto elem_ptr = {get_ext_fn_name}(this->self, i); {struct_name} elem(elem_ptr);"
             )
         }
+        WrapperType::Enum(_) => {
+            format!("auto elem = {get_ext_fn_name}(this->self, i);")
+        }
         WrapperType::Vec(_) => unreachable!(),
     };
 
@@ -87,6 +91,7 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> String {
         WrapperType::String => "void*".to_string(),
         WrapperType::Struct(_) => "void*".to_string(),
         WrapperType::Vec(_) => unimplemented!("Vec of vecs not supported yet!"),
+        WrapperType::Enum(name) => name.to_string(),
     };
 
     format!(
@@ -174,6 +179,10 @@ impl Wrapper {
                 )),
                 source: None,
             },
+            ParsedWrapper::Enum(enum_wrapper) => CppFiles {
+                header: CppHeader::Function(gen_enum_declaration(enum_wrapper)),
+                source: None,
+            },
         }
     }
 }
@@ -246,6 +255,7 @@ return {}(result);",
                 WrapperType::Bool => "bool".to_string(),
                 WrapperType::String => "std::string".to_string(),
                 WrapperType::Struct(name) => name.clone(),
+                WrapperType::Enum(name) => name.clone(),
                 WrapperType::Vec(_) => unimplemented!("Nested vectors not supported"),
             };
             let rust_vec_name = format!("Rust{}Vec", inner.name());
@@ -268,6 +278,18 @@ return rust_vec.to_std();
                 return_type_includes: includes,
             }
         }
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Enum(_),
+            return_type,
+        }) => {
+            let enum_type = return_type.to_token_stream().to_string();
+            ReturnTypes {
+                ext_return_type: enum_type.clone(),
+                return_type: enum_type.clone(),
+                return_cast: "return result;".to_string(),
+                return_type_includes: format!("#include \"{}.h\"", enum_type),
+            }
+        }
         None => ReturnTypes {
             ext_return_type: "void*".to_string(),
             return_type: "void".to_string(),
@@ -275,4 +297,40 @@ return rust_vec.to_std();
             return_type_includes: String::new(),
         },
     }
+}
+
+fn gen_enum_declaration(enum_wrapper: &crate::wrapper::struct_wrapper::EnumWrapper) -> String {
+    let enum_name = &enum_wrapper.name;
+
+    let variants: Vec<String> = enum_wrapper
+        .variants
+        .iter()
+        .map(|variant| {
+            let variant_name = &variant.name;
+            match &variant.discriminant {
+                Some(discriminant) => {
+                    format!("    {} = {}", variant_name, discriminant)
+                }
+                None => {
+                    format!("    {}", variant_name)
+                }
+            }
+        })
+        .collect();
+
+    format!(
+        r#"
+#ifndef {enum_name}_h
+#define {enum_name}_h
+
+#include "base.h"
+
+enum class {enum_name} {{
+{}
+}};
+
+#endif
+"#,
+        variants.join(",\n")
+    )
 }

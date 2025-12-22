@@ -76,7 +76,8 @@ pub fn map_args<'a>(
                 WrapperType::Vec(_) => unimplemented!("Nested vector type not implemented yet"),
                 WrapperType::Bool => "bool",
                 WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.as_str(),
-                WrapperType::Struct(struct_name) => struct_name.as_str()
+                WrapperType::Struct(struct_name) => struct_name.as_str(),
+                WrapperType::Enum(enum_name) => enum_name.as_str()
             };
             cpp_args.push(format!("const std::vector<{inner_type}>& {arg_name}"));
             includes.insert("#include <vector>".to_string());
@@ -85,6 +86,17 @@ pub fn map_args<'a>(
             arg_casts.push(format!("auto casted_{arg_name} = Rust{inner_wrapper_name}Vec::from_std({arg_name});"));
             call_args.push(format!("casted_{arg_name}.raw_ptr()"));
             wrapper_args.push(format!("void* {arg_name}"));
+        },
+        FunctionArgWrapper {
+            arg_name,
+            arg_type,
+            wrapper_type: WrapperType::Enum(_),
+        } => {
+            let enum_type = arg_type.to_token_stream();
+            cpp_args.push(format!("{} {}", enum_type, arg_name));
+            wrapper_args.push(format!("{} {}", enum_type, arg_name));
+            call_args.push(arg_name.to_string());
+            includes.insert(format!("#include \"{enum_type}.h\""));
         },
     });
 
@@ -164,7 +176,7 @@ pub fn gen_function_definition(function_wrapper: &FunctionWrapper) -> String {
 {return_type} {fn_name}({cpp_args}) {{
 {arg_casts}
     {ext_return_type} result = {extern_fn_name}({arg_names});
-    {return_casts}
+{return_casts}
 }}
 "#
     )

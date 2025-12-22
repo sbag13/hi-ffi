@@ -1,8 +1,20 @@
 use std::fmt::Debug;
 use std::str::FromStr;
+use std::sync::{LazyLock, Mutex};
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+
+static ENUM_TYPES: LazyLock<Mutex<std::collections::HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
+
+pub fn register_enum_type(name: String) {
+    ENUM_TYPES.lock().unwrap().insert(name);
+}
+
+pub fn is_enum_type(name: &str) -> bool {
+    ENUM_TYPES.lock().unwrap().contains(name)
+}
 
 #[derive(Debug)]
 pub struct FunctionWrapper {
@@ -53,6 +65,13 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
             result_cast: quote! {
                 Box::into_raw(Box::new(result))
             },
+        },
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Enum(_),
+            return_type,
+        }) => MappedReturnType {
+            return_type_sig: quote! {-> #return_type},
+            result_cast: quote! {result},
         },
         None => MappedReturnType {
             return_type_sig: quote! {},
@@ -145,6 +164,14 @@ pub fn map_function_arg_wrappers<'a>(
                 std::mem::swap(&mut new_vec, unsafe { &mut(*#arg_name)} );
             });
         }
+        FunctionArgWrapper {
+            arg_name,
+            arg_type,
+            wrapper_type: WrapperType::Enum(_),
+        } => {
+            arg_signatures.push(quote! {#arg_name: #arg_type});
+            arg_names.push(quote! {#arg_name});
+        }
     });
     MappedFunctionArgsTokens {
         arg_signatures,
@@ -175,6 +202,7 @@ pub enum WrapperType {
     String,
     Struct(String),
     Vec(Box<WrapperType>),
+    Enum(String),
 }
 
 impl WrapperType {
@@ -182,7 +210,8 @@ impl WrapperType {
         match self {
             WrapperType::IntegerNumber(inner)
             | WrapperType::FloatingPointNumber(inner)
-            | WrapperType::Struct(inner) => inner.to_owned(),
+            | WrapperType::Struct(inner)
+            | WrapperType::Enum(inner) => inner.to_owned(),
             WrapperType::Vec(inner) => format!("vec_of_{}", inner.name()),
             WrapperType::Bool => "bool".to_string(),
             WrapperType::String => "String".to_string(),
@@ -201,7 +230,13 @@ impl FromStr for WrapperType {
             "bool" => Ok(WrapperType::Bool),
             "String" => Ok(WrapperType::String),
             "str" => Err("str wrapper not supported".to_string()),
-            struct_name => Ok(WrapperType::Struct(struct_name.to_string())),
+            _ => {
+                if is_enum_type(s) {
+                    Ok(WrapperType::Enum(s.to_string()))
+                } else {
+                    Ok(WrapperType::Struct(s.to_string()))
+                }
+            }
         }
     }
 }

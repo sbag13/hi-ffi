@@ -4,9 +4,12 @@ use class_definition::{
 };
 use function_definition::{gen_function_definition, gen_function_header};
 
+use crate::wrapper::swift::enum_definition::gen_enum_code;
+
 use super::*;
 
 pub mod class_definition;
+pub mod enum_definition;
 pub mod function_definition;
 
 impl ReusableWrapper {
@@ -34,6 +37,7 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::String => "const char* value, unsigned int len".to_string(),
         WrapperType::Struct(_) => "void* value".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+        WrapperType::Enum(name) => format!("{} value", name),
     };
 
     let get_return_type = match inner {
@@ -42,6 +46,7 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::String => "void*".to_string(),
         WrapperType::Struct(_) => "void*".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+        WrapperType::Enum(name) => name.to_string(),
     };
 
     format!(
@@ -78,6 +83,7 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
         WrapperType::String => "value: UnsafePointer<Int8>?, _ len: usize".to_string(),
         WrapperType::Struct(_inner) => "value: UnsafeMutableRawPointer?".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Enum(name) => format!("value: {}", name),
     };
 
     let _get_ext_return_type = match inner {
@@ -86,6 +92,7 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
         WrapperType::String => "UnsafeMutableRawPointer?".to_string(),
         WrapperType::Struct(_) => "UnsafeMutableRawPointer?".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Enum(name) => name.to_string(),
     };
 
     let loop_expressions = match inner {
@@ -99,6 +106,9 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
         }
         WrapperType::Struct(_) => {
             format!("            {push_ext_fn_name}(rust_vec_ptr, elem.rawPtr())")
+        }
+        WrapperType::Enum(_) => {
+            format!("            {push_ext_fn_name}(rust_vec_ptr, elem.rawValue)")
         }
         _ => panic!("Pushing to vec not supported"),
     };
@@ -118,6 +128,11 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
         WrapperType::Struct(_) => {
             format!(
                 "            let elem_ptr = {get_ext_fn_name}(self.rawPtr(), i)\n            let elem = {inner_swift_name}(elem_ptr!)"
+            )
+        }
+        WrapperType::Enum(_) => {
+            format!(
+                "            let elem = {inner_swift_name}(rawValue: {get_ext_fn_name}(self.rawPtr(), i))"
             )
         }
         WrapperType::Vec(_) => unreachable!(),
@@ -163,6 +178,7 @@ open class {wrapper_name}: Opaque {{
 pub enum SwiftCode {
     Class { header: String, source: String },
     Function { header: String, source: String },
+    Enum { header: String, source: String },
 }
 
 impl SwiftCode {
@@ -170,6 +186,7 @@ impl SwiftCode {
         match self {
             SwiftCode::Class { header, .. } => header.to_owned(),
             SwiftCode::Function { header, .. } => header.to_owned(),
+            SwiftCode::Enum { header, .. } => header.to_owned(),
         }
     }
 }
@@ -200,6 +217,7 @@ impl Wrapper {
                 header: gen_method_declarations_from_impl_block(impl_block_wrapper),
                 source: gen_class_methods_definition_from_impl_block(impl_block_wrapper),
             },
+            ParsedWrapper::Enum(enum_wrapper) => gen_enum_code(enum_wrapper),
         }
     }
 }

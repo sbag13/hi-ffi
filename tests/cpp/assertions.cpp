@@ -18,6 +18,11 @@
 #include "function_returning_vec_of_bool.h"
 #include "function_returning_vec_of_structs.h"
 #include "function_returning_vec_of_string.h"
+#include "TestStatus.h"
+#include "get_status.h"
+#include "get_inactive_status.h"
+#include "assert_active.h"
+#include "assert_inactive.h"
 #include <iostream>
 #include <cassert>
 
@@ -211,3 +216,14 @@ void assert_functions()
     auto combo_struct_function_result = combo_struct_function(s1, TestStruct(), TestStruct2());
     assert(combo_struct_function_result.get_i32_field() == 49);
 }
+
+void assert_enums()
+{
+    std::cout << "assert_enums" << std::endl;
+    assert(get_status() == TestStatus::Active);
+    assert(get_inactive_status() == TestStatus::Inactive);
+
+    assert_active(TestStatus::Active);
+    assert_inactive(TestStatus::Inactive);
+}
+

@@ -84,6 +84,13 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
                     casts.extend(cast_lines);
                     call_list.push(format!("casted_{arg_name}.raw_ptr()"));
                 }
+
+                WrapperType::Enum(_) => {
+                    let arg_name = &arg_wrapper.arg_name;
+                    let cast_line = format!("{arg_name}_ffi = {arg_name}.to_ffi()");
+                    casts.push(cast_line);
+                    call_list.push(format!("{arg_name}_ffi"));
+                }
             }
             (casts, call_list)
         },
@@ -97,6 +104,13 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
             let type_name = arg_wrapper.arg_type.to_token_stream().to_string();
             match &arg_wrapper.wrapper_type {
                 WrapperType::Struct(_) => {
+                    acc.insert(
+                        type_name.clone(),
+                        format!("from .{type_name} import {type_name}"),
+                    );
+                }
+                WrapperType::Enum(_) => {
+                    let type_name = arg_wrapper.arg_type.to_token_stream().to_string();
                     acc.insert(
                         type_name.clone(),
                         format!("from .{type_name} import {type_name}"),
@@ -158,5 +172,12 @@ fn arg_receiver(arg_wrapper: &crate::wrapper::FunctionArgWrapper) -> String {
             arg_wrapper.arg_name,
             arg_wrapper.arg_type.to_token_stream()
         ),
+        WrapperType::Enum(_) => {
+            format!(
+                "{}: {}",
+                arg_wrapper.arg_name,
+                arg_wrapper.arg_type.to_token_stream()
+            )
+        }
     }
 }

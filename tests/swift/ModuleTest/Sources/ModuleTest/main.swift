@@ -168,6 +168,18 @@ func assert_vec_methods() {
     assert(staticReturnedStructs[1].i32_field == 600, "Second static struct should have i32_field 600")
 }
 
+func assert_enums() {
+    print("assert_enums")
+    let status = get_status()
+    assert(status == TestStatus.Active, "Enum should be Active")
+
+    let status2 = get_inactive_status()
+    assert(status2 == TestStatus.Inactive, "Enum should be Inactive")
+
+    assert_active(TestStatus.Active)
+    assert_inactive(TestStatus.Inactive)
+}
+
 func run() {
     assert_struct_basics()
     assert_functions()
@@ -175,6 +187,7 @@ func run() {
     assert_struct_static_methods()
     assert_vec_functions()
     assert_vec_methods()
+    assert_enums()
     print("All assertions passed.")
 }
 

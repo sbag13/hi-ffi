@@ -324,3 +324,32 @@ impl Drop for TestStruct2 {
         // println!("Dropping TestStruct2");
     }
 }
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[ffi]
+pub enum TestStatus {
+    Active = 1,
+    Inactive = 2,
+    Pending = 3,
+}
+
+#[ffi]
+pub fn get_status() -> TestStatus {
+    TestStatus::Active
+}
+
+#[ffi]
+pub fn get_inactive_status() -> TestStatus {
+    TestStatus::Inactive
+}
+
+#[ffi]
+pub fn assert_active(status: TestStatus) {
+    assert_eq!(status, TestStatus::Active);
+}
+
+#[ffi]
+pub fn assert_inactive(status: TestStatus) {
+    assert_eq!(status, TestStatus::Inactive);
+}

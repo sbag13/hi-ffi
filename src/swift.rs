@@ -75,7 +75,9 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
                 &source_path,
             );
         }
-        SwiftCode::Function { source, .. } => create_file(source, &source_path),
+        SwiftCode::Function { source, .. } | SwiftCode::Enum { source, .. } => {
+            create_file(source, &source_path)
+        }
     }
 
     // Generate reusable wrappers, like Vectors with different types inside

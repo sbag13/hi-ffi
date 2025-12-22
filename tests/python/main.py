@@ -221,6 +221,27 @@ def vector_methods_tests():
     ), f"Expected 600, got {static_returned_structs[1].i32_field}"
 
 
+def enum_tests():
+    # Test enum values
+    print(f"TestStatus.Active = {TestStatus.Active}")
+    print(f"TestStatus.Inactive = {TestStatus.Inactive}")
+    print(f"TestStatus.Pending = {TestStatus.Pending}")
+
+    # Test function returning enum
+    status = get_status()
+    assert status == TestStatus.Active, f"Expected Active, got {status}"
+
+    # Test function returning different enum
+    inactive_status = get_inactive_status()
+    assert (
+        inactive_status == TestStatus.Inactive
+    ), f"Expected Inactive, got {inactive_status}"
+
+    # Test function taking enum parameter
+    assert_active(TestStatus.Active)
+    assert_inactive(TestStatus.Inactive)
+
+
 if __name__ == "__main__":
     struct_tests()
     functions_tests()
@@ -228,4 +249,5 @@ if __name__ == "__main__":
     static_methods_tests()
     vector_tests()
     vector_methods_tests()
+    enum_tests()
     print("All tests passed!")

@@ -61,6 +61,7 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::String => "ptr: *const i8, _len: usize".parse().unwrap(),
         WrapperType::Struct(name) => format!("value: *mut {name}").parse().unwrap(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Enum(_) => panic!("Enum in vec not supported yet!"),
     };
     let value_cast = match inner {
         WrapperType::String => quote! {
@@ -85,6 +86,7 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::String => "*mut std::string::String".parse().unwrap(),
         WrapperType::Struct(name) => format!("*mut {name}").parse().unwrap(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Enum(name) => name.parse().unwrap(),
     };
 
     let get_body: TokenStream2 = match inner {
@@ -98,6 +100,9 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
             Box::into_raw(Box::new(v))
         }},
         WrapperType::Vec(_) => unreachable!(),
+        WrapperType::Enum(_) => quote! {
+            (&*_self)[index]
+        },
     };
 
     quote! {
@@ -163,6 +168,7 @@ impl Wrapper {
             ParsedWrapper::ImplBlock(impl_block_wrapper) => {
                 impl_block_wrapper.struct_name.to_string()
             }
+            ParsedWrapper::Enum(enum_wrapper) => enum_wrapper.name.to_string(),
         }
     }
 }
@@ -196,6 +202,17 @@ impl From<&Wrapper> for TokenStream2 {
                     #tokens
                 }
             }
+            Wrapper {
+                parsed: ParsedWrapper::Enum(enum_wrapper),
+                original_definition,
+                ..
+            } => {
+                let tokens: TokenStream2 = enum_wrapper.into();
+                quote! {
+                    #original_definition
+                    #tokens
+                }
+            }
         }
     }
 }
@@ -205,6 +222,7 @@ pub enum ParsedWrapper {
     Struct(StructWrapper),
     Function(FunctionWrapper),
     ImplBlock(ImplBlockWrapper),
+    Enum(EnumWrapper),
 }
 
 impl From<Wrapper> for TokenStream {

@@ -24,6 +24,16 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
             } => {
                 format!("void* {arg_name}")
             }
+            FunctionArgWrapper {
+                wrapper_type: WrapperType::Enum(_),
+                arg_name,
+                arg_type,
+            } => {
+                format!(
+                    "enum {arg_type} {arg_name}",
+                    arg_type = arg_type.to_token_stream()
+                )
+            }
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -34,13 +44,13 @@ pub fn gen_function_header(
     args: &[FunctionArgWrapper],
     return_wrapper: &Option<FunctionReturnWrapper>,
 ) -> String {
-    let swift_args = map_header_declaration_args(args);
+    let c_args = map_header_declaration_args(args);
 
     let ReturnTypes {
         cpp_return_type, ..
     } = map_return_type(return_wrapper);
 
-    format!(r#"{cpp_return_type} {extern_fn_name}({swift_args});"#)
+    format!(r#"{cpp_return_type} {extern_fn_name}({c_args});"#)
 }
 
 pub struct MappedSwiftFunctionArgsTokens {
@@ -101,6 +111,7 @@ pub fn map_args<'a>(
                     WrapperType::String => "[String]".to_string(),
                     WrapperType::Struct(name) => format!("[{}]", name),
                     WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+                    WrapperType::Enum(_) => "[Int32]".to_string(),
                 };
                 args_signatures.push(format!("_ {arg_name}: {swift_type}"));
                 args_names.push(format!("casted_{arg_name}.rawPtr()"));
@@ -109,6 +120,16 @@ pub fn map_args<'a>(
                     inner_type.name()
                 ));
             }
+
+            FunctionArgWrapper {
+                arg_name,
+                wrapper_type: WrapperType::Enum(_),
+                arg_type,
+            } => {
+                args_signatures.push(format!("_ {arg_name}: {}", arg_type.to_token_stream()));
+                args_names.push(format!("CFfiModule.{arg_type}(rawValue: UInt32({arg_name}.rawValue))", arg_type = arg_type.to_token_stream())); // Convert to C enum type with UInt32
+                args_casts.push(String::new()); // No casting needed for enums
+            },
 
             // No other variants
         });
@@ -235,6 +256,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 WrapperType::String => "[String]".to_string(),
                 WrapperType::Struct(name) => format!("[{}]", name),
                 WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+                WrapperType::Enum(_) => "[Int32]".to_string(),
             };
             ReturnTypes {
                 return_type_sig: Some(format!(" -> {}", swift_type)),
@@ -245,6 +267,18 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 )),
             }
         }
+
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Enum(_),
+            return_type,
+        }) => ReturnTypes {
+            return_type_sig: Some(format!(" -> {}", return_type.to_token_stream())),
+            cpp_return_type: format!("enum {}", return_type.to_token_stream()),
+            result_cast: Some(format!(
+                "let casted_result = {}(rawValue: Int32(result.rawValue))!",
+                return_type.to_token_stream()
+            )),
+        },
 
         None => ReturnTypes {
             return_type_sig: None,
