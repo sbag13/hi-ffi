@@ -1,4 +1,5 @@
-use std::{collections::HashSet, fmt::Debug};
+use std::collections::HashSet;
+use std::fmt::Debug;
 
 use impl_block_wrapper::ImplBlockWrapper;
 use proc_macro::TokenStream;

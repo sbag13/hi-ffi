@@ -106,12 +106,75 @@ func assert_vec_functions() {
     assert(returned_vec_strings == expected_strings)
 }
 
+func assert_vec_methods() {
+    print("assert_vec_methods")
+
+    let testStruct = TestStruct()
+
+    // Test instance methods with vector arguments
+    let vecPrimitives: [i32] = [1, 2, 3, 4, 5]
+    testStruct.public_method_taking_vec_of_primitives(vecPrimitives)
+
+    let vecStrings: [String] = ["Hello", "World"]
+    testStruct.public_method_taking_vec_of_strings(vecStrings)
+
+    let s1 = TestStruct2()
+    s1.i32_field = 42
+    let s2 = TestStruct2()
+    s2.i32_field = 24
+    let vecStructs: [TestStruct2] = [s1, s2]
+    testStruct.public_method_taking_vec_of_structs(vecStructs)
+
+    // Test static methods with vector arguments
+    let staticVecPrimitives: [i32] = [6, 7, 8, 9, 10]
+    TestStruct.static_method_taking_vec_of_primitives(staticVecPrimitives)
+
+    let staticVecStrings: [String] = ["Static", "Method"]
+    TestStruct.static_method_taking_vec_of_strings(staticVecStrings)
+
+    let s3 = TestStruct2()
+    s3.i32_field = 100
+    let s4 = TestStruct2()
+    s4.i32_field = 200
+    let staticVecStructs: [TestStruct2] = [s3, s4]
+    TestStruct.static_method_taking_vec_of_structs(staticVecStructs)
+
+    // Test instance methods returning vectors
+    let returnedPrimitives = testStruct.public_method_returning_vec_of_primitives()
+    let expectedPrimitives: [i32] = [10, 20, 30, 40, 50]
+    assert(returnedPrimitives == expectedPrimitives, "Instance method returning primitives should match expected")
+
+    let returnedStrings = testStruct.public_method_returning_vec_of_strings()
+    let expectedStrings: [String] = ["Method", "Vector", "Return"]
+    assert(returnedStrings == expectedStrings, "Instance method returning strings should match expected")
+
+    let returnedStructs = testStruct.public_method_returning_vec_of_structs()
+    assert(returnedStructs.count == 2, "Instance method should return 2 structs")
+    assert(returnedStructs[0].i32_field == 300, "First struct should have i32_field 300")
+    assert(returnedStructs[1].i32_field == 400, "Second struct should have i32_field 400")
+
+    // Test static methods returning vectors
+    let staticReturnedPrimitives = TestStruct.static_method_returning_vec_of_primitives()
+    let staticExpectedPrimitives: [i32] = [60, 70, 80, 90, 100]
+    assert(staticReturnedPrimitives == staticExpectedPrimitives, "Static method returning primitives should match expected")
+
+    let staticReturnedStrings = TestStruct.static_method_returning_vec_of_strings()
+    let staticExpectedStrings: [String] = ["Static", "Method", "Vector"]
+    assert(staticReturnedStrings == staticExpectedStrings, "Static method returning strings should match expected")
+
+    let staticReturnedStructs = TestStruct.static_method_returning_vec_of_structs()
+    assert(staticReturnedStructs.count == 2, "Static method should return 2 structs")
+    assert(staticReturnedStructs[0].i32_field == 500, "First static struct should have i32_field 500")
+    assert(staticReturnedStructs[1].i32_field == 600, "Second static struct should have i32_field 600")
+}
+
 func run() {
     assert_struct_basics()
     assert_functions()
     assert_struct_methods()
     assert_struct_static_methods()
     assert_vec_functions()
+    assert_vec_methods()
     print("All assertions passed.")
 }
 

@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
+use crate::ReusableWrapper;
+use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::WrapperType;
-use crate::{ReusableWrapper, python::PYTHON_LIB_GETTER_NAME};
 use quote::ToTokens;
 use syn::Type;
 
-use crate::{Wrapper, wrapper::ParsedWrapper};
+use crate::Wrapper;
+use crate::wrapper::ParsedWrapper;
 
 mod function;
 mod impl_mod;
@@ -39,26 +41,16 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
         WrapperType::IntegerNumber(_) | WrapperType::Bool | WrapperType::FloatingPointNumber(_) => {
             "value".to_string()
         }
-        WrapperType::String => {
-            "ctypes.c_char_p(value.encode(\"utf-8\"))".to_string()
-        }
-        WrapperType::Struct(_) => {
-            "value.raw_ptr()".to_string()
-        }
+        WrapperType::String => "ctypes.c_char_p(value.encode(\"utf-8\"))".to_string(),
+        WrapperType::Struct(_) => "value.raw_ptr()".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
     };
 
     // Generate result casting for get function
     let get_result_cast = match inner {
-        WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) => {
-            "result".to_string()
-        }
-        WrapperType::Bool => {
-            "ctypes.c_byte(result).value != 0".to_string()
-        }
-        WrapperType::String => {
-            "RustString(result).py_str()".to_string()
-        }
+        WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) => "result".to_string(),
+        WrapperType::Bool => "ctypes.c_byte(result).value != 0".to_string(),
+        WrapperType::String => "RustString(result).py_str()".to_string(),
         WrapperType::Struct(_) => {
             format!("{}(result)", type_name)
         }
@@ -210,11 +202,11 @@ fn type_hint(ty: &syn::Type) -> String {
                     // Check if it's a Vec type
                     if segment.ident.to_string().starts_with("Vec")
                         && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
-                            && let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
-                            {
-                                let inner_hint = type_hint(inner_type);
-                                return format!("List[{}]", inner_hint);
-                            }
+                        && let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
+                    {
+                        let inner_hint = type_hint(inner_type);
+                        return format!("List[{}]", inner_hint);
+                    }
                     segment.ident.to_string()
                 }
             }
@@ -245,12 +237,12 @@ fn result_cast(ty: &Type, result_var_name: &str) -> String {
                     // Check if it's a Vec type
                     if segment.ident.to_string().starts_with("Vec")
                         && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
-                            && let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
-                            {
-                                // Use vector wrapper to convert Rust vector pointer to Python list
-                                let inner_type_str = inner_type.to_token_stream().to_string();
-                                return format!(r#"{inner_type_str}Vec(result).to_list()"#);
-                            }
+                        && let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
+                    {
+                        // Use vector wrapper to convert Rust vector pointer to Python list
+                        let inner_type_str = inner_type.to_token_stream().to_string();
+                        return format!(r#"{inner_type_str}Vec(result).to_list()"#);
+                    }
                     format!("{}({})", ty.to_token_stream(), result_var_name)
                 }
             }
@@ -270,7 +262,18 @@ fn arg_cast(ty: &Type, arg_name: &str) -> String {
                 "bool" => format!("ctypes.c_byte(1 if {} else 0)", arg_name),
                 "String" => format!(r#"ctypes.c_char_p({arg_name}.encode("utf-8"))"#),
                 _ => {
-                    format!("{arg_name}.raw_ptr()")
+                    // Check if it's a Vec type
+                    if segment.ident.to_string().starts_with("Vec")
+                        && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+                        && let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
+                        && let syn::Type::Path(inner_path) = inner_type
+                        && let Some(inner_segment) = inner_path.path.segments.last()
+                    {
+                        let inner_type_name = inner_segment.ident.to_string();
+                        format!("{}Vec.from_list({})", inner_type_name, arg_name)
+                    } else {
+                        format!("{arg_name}.raw_ptr()")
+                    }
                 }
             }
         }

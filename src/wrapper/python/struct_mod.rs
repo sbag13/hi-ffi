@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use crate::python::PYTHON_LIB_GETTER_NAME;
-use crate::wrapper::FieldWrapperType;
-use crate::wrapper::python::{arg_cast, set_extern_fn_resttype, type_hint};
-use crate::wrapper::{FieldWrapper, StructWrapper, python::ClassCode};
+use crate::wrapper::python::{ClassCode, arg_cast, set_extern_fn_resttype, type_hint};
+use crate::wrapper::{FieldWrapper, FieldWrapperType, StructWrapper};
 use quote::ToTokens;
 use syn::Type;
 

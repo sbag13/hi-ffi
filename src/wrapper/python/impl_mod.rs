@@ -45,12 +45,32 @@ class {class_name}:"#
                 );
             }
 
+            // Check if this is a vector argument and add List import
+            if let crate::wrapper::WrapperType::Vec(_) = &arg.wrapper_type {
+                imports.insert("List".to_string(), "from typing import List".to_string());
+            }
+
             py_args_sig.push(format!("{}: {}", arg_name, type_hint(&arg.arg_type)));
-            pre_casts.push(format!(
-                "casted_{name} = {cast}",
-                name = arg_name,
-                cast = arg_cast(&arg.arg_type, &arg_name)
-            ));
+
+            // For vector arguments, we need to store the wrapper object to prevent garbage collection
+            if let crate::wrapper::WrapperType::Vec(_) = &arg.wrapper_type {
+                pre_casts.push(format!(
+                    "casted_{name}_wrapper = {cast}",
+                    name = arg_name,
+                    cast = arg_cast(&arg.arg_type, &arg_name)
+                ));
+                pre_casts.push(format!(
+                    "casted_{name} = casted_{name}_wrapper.raw_ptr()",
+                    name = arg_name
+                ));
+            } else {
+                pre_casts.push(format!(
+                    "casted_{name} = {cast}",
+                    name = arg_name,
+                    cast = arg_cast(&arg.arg_type, &arg_name)
+                ));
+            }
+
             call_args.push(format!("casted_{}", arg_name));
         }
 
@@ -66,6 +86,16 @@ class {class_name}:"#
         let mut ret_line = String::new();
         let mut restype_set = String::new();
         if let Some(ret) = &method.return_wrapper {
+            // Check if this is a vector return type and add proper imports
+            if let crate::wrapper::WrapperType::Vec(inner) = &ret.wrapper_type {
+                imports.insert("List".to_string(), "from typing import List".to_string());
+                let vec_name = format!("{}Vec", inner.name());
+                imports.insert(
+                    vec_name.clone(),
+                    format!("from .vec_{} import {}", inner.name(), vec_name),
+                );
+            }
+
             ret_hint = format!(" -> {}", type_hint(&ret.return_type));
             restype_set = set_extern_fn_resttype(&ret.return_type, extern_fn_name);
             ret_line = format!(

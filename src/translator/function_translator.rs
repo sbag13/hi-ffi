@@ -1,9 +1,6 @@
-use quote::ToTokens;
-use quote::quote;
+use quote::{ToTokens, quote};
 use std::ops::Deref;
-use syn::GenericArgument;
-use syn::Type;
-use syn::{FnArg, ItemFn};
+use syn::{FnArg, GenericArgument, ItemFn, Type};
 
 use crate::EXPORTED_SYMBOLS_PREFIX;
 use crate::wrapper::*;
@@ -30,7 +27,11 @@ pub fn translate_function(item_struct: ItemFn) -> Wrapper {
     let return_wrapper = return_wrapper(&item_struct.sig.output);
 
     // Ensure vec reusable wrapper is generated for return vecs too
-    if let Some(FunctionReturnWrapper { wrapper_type: WrapperType::Vec(inner), .. }) = &return_wrapper {
+    if let Some(FunctionReturnWrapper {
+        wrapper_type: WrapperType::Vec(inner),
+        ..
+    }) = &return_wrapper
+    {
         reusable_wrappers.insert(ReusableWrapper::Vec(*inner.clone()));
     }
 
@@ -54,7 +55,10 @@ pub fn return_wrapper(output: &syn::ReturnType) -> Option<FunctionReturnWrapper>
             if let syn::Type::Path(path) = ty.deref() {
                 if let Some(ident) = path.path.get_ident() {
                     let wrapper_type = ident.to_string().as_str().parse().unwrap();
-                    Some(FunctionReturnWrapper { wrapper_type, return_type: ty.deref().clone() })
+                    Some(FunctionReturnWrapper {
+                        wrapper_type,
+                        return_type: ty.deref().clone(),
+                    })
                 } else {
                     // Handle non-trivial paths, e.g., Vec<T>
                     match path.path.segments.first() {
@@ -80,10 +84,15 @@ pub fn return_wrapper(output: &syn::ReturnType) -> Option<FunctionReturnWrapper>
                                     _ => panic!("Vec return type arguments not supported"),
                                 };
                                 let wrapper_type = match inner_wrapper_type {
-                                    WrapperType::Vec(_) => panic!("Nested vectors are not supported in return type"),
+                                    WrapperType::Vec(_) => {
+                                        panic!("Nested vectors are not supported in return type")
+                                    }
                                     inner => WrapperType::Vec(Box::new(inner)),
                                 };
-                                Some(FunctionReturnWrapper { wrapper_type, return_type: ty.deref().clone() })
+                                Some(FunctionReturnWrapper {
+                                    wrapper_type,
+                                    return_type: ty.deref().clone(),
+                                })
                             }
                             _ => panic!("Unsupported return type: {:?}", segment.ident),
                         },
