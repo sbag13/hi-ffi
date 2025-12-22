@@ -74,6 +74,7 @@ pub fn gen_class_definition_parts_from_impl_block(
 
     let includes = includes.into_iter().fold(String::new(), |mut acc, i| {
         acc.push_str(&i);
+        acc.push('\n');
         acc
     });
 
@@ -194,6 +195,7 @@ pub fn gen_class_definition_parts_from_struct(struct_wrapper: &StructWrapper) ->
 
     let includes = includes.into_iter().fold(String::new(), |mut acc, i| {
         acc.push_str(&i);
+        acc.push('\n');
         acc
     });
 

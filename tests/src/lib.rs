@@ -115,6 +115,73 @@ impl TestStruct {
         // println!("Rust: Static combo struct method: s1 = {s1:?}, s2 = {_s2:?}");
         s1
     }
+
+    pub fn public_method_taking_vec_of_primitives(&self, vec: Vec<i32>) {
+        assert_eq!(vec![1, 2, 3, 4, 5], vec);
+    }
+
+    pub fn public_method_taking_vec_of_strings(&self, vec: Vec<String>) {
+        assert_eq!(vec!["Hello".to_string(), "World".to_string()], vec);
+    }
+
+    pub fn public_method_taking_vec_of_structs(&self, vec: Vec<TestStruct2>) {
+        let expected = vec![TestStruct2 { i32_field: 42 }, TestStruct2 { i32_field: 24 }];
+        assert_eq!(expected, vec);
+    }
+
+    pub fn static_method_taking_vec_of_primitives(vec: Vec<i32>) {
+        assert_eq!(vec![6, 7, 8, 9, 10], vec);
+    }
+
+    pub fn static_method_taking_vec_of_strings(vec: Vec<String>) {
+        assert_eq!(vec!["Static".to_string(), "Method".to_string()], vec);
+    }
+
+    pub fn static_method_taking_vec_of_structs(vec: Vec<TestStruct2>) {
+        let expected = vec![
+            TestStruct2 { i32_field: 100 },
+            TestStruct2 { i32_field: 200 },
+        ];
+        assert_eq!(expected, vec);
+    }
+
+    pub fn public_method_returning_vec_of_primitives(&self) -> Vec<i32> {
+        vec![10, 20, 30, 40, 50]
+    }
+
+    pub fn public_method_returning_vec_of_strings(&self) -> Vec<String> {
+        vec![
+            "Method".to_string(),
+            "Vector".to_string(),
+            "Return".to_string(),
+        ]
+    }
+
+    pub fn public_method_returning_vec_of_structs(&self) -> Vec<TestStruct2> {
+        vec![
+            TestStruct2 { i32_field: 300 },
+            TestStruct2 { i32_field: 400 },
+        ]
+    }
+
+    pub fn static_method_returning_vec_of_primitives() -> Vec<i32> {
+        vec![60, 70, 80, 90, 100]
+    }
+
+    pub fn static_method_returning_vec_of_strings() -> Vec<String> {
+        vec![
+            "Static".to_string(),
+            "Method".to_string(),
+            "Vector".to_string(),
+        ]
+    }
+
+    pub fn static_method_returning_vec_of_structs() -> Vec<TestStruct2> {
+        vec![
+            TestStruct2 { i32_field: 500 },
+            TestStruct2 { i32_field: 600 },
+        ]
+    }
 }
 
 #[ffi]
