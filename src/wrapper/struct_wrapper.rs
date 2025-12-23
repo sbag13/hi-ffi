@@ -4,33 +4,7 @@ use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{ToTokens, format_ident, quote};
 use syn::Type;
 
-pub struct EnumWrapper {
-    pub(crate) name: Ident,
-    pub(crate) variants: Vec<EnumVariant>,
-}
-
-#[derive(Debug)]
-pub struct EnumVariant {
-    pub(crate) name: Ident,
-    pub(crate) discriminant: Option<String>,
-}
-
-impl Debug for EnumWrapper {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EnumWrapper")
-            .field("name", &self.name)
-            .field("variants", &self.variants)
-            .finish()
-    }
-}
-
-impl From<&EnumWrapper> for TokenStream2 {
-    fn from(_enum_wrapper: &EnumWrapper) -> TokenStream2 {
-        // For enums, we don't need to generate any additional wrapper functions
-        // since C-like enums are directly compatible with C
-        quote! {}
-    }
-}
+use crate::wrapper::WrapperType;
 
 pub struct StructWrapper {
     pub(crate) name: Ident,
@@ -57,10 +31,11 @@ impl From<&StructWrapper> for TokenStream2 {
         let fields = struct_wrapper
             .fields
             .iter()
-            .map(|field| match field.wrapper_type {
+            .map(|field| match &field.wrapper_type {
                 FieldWrapperType::Primitive => map_primitive_field(field, class_name),
                 FieldWrapperType::String => map_string_field(field, class_name),
                 FieldWrapperType::Custom => map_custom_field(field, class_name),
+                FieldWrapperType::Vec(_) => map_vec_field(field, class_name),
             });
 
         let default_constructor =
@@ -235,6 +210,55 @@ fn map_string_field(
     tokens
 }
 
+fn map_vec_field(
+    FieldWrapper {
+        setter,
+        getter,
+        field_type,
+        field_name,
+        ..
+    }: &FieldWrapper,
+    class_name: impl ToTokens + Display,
+) -> TokenStream2 {
+    let mut tokens = quote! {};
+
+    if let Some(Getter {
+        name,
+        extern_fn_name,
+    }) = getter
+    {
+        let wrapper_fn_name = wrapper_fn_name(&class_name, name);
+        tokens.extend(quote! {
+            #[doc(hidden)]
+            #[unsafe(export_name = #extern_fn_name)]
+            pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name) -> *mut #field_type {
+                unsafe {
+                    &mut(&mut *_self).#field_name as *mut #field_type
+                }
+            }
+        });
+    }
+
+    if let Some(Setter {
+        name,
+        extern_fn_name,
+    }) = setter
+    {
+        let wrapper_fn_name = wrapper_fn_name(&class_name, name);
+        tokens.extend(quote! {
+            #[doc(hidden)]
+            #[unsafe(export_name = #extern_fn_name)]
+            pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name, value: *mut #field_type) {
+                unsafe {
+                    std::mem::swap(&mut (*value), &mut (&mut *_self).#field_name);
+                }
+            }
+        });
+    }
+
+    tokens
+}
+
 fn map_custom_field(
     FieldWrapper {
         field_name,
@@ -324,5 +348,6 @@ impl Debug for FieldWrapper {
 pub enum FieldWrapperType {
     Primitive,
     String,
+    Vec(WrapperType),
     Custom,
 }

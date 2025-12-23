@@ -139,6 +139,10 @@ public:
 
     static {wrapper_name} from_raw(void* raw) {{ return {wrapper_name}(raw); }}
 
+    void leak() {{
+        this->self = nullptr;
+    }}
+
     std::vector<{inner_cpp_name}> to_std() {{
         std::vector<{inner_cpp_name}> out;
         auto len = {len_ext_fn_name}(this->self);
@@ -310,7 +314,7 @@ return rust_vec.to_std();
     }
 }
 
-fn gen_enum_declaration(enum_wrapper: &crate::wrapper::struct_wrapper::EnumWrapper) -> String {
+fn gen_enum_declaration(enum_wrapper: &EnumWrapper) -> String {
     let enum_name = &enum_wrapper.name;
 
     let variants: Vec<String> = enum_wrapper

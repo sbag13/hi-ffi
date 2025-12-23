@@ -145,7 +145,8 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
 import Foundation
 
 open class {wrapper_name}: Opaque {{
-    
+    private var leaked = false
+
     public required init(_ _self: UnsafeMutableRawPointer) {{
         super.init(_self)
     }}
@@ -169,8 +170,14 @@ open class {wrapper_name}: Opaque {{
         return result
     }}
 
+    public func leak() {{
+        leaked = true
+    }}
+
     deinit {{
-        {drop_ext_name}(self.rawPtr())
+        if !leaked {{
+            {drop_ext_name}(self.rawPtr())
+        }}
     }}
 }}
 "#

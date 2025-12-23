@@ -189,6 +189,56 @@ func assert_enums() {
     assert_inactive(TestStatus.Inactive)
 }
 
+func assert_struct_vector_fields() {
+    print("assert_struct_vector_fields")
+
+    let structWithVectors = StructWithVecs()
+
+    // Test vec_of_ints
+    let vecOfInts = structWithVectors.vec_of_ints
+    assert(vecOfInts.count == 0, "vec_of_ints should be empty initially")
+    let newVecOfInts: [i32] = [3, 5, 7]
+    structWithVectors.vec_of_ints = newVecOfInts
+    let vecOfInts2 = structWithVectors.vec_of_ints
+    assert(vecOfInts2.count == 3, "vec_of_ints should have 3 elements after set")
+    assert(vecOfInts2[0] == 3, "First element should be 3")
+    assert(vecOfInts2[1] == 5, "Second element should be 5")
+    assert(vecOfInts2[2] == 7, "Third element should be 7")
+
+    // Test vec_of_bools
+    let vecOfBools = structWithVectors.vec_of_bools
+    assert(vecOfBools.count == 0, "vec_of_bools should be empty initially")
+    let newVecOfBools: [bool] = [true, true, false]
+    structWithVectors.vec_of_bools = newVecOfBools
+    let vecOfBools2 = structWithVectors.vec_of_bools
+    assert(vecOfBools2.count == 3, "vec_of_bools should have 3 elements after set")
+    assert(vecOfBools2[0] == true, "First bool should be true")
+    assert(vecOfBools2[1] == true, "Second bool should be true")
+    assert(vecOfBools2[2] == false, "Third bool should be false")
+
+    // Test vec_of_strings
+    let vecOfStrings = structWithVectors.vec_of_strings
+    assert(vecOfStrings.count == 0, "vec_of_strings should be empty initially")
+    let newVecOfStrings: [String] = ["new", "vec"]
+    structWithVectors.vec_of_strings = newVecOfStrings
+    let vecOfStrings2 = structWithVectors.vec_of_strings
+    assert(vecOfStrings2.count == 2, "vec_of_strings should have 2 elements after set")
+    assert(vecOfStrings2[0] == "new", "First string should be 'new'")
+    assert(vecOfStrings2[1] == "vec", "Second string should be 'vec'")
+
+    // Test vec_of_structs
+    let vecOfStructs = structWithVectors.vec_of_structs
+    assert(vecOfStructs.count == 0, "vec_of_structs should be empty initially")
+    let ts2 = TestStruct2()
+    ts2.i32_field = 567
+    let newVecOfStructs: [TestStruct2] = [TestStruct2(), ts2]
+    structWithVectors.vec_of_structs = newVecOfStructs
+    let vecOfStructs2 = structWithVectors.vec_of_structs
+    assert(vecOfStructs2.count == 2, "vec_of_structs should have 2 elements after set")
+    assert(vecOfStructs2[0].i32_field == 0, "First struct should have i32_field 0")
+    assert(vecOfStructs2[1].i32_field == 567, "Second struct should have i32_field 567")
+}
+
 func run() {
     assert_struct_basics()
     assert_functions()
@@ -196,6 +246,7 @@ func run() {
     assert_struct_static_methods()
     assert_vec_functions()
     assert_vec_methods()
+    assert_struct_vector_fields()
     assert_enums()
     print("All assertions passed.")
 }

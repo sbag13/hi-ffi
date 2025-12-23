@@ -16,6 +16,7 @@ from python_ffi.vec_i32 import i32Vec
 from python_ffi.vec_String import StringVec
 from python_ffi.vec_TestStruct2 import TestStruct2Vec
 from python_ffi.vec_TestStatus import TestStatusVec
+from python_ffi.StructWithVecs import StructWithVecs
 
 
 ext = "so"  # Change to 'dylib' for MacOS, 'dll' for Windows
@@ -90,6 +91,29 @@ def struct_tests():
     s.struct_field = new_struct_field
     assert s.struct_field.i32_field == 5
 
+    # vector getters/setters
+    struct_with_vecs = StructWithVecs()
+
+    assert len(struct_with_vecs.vec_of_ints) == 0
+    struct_with_vecs.vec_of_ints = [35, 55]
+    assert struct_with_vecs.vec_of_ints == [35, 55]
+
+    assert len(struct_with_vecs.vec_of_bools) == 0
+    struct_with_vecs.vec_of_bools = [True, True, False]
+    assert struct_with_vecs.vec_of_bools == [True, True, False]
+
+    assert len(struct_with_vecs.vec_of_strings) == 0
+    struct_with_vecs.vec_of_strings = ["Hello", "from", "Python"]
+    assert struct_with_vecs.vec_of_strings == ["Hello", "from", "Python"]
+
+    assert len(struct_with_vecs.vec_of_structs) == 0
+    ts2 = TestStruct2()
+    ts2.i32_field = 5
+    struct_with_vecs.vec_of_structs = [TestStruct2(), ts2]
+    assert len(struct_with_vecs.vec_of_structs) == 2
+    assert struct_with_vecs.vec_of_structs[0].i32_field == 0
+    assert struct_with_vecs.vec_of_structs[1].i32_field == 5
+
 
 def functions_tests():
     s = TestStruct()
@@ -141,12 +165,9 @@ def vector_tests():
     assert returned_structs[1].i32_field == 11
 
     # Test vector of enums
-    function_taking_vec_of_enums([
-        TestStatus.Active,
-        TestStatus.Inactive,
-        TestStatus.Pending,
-        TestStatus.Active
-    ])
+    function_taking_vec_of_enums(
+        [TestStatus.Active, TestStatus.Inactive, TestStatus.Pending, TestStatus.Active]
+    )
 
     returned_enums = function_returning_vec_of_enums()
     assert len(returned_enums) == 4
@@ -154,7 +175,7 @@ def vector_tests():
         TestStatus.Pending,
         TestStatus.Active,
         TestStatus.Inactive,
-        TestStatus.Active
+        TestStatus.Active,
     ]
 
 

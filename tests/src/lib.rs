@@ -373,6 +373,15 @@ pub fn function_returning_vec_of_enums() -> Vec<TestStatus> {
         TestStatus::Pending,
         TestStatus::Active,
         TestStatus::Inactive,
-        TestStatus::Active
+        TestStatus::Active,
     ]
+}
+
+#[ffi]
+#[derive(Debug, Clone, Default)]
+pub(crate) struct StructWithVecs {
+    pub vec_of_ints: Vec<i32>,
+    pub vec_of_bools: Vec<bool>,
+    pub vec_of_strings: Vec<String>,
+    pub vec_of_structs: Vec<TestStruct2>,
 }

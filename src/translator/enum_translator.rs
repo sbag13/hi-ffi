@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use quote::{ToTokens, quote};
 use syn::{ItemEnum, Variant};
 
+use crate::wrapper::enum_wrapper::{EnumVariant, EnumWrapper};
 use crate::wrapper::*;
 
 pub fn translate_enum(item_enum: ItemEnum) -> Wrapper {

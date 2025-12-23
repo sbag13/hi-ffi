@@ -2,8 +2,8 @@ use core::panic;
 use std::collections::HashSet;
 use std::fmt::Display;
 
-use quote::{format_ident, quote};
-use syn::ItemStruct;
+use quote::{ToTokens, format_ident, quote};
+use syn::{GenericArgument, ItemStruct, Type};
 
 use crate::EXPORTED_SYMBOLS_PREFIX;
 use crate::wrapper::*;
@@ -56,7 +56,44 @@ fn fields_wrappers(item_struct: &ItemStruct) -> Vec<FieldWrapper> {
                         setter,
                     }
                 } else {
-                    panic!("No ident found")
+                    // Handle non-trivial paths, e.g., Vec<T>
+                    match path.path.segments.first() {
+                        Some(segment) => match segment.ident.to_string().as_str() {
+                            "Vec" => {
+                                let inner_wrapper_type: WrapperType = match &segment.arguments {
+                                    syn::PathArguments::AngleBracketed(args) => {
+                                        let Some(inner_arg) = args.args.first() else {
+                                            panic!("No argument found in Vec return type");
+                                        };
+                                        match inner_arg {
+                                            GenericArgument::Type(Type::Path(inner_path)) => {
+                                                inner_path
+                                                    .to_token_stream()
+                                                    .to_string()
+                                                    .as_str()
+                                                    .parse()
+                                                    .unwrap()
+                                            }
+                                            _ => panic!("Vector inner return type must be a path"),
+                                        }
+                                    }
+                                    _ => panic!("Vec return type arguments not supported"),
+                                };
+
+                                FieldWrapper {
+                                    field_name,
+                                    field_type: field.ty.clone(),
+                                    wrapper_type: FieldWrapperType::Vec(inner_wrapper_type),
+                                    setter,
+                                    getter,
+                                }
+                            }
+                            _ => panic!("Unsupported field type: {:?}", segment.ident),
+                        },
+                        None => {
+                            panic!("No segment found in a field wrapper")
+                        }
+                    }
                 }
             } else {
                 panic!("No path found")
@@ -151,9 +188,8 @@ fn default_constructor(item_struct: &ItemStruct) -> Option<DefaultConstructor> {
                         ),
                         constructor_name: format_ident!("{class_name}__default"),
                     });
-                    return Ok(());
                 }
-                Err(meta.error("unsupported attribute"))
+                Ok(())
             });
         }
     }

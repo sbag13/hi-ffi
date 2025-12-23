@@ -9,12 +9,14 @@ use quote::{format_ident, quote};
 pub mod base;
 #[cfg(feature = "cpp")]
 pub mod cpp;
+pub mod enum_wrapper;
 pub mod function_wrapper;
 pub mod impl_block_wrapper;
 pub mod struct_wrapper;
 #[cfg(feature = "swift")]
 pub mod swift;
 use crate::EXPORTED_SYMBOLS_PREFIX;
+use crate::wrapper::enum_wrapper::EnumWrapper;
 pub use function_wrapper::*;
 pub use struct_wrapper::*;
 #[cfg(feature = "python")]

@@ -339,6 +339,80 @@ fn map_fields(field: &FieldWrapper) -> Methods {
                 .map(|s| map_custom_setter(s, field_type.to_token_stream().to_string()));
             Methods { getter, setter }
         }
+
+        FieldWrapper {
+            wrapper_type: FieldWrapperType::Vec(inner),
+            getter,
+            setter,
+            ..
+        } => {
+            let getter = getter.as_ref().map(|g| map_vec_getter(g, inner));
+            let setter = setter.as_ref().map(|s| map_vec_setter(s, inner));
+
+            Methods { getter, setter }
+        }
+    }
+}
+
+fn map_vec_getter(
+    Getter {
+        name,
+        extern_fn_name,
+    }: &Getter,
+    inner: &WrapperType,
+) -> Method {
+    let inner_name = inner.name();
+    let cpp_inner_name = match inner {
+        WrapperType::String => "std::string",
+        _ => inner_name.as_str(),
+    };
+    let cpp_vec_file_name = format!("vec_{inner_name}");
+    let cpp_vec_class_name = format!("Rust{inner_name}Vec");
+
+    Method {
+        definition: format!(
+            r#"
+    std::vector<{cpp_inner_name}> {name}() {{
+        void* result = {extern_fn_name}(this->self);
+        auto rust_vec = {cpp_vec_class_name}::from_raw(result);
+        auto std_vec = rust_vec.to_std();
+        // this vec is still owned by a Rust struct - avoid calling drop by cpp
+        rust_vec.leak();
+        return std_vec;
+    }}
+"#
+        ),
+        extern_fn: format!("    void* {extern_fn_name}(void*);\n"),
+        include: custom_type_include(cpp_vec_file_name),
+    }
+}
+
+fn map_vec_setter(
+    Setter {
+        name,
+        extern_fn_name,
+    }: &Setter,
+    inner: &WrapperType,
+) -> Method {
+    let inner_name = inner.name();
+    let cpp_inner_name = match inner {
+        WrapperType::String => "std::string",
+        _ => inner_name.as_str(),
+    };
+
+    let cpp_vec_file_name = format!("vec_{inner_name}");
+    let cpp_vec_class_name = format!("Rust{inner_name}Vec");
+
+    Method {
+        definition: format!(
+            r#"
+    void {name}(std::vector<{cpp_inner_name}>& value) {{
+        auto rust_vec = {cpp_vec_class_name}::from_std(value);
+        {extern_fn_name}(this->self, rust_vec.raw_ptr()); // Rust side makes swap
+    }}"#
+        ),
+        extern_fn: format!("    void {extern_fn_name}(void*, void*);\n"),
+        include: custom_type_include(cpp_vec_file_name),
     }
 }
 

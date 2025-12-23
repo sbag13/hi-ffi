@@ -75,16 +75,14 @@ These examples demonstrate how to use the generated bindings in real application
 
 ### Structs
 
-| Feature             | C++ | Swift | Python |
-| ------------------- | --- | ----- | ------ |
-| Primitive getters   | ✅  | ✅    | ✅     |
-| Primitive setters   | ✅  | ✅    | ✅     |
-| String getters      | ✅  | ✅    | ✅     |
-| String setters      | ✅  | ✅    | ✅     |
-| Struct getters      | ✅  | ✅    | ✅     |
-| Struct setters      | ✅  | ✅    | ✅     |
-| Default constructor | ✅  | ✅    | ✅     |
-| PartialEq           | ❌  | ❌    | ❌     |
+| Feature                   | C++ | Swift | Python |
+| ------------------------- | --- | ----- | ------ |
+| Primitive getters/setters | ✅  | ✅    | ✅     |
+| String getters/setters    | ✅  | ✅    | ✅     |
+| Struct getters/setters    | ✅  | ✅    | ✅     |
+| Vec getters/setters       | ✅  | ✅    | ✅     |
+| Default constructor       | ✅  | ✅    | ✅     |
+| PartialEq                 | ❌  | ❌    | ❌     |
 
 ### Methods
 
@@ -135,11 +133,11 @@ These examples demonstrate how to use the generated bindings in real application
 
 ### Enums
 
-| Feature      | C++ | Swift | Python |
-| ------------ | --- | ----- | ------ |
-| C-like enums | ✅  | ✅    | ✅     |
+| Feature                 | C++ | Swift | Python |
+| ----------------------- | --- | ----- | ------ |
+| C-like enums            | ✅  | ✅    | ✅     |
 | Single element variants | ❌  | ❌    | ❌     |
-| Tuple variants | ❌  | ❌    | ❌     |
+| Tuple variants          | ❌  | ❌    | ❌     |
 
 ## Architecture
 

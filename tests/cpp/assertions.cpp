@@ -25,6 +25,7 @@
 #include "get_inactive_status.h"
 #include "assert_active.h"
 #include "assert_inactive.h"
+#include "StructWithVecs.h"
 #include <iostream>
 #include <cassert>
 
@@ -112,6 +113,48 @@ void assert_structs()
     test_struct2_other.set_i32_field(44);
     test_struct.set_struct_field(test_struct2_other);
     assert(test_struct.get_struct_field().get_i32_field() == 44);
+
+    auto struct_with_vectors = StructWithVecs();
+
+    auto vec_of_ints = struct_with_vectors.get_vec_of_ints();
+    assert(vec_of_ints.size() == 0);
+    std::vector<i32> new_vec_of_ints = {3, 5, 7};
+    struct_with_vectors.set_vec_of_ints(new_vec_of_ints);
+    auto vec_of_ints_2 = struct_with_vectors.get_vec_of_ints();
+    assert(vec_of_ints_2.size() == 3);
+    assert(vec_of_ints_2[0] == 3);
+    assert(vec_of_ints_2[1] == 5);
+    assert(vec_of_ints_2[2] == 7);
+
+    auto vec_of_bools = struct_with_vectors.get_vec_of_bools();
+    assert(vec_of_bools.size() == 0);
+    std::vector<bool> new_vec_of_bools = {true, true, false};
+    struct_with_vectors.set_vec_of_bools(new_vec_of_bools);
+    auto vec_of_bools_2 = struct_with_vectors.get_vec_of_bools();
+    assert(vec_of_bools_2.size() == 3);
+    assert(vec_of_bools_2[0]);
+    assert(vec_of_bools_2[1]);
+    assert(!vec_of_bools_2[2]);
+
+    auto vec_of_strings = struct_with_vectors.get_vec_of_strings();
+    assert(vec_of_strings.size() == 0);
+    std::vector<std::string> new_vec_of_strings = {"new", "vec"};
+    struct_with_vectors.set_vec_of_strings(new_vec_of_strings);
+    auto vec_of_strings_2 = struct_with_vectors.get_vec_of_strings();
+    assert(vec_of_strings_2.size() == 2);
+    assert(vec_of_strings_2[0] == "new");
+    assert(vec_of_strings_2[1] == "vec");
+
+    auto vec_of_structs = struct_with_vectors.get_vec_of_structs();
+    assert(vec_of_structs.size() == 0);
+    auto ts2 = TestStruct2();
+    ts2.set_i32_field(567);
+    std::vector<TestStruct2> new_vec_of_structs = {TestStruct2(), ts2};
+    struct_with_vectors.set_vec_of_structs(new_vec_of_structs);
+    auto vec_of_structs_2 = struct_with_vectors.get_vec_of_structs();
+    assert(vec_of_structs_2.size() == 2);
+    assert(vec_of_structs_2[0].get_i32_field() == 0);
+    assert(vec_of_structs_2[1].get_i32_field() == 567);
 }
 
 void assert_struct_impl_block()

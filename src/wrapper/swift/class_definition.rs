@@ -6,7 +6,7 @@ use crate::wrapper::swift::function_definition::{
     map_return_type,
 };
 use crate::wrapper::{
-    FieldWrapper, FieldWrapperType, Getter, ImplBlockWrapper, Setter, StructWrapper,
+    FieldWrapper, FieldWrapperType, Getter, ImplBlockWrapper, Setter, StructWrapper, WrapperType,
 };
 use quote::ToTokens;
 
@@ -168,6 +168,26 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
             getter.as_ref().map(map_string_getter_as_extern_fn),
             setter.as_ref().map(map_string_setter_as_extern_fn),
         ),
+        FieldWrapper {
+            wrapper_type: FieldWrapperType::Vec(_),
+            getter,
+            setter,
+            ..
+        } => {
+            let getter_code = getter.as_ref().map(|g| {
+                format!(
+                    "void* {extern_fn_name}(void*);",
+                    extern_fn_name = g.extern_fn_name
+                )
+            });
+            let setter_code = setter.as_ref().map(|s| {
+                format!(
+                    "void {extern_fn_name}(void*, void*);",
+                    extern_fn_name = s.extern_fn_name
+                )
+            });
+            (getter_code, setter_code)
+        }
     };
 
     match (getter, setter) {
@@ -247,7 +267,7 @@ fn gen_props(struct_wrapper: &StructWrapper) -> String {
 }
 
 fn gen_property(field: &FieldWrapper) -> String {
-    let (getter, setter) = match field {
+    let (getter, setter, swift_field_type) = match field {
         FieldWrapper {
             wrapper_type: FieldWrapperType::Primitive,
             setter,
@@ -256,6 +276,7 @@ fn gen_property(field: &FieldWrapper) -> String {
         } => (
             getter.as_ref().map(map_primitive_getter),
             setter.as_ref().map(map_primitive_setter),
+            field.field_type.to_token_stream().to_string(),
         ),
 
         FieldWrapper {
@@ -269,6 +290,7 @@ fn gen_property(field: &FieldWrapper) -> String {
                 .as_ref()
                 .map(|g| map_custom_getter(g, field_type.to_token_stream())),
             setter.as_ref().map(map_custom_setter),
+            field.field_type.to_token_stream().to_string(),
         ),
 
         FieldWrapper {
@@ -279,16 +301,42 @@ fn gen_property(field: &FieldWrapper) -> String {
         } => (
             getter.as_ref().map(map_string_getter),
             setter.as_ref().map(map_string_setter),
+            field.field_type.to_token_stream().to_string(),
         ),
+
+        FieldWrapper {
+            wrapper_type: FieldWrapperType::Vec(inner),
+            setter,
+            getter,
+            ..
+        } => {
+            let swift_inner_type = match inner {
+                WrapperType::IntegerNumber(name)
+                | WrapperType::FloatingPointNumber(name)
+                | WrapperType::Struct(name)
+                | WrapperType::Enum(name) => name.clone(),
+                WrapperType::Bool => "bool".to_string(),
+                WrapperType::String => "String".to_string(),
+                WrapperType::Vec(_) => "Array".to_string(), // Nested vectors not supported yet
+            };
+            (
+                getter
+                    .as_ref()
+                    .map(|g| map_vec_getter(g, swift_inner_type.clone(), inner)),
+                setter
+                    .as_ref()
+                    .map(|s| map_vec_setter(s, swift_inner_type.clone(), inner)),
+                format!("[{}]", swift_inner_type),
+            )
+        }
     };
 
     let field_name = &field.field_name;
-    let field_type = &field.field_type.to_token_stream().to_string();
     match (getter, setter) {
         (Some(getter), Some(setter)) => {
             format!(
                 r#"
-    public var {field_name}: {field_type} {{
+    public var {field_name}: {swift_field_type} {{
 {getter}
 {setter}
     }}
@@ -298,7 +346,7 @@ fn gen_property(field: &FieldWrapper) -> String {
         (Some(getter), None) => {
             format!(
                 r#"
-    public var {field_name}: {field_type} {{
+    public var {field_name}: {swift_field_type} {{
 {getter}
     }}
 "#,
@@ -307,7 +355,7 @@ fn gen_property(field: &FieldWrapper) -> String {
         (None, Some(setter)) => {
             format!(
                 r#"
-    public var {field_name}: {field_type} {{
+    public var {field_name}: {swift_field_type} {{
 {setter}
     }}
 "#,
@@ -376,6 +424,49 @@ fn map_string_setter(Setter { extern_fn_name, .. }: &Setter) -> String {
         set {{
             let str_ptr = newValue.utf8CString.withUnsafeBufferPointer({{ ptr in return UnsafeMutableRawPointer(mutating: ptr.baseAddress!) }})
             {extern_fn_name}(self.rawPtr(), str_ptr, UInt32(newValue.utf8CString.count))
+        }}"#,
+    )
+}
+
+fn map_vec_getter(
+    Getter { extern_fn_name, .. }: &Getter,
+    _field_type: impl Display,
+    inner: &WrapperType,
+) -> String {
+    let inner_name = match inner {
+        WrapperType::String => "String".to_string(),
+        _ => inner.name(),
+    };
+    let vec_class_name = format!("Rust{inner_name}Vec");
+
+    format!(
+        r#"
+        get {{
+            let ptr = {extern_fn_name}(self.rawPtr())
+            let rust_vec = {vec_class_name}(ptr!)
+            let swift_array = rust_vec.toSwift()
+            rust_vec.leak()
+            return swift_array
+        }}"#,
+    )
+}
+
+fn map_vec_setter(
+    Setter { extern_fn_name, .. }: &Setter,
+    _field_type: impl Display,
+    inner: &WrapperType,
+) -> String {
+    let inner_name = match inner {
+        WrapperType::String => "String".to_string(),
+        _ => inner.name(),
+    };
+    let vec_class_name = format!("Rust{inner_name}Vec");
+
+    format!(
+        r#"
+        set {{
+            let rust_vec = {vec_class_name}.fromSwift(newValue)
+            {extern_fn_name}(self.rawPtr(), rust_vec.rawPtr())
         }}"#,
     )
 }

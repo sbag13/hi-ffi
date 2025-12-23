@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::python::{ClassCode, arg_cast, set_extern_fn_resttype, type_hint};
-use crate::wrapper::{FieldWrapper, FieldWrapperType, StructWrapper};
+use crate::wrapper::{FieldWrapper, FieldWrapperType, StructWrapper, WrapperType};
 use quote::ToTokens;
 use syn::Type;
 
@@ -37,7 +37,7 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
     struct_wrapper.fields.iter().fold(
         imports,
         |mut acc: HashMap<String, String>, field_wrapper| {
-            match field_wrapper.wrapper_type {
+            match &field_wrapper.wrapper_type {
                 FieldWrapperType::Custom => {
                     let type_name = field_wrapper.field_type.to_token_stream().to_string();
                     acc.insert(
@@ -54,7 +54,27 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
                 FieldWrapperType::Primitive => {
                     acc.insert("ctypes".to_string(), "import ctypes".to_string());
                 }
-            }
+                FieldWrapperType::Vec(inner) => {
+                    let inner_type_name = inner.name();
+                    acc.insert("List".to_string(), "from typing import List".to_string());
+                    acc.insert(
+                        format!("{}Vec", inner_type_name),
+                        format!(
+                            "from .vec_{} import {}Vec",
+                            inner_type_name, inner_type_name
+                        ),
+                    );
+                    acc.insert("ctypes".to_owned(), "import ctypes".to_string());
+
+                    if let WrapperType::Struct(struct_name) = inner {
+                        acc.insert(
+                            struct_name.to_owned(),
+                            format!("from .{struct_name} import {struct_name}"),
+                        );
+                    }
+                }
+            };
+
             acc
         },
     )
@@ -125,6 +145,11 @@ fn gen_property(field_wrapper: &FieldWrapper) -> String {
     let field_type = &field_wrapper.field_type;
     let field_name = &field_wrapper.field_name;
 
+    // Handle Vec fields specially
+    if let FieldWrapperType::Vec(inner) = &field_wrapper.wrapper_type {
+        return gen_vec_property(field_wrapper, inner);
+    }
+
     let getter = if let Some(getter) = &field_wrapper.getter {
         let extern_fn_name = &getter.extern_fn_name;
         let type_hint = type_hint(field_type);
@@ -177,4 +202,52 @@ fn prop_result_cast(ty: &Type, result_var_name: &str) -> String {
         }
         _ => unimplemented!("Result cast not implemented for this type"),
     }
+}
+
+fn gen_vec_property(field_wrapper: &FieldWrapper, inner: &crate::wrapper::WrapperType) -> String {
+    use crate::wrapper::python::type_hint_from_wrapper_type;
+
+    let field_name = &field_wrapper.field_name;
+    let inner_type_name = inner.name();
+    let vec_class_name = format!("{inner_type_name}Vec");
+    let inner_type_hint = type_hint_from_wrapper_type(inner);
+
+    let getter = if let Some(getter) = &field_wrapper.getter {
+        let extern_fn_name = &getter.extern_fn_name;
+
+        format!(
+            r#"    
+    @property
+    def {field_name}(self) -> List[{inner_type_hint}]:
+        {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p
+        result_ptr = {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}(self._self_ptr)
+        rust_vec = {vec_class_name}(result_ptr)
+        python_list = rust_vec.to_list()
+        # Prevent the vector from being dropped, as it's still owned by the struct
+        rust_vec._ptr = None
+        return python_list"#
+        )
+    } else {
+        String::new()
+    };
+
+    let setter = if let Some(setter) = &field_wrapper.setter {
+        let extern_fn_name = &setter.extern_fn_name;
+
+        format!(
+            r#"
+    @{field_name}.setter
+    def {field_name}(self, value: List[{inner_type_hint}]):
+        rust_vec = {vec_class_name}.from_list(value)
+        {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}(self._self_ptr, rust_vec.raw_ptr())"#
+        )
+    } else {
+        String::new()
+    };
+
+    format!(
+        r#"
+{getter}
+{setter}"#
+    )
 }
