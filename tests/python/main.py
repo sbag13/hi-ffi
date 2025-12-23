@@ -11,9 +11,11 @@ from python_ffi import ffi_init
 from python_ffi import *
 from python_ffi.TestStruct import TestStruct
 from python_ffi.TestStruct2 import TestStruct2
+from python_ffi.TestStatus import TestStatus
 from python_ffi.vec_i32 import i32Vec
 from python_ffi.vec_String import StringVec
 from python_ffi.vec_TestStruct2 import TestStruct2Vec
+from python_ffi.vec_TestStatus import TestStatusVec
 
 
 ext = "so"  # Change to 'dylib' for MacOS, 'dll' for Windows
@@ -137,6 +139,23 @@ def vector_tests():
     assert len(returned_structs) == 2
     assert returned_structs[0].i32_field == 8
     assert returned_structs[1].i32_field == 11
+
+    # Test vector of enums
+    function_taking_vec_of_enums([
+        TestStatus.Active,
+        TestStatus.Inactive,
+        TestStatus.Pending,
+        TestStatus.Active
+    ])
+
+    returned_enums = function_returning_vec_of_enums()
+    assert len(returned_enums) == 4
+    assert returned_enums == [
+        TestStatus.Pending,
+        TestStatus.Active,
+        TestStatus.Inactive,
+        TestStatus.Active
+    ]
 
 
 def vector_methods_tests():

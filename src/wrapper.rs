@@ -61,7 +61,7 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::String => "ptr: *const i8, _len: usize".parse().unwrap(),
         WrapperType::Struct(name) => format!("value: *mut {name}").parse().unwrap(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
-        WrapperType::Enum(_) => panic!("Enum in vec not supported yet!"),
+        WrapperType::Enum(name) => format!("value: {name}").parse().unwrap(),
     };
     let value_cast = match inner {
         WrapperType::String => quote! {

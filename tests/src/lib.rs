@@ -353,3 +353,26 @@ pub fn assert_active(status: TestStatus) {
 pub fn assert_inactive(status: TestStatus) {
     assert_eq!(status, TestStatus::Inactive);
 }
+
+#[ffi]
+pub fn function_taking_vec_of_enums(vec: Vec<TestStatus>) {
+    assert_eq!(
+        vec![
+            TestStatus::Active,
+            TestStatus::Inactive,
+            TestStatus::Pending,
+            TestStatus::Active
+        ],
+        vec
+    );
+}
+
+#[ffi]
+pub fn function_returning_vec_of_enums() -> Vec<TestStatus> {
+    vec![
+        TestStatus::Pending,
+        TestStatus::Active,
+        TestStatus::Inactive,
+        TestStatus::Active
+    ]
+}

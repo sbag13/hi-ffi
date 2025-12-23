@@ -37,7 +37,7 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::String => "const char* value, unsigned int len".to_string(),
         WrapperType::Struct(_) => "void* value".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
-        WrapperType::Enum(name) => format!("{} value", name),
+        WrapperType::Enum(name) => format!("enum {} value", name),
     };
 
     let get_return_type = match inner {
@@ -46,7 +46,7 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::String => "void*".to_string(),
         WrapperType::Struct(_) => "void*".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
-        WrapperType::Enum(name) => name.to_string(),
+        WrapperType::Enum(name) => format!("enum {}", name),
     };
 
     format!(
@@ -108,7 +108,9 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
             format!("            {push_ext_fn_name}(rust_vec_ptr, elem.rawPtr())")
         }
         WrapperType::Enum(_) => {
-            format!("            {push_ext_fn_name}(rust_vec_ptr, elem.rawValue)")
+            format!(
+                "            {push_ext_fn_name}(rust_vec_ptr, CFfiModule.{inner_swift_name}(rawValue: UInt32(elem.rawValue)))"
+            )
         }
         _ => panic!("Pushing to vec not supported"),
     };
@@ -132,7 +134,7 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
         }
         WrapperType::Enum(_) => {
             format!(
-                "            let elem = {inner_swift_name}(rawValue: {get_ext_fn_name}(self.rawPtr(), i))"
+                "            let c_elem = {get_ext_fn_name}(self.rawPtr(), i)\n            let elem = {inner_swift_name}(rawValue: Int32(c_elem.rawValue))!"
             )
         }
         WrapperType::Vec(_) => unreachable!(),

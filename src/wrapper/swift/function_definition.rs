@@ -111,7 +111,7 @@ pub fn map_args<'a>(
                     WrapperType::String => "[String]".to_string(),
                     WrapperType::Struct(name) => format!("[{}]", name),
                     WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
-                    WrapperType::Enum(_) => "[Int32]".to_string(),
+                    WrapperType::Enum(name) => format!("[{}]", name),
                 };
                 args_signatures.push(format!("_ {arg_name}: {swift_type}"));
                 args_names.push(format!("casted_{arg_name}.rawPtr()"));
@@ -256,7 +256,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 WrapperType::String => "[String]".to_string(),
                 WrapperType::Struct(name) => format!("[{}]", name),
                 WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
-                WrapperType::Enum(_) => "[Int32]".to_string(),
+                WrapperType::Enum(name) => format!("[{}]", name),
             };
             ReturnTypes {
                 return_type_sig: Some(format!(" -> {}", swift_type)),

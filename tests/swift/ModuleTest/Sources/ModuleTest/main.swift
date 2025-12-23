@@ -104,6 +104,15 @@ func assert_vec_functions() {
     assert(returned_vec_strings.count == 3)
     let expected_strings: [String] = ["Hello", "World", "Rust"]
     assert(returned_vec_strings == expected_strings)
+
+    // Test vector of enums
+    let vec_enums: [TestStatus] = [TestStatus.Active, TestStatus.Inactive, TestStatus.Pending, TestStatus.Active]
+    function_taking_vec_of_enums(vec_enums)
+
+    let returned_vec_enums = function_returning_vec_of_enums()
+    assert(returned_vec_enums.count == 4)
+    let expected_enums: [TestStatus] = [TestStatus.Pending, TestStatus.Active, TestStatus.Inactive, TestStatus.Active]
+    assert(returned_vec_enums == expected_enums)
 }
 
 func assert_vec_methods() {

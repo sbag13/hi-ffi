@@ -31,7 +31,7 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> String {
         WrapperType::Vec(_) => unimplemented!("CPP: vec of vecs unimplemented!"),
         WrapperType::Bool => "bool value".to_string(),
         WrapperType::String => "const char* value".to_string(), // 2nd arg, len, is ignored for now
-        WrapperType::Enum(name) => format!("{} value", name),
+        WrapperType::Enum(_) => "int value".to_string(),
     };
     let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_vec");
     let with_capacity_ext_name =
@@ -52,11 +52,15 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> String {
         WrapperType::Struct(_) => {
             format!("            {push_ext_fn_name}(rust_vec_ptr, elem.self_ptr());")
         }
+        WrapperType::Enum(_) => {
+            format!("            {push_ext_fn_name}(rust_vec_ptr, static_cast<int>(elem));")
+        }
         _ => panic!("Pushing to vec not supported"),
     };
 
     let includes = match inner {
         WrapperType::Struct(struct_name) => format!(r#"#include "{struct_name}.h""#),
+        WrapperType::Enum(enum_name) => format!(r#"#include "{enum_name}.h""#),
         _ => String::new(),
     };
 
@@ -267,9 +271,16 @@ return rust_vec.to_std();
             );
             let mut includes = String::from("#include <vector>\n");
             includes.push_str(&format!("#include \"vec_{}.h\"", inner.name()));
-            if let WrapperType::Struct(inner_struct) = inner.as_ref() {
-                // For struct vector, ensure struct header is included
-                includes.push_str(&format!("\n#include \"{inner_struct}.h\""));
+            match inner.as_ref() {
+                WrapperType::Struct(inner_struct) => {
+                    // For struct vector, ensure struct header is included
+                    includes.push_str(&format!("\n#include \"{inner_struct}.h\""));
+                }
+                WrapperType::Enum(inner_enum) => {
+                    // For enum vector, ensure enum header is included
+                    includes.push_str(&format!("\n#include \"{inner_enum}.h\""));
+                }
+                _ => {}
             }
             ReturnTypes {
                 ext_return_type: "void*".to_string(),

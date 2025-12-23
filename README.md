@@ -129,7 +129,7 @@ These examples demonstrate how to use the generated bindings in real application
 | Primitive    | ✅  | ✅    | ✅     |
 | String       | ✅  | ✅    | ✅     |
 | Struct       | ✅  | ✅    | ✅     |
-| C-like enums | ❌  | ❌    | ❌     |
+| C-like enums | ✅  | ✅    | ✅     |
 | `&str`       | ❌  | ❌    | ❌     |
 | Traits       | ❌  | ❌    | ❌     |
 
@@ -138,6 +138,8 @@ These examples demonstrate how to use the generated bindings in real application
 | Feature      | C++ | Swift | Python |
 | ------------ | --- | ----- | ------ |
 | C-like enums | ✅  | ✅    | ✅     |
+| Single element variants | ❌  | ❌    | ❌     |
+| Tuple variants | ❌  | ❌    | ❌     |
 
 ## Architecture
 

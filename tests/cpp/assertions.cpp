@@ -18,6 +18,8 @@
 #include "function_returning_vec_of_bool.h"
 #include "function_returning_vec_of_structs.h"
 #include "function_returning_vec_of_string.h"
+#include "function_taking_vec_of_enums.h"
+#include "function_returning_vec_of_enums.h"
 #include "TestStatus.h"
 #include "get_status.h"
 #include "get_inactive_status.h"
@@ -63,6 +65,18 @@ void assert_vectors()
     assert(returned_strings.size() == 3);
     std::vector<std::string> expected_strings = {"Hello", "World", "Rust"};
     assert(returned_strings == expected_strings);
+
+    // Test vector of enums
+    std::vector<TestStatus> v_enums = {TestStatus::Active, TestStatus::Inactive, TestStatus::Pending, TestStatus::Active};
+    function_taking_vec_of_enums(v_enums);
+
+    auto returned_enums = function_returning_vec_of_enums();
+    assert(returned_enums.size() == 4);
+    std::vector<TestStatus> expected_enums = {TestStatus::Pending, TestStatus::Active, TestStatus::Inactive, TestStatus::Active};
+    assert(returned_enums.size() == expected_enums.size());
+    for (size_t i = 0; i < returned_enums.size(); ++i) {
+        assert(returned_enums[i] == expected_enums[i]);
+    }
 }
 
 void assert_structs()
