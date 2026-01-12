@@ -34,7 +34,7 @@ impl From<&StructWrapper> for TokenStream2 {
             .map(|field| match &field.wrapper_type {
                 FieldWrapperType::Primitive => map_primitive_field(field, class_name),
                 FieldWrapperType::String => map_string_field(field, class_name),
-                FieldWrapperType::Custom => map_custom_field(field, class_name),
+                FieldWrapperType::Custom(_) => map_custom_field(field, class_name),
                 FieldWrapperType::Vec(_) => map_vec_field(field, class_name),
             });
 
@@ -349,5 +349,5 @@ pub enum FieldWrapperType {
     Primitive,
     String,
     Vec(WrapperType),
-    Custom,
+    Custom(String),
 }

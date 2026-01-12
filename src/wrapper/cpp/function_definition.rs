@@ -77,7 +77,8 @@ pub fn map_args<'a>(
                 WrapperType::Bool => "bool",
                 WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.as_str(),
                 WrapperType::Struct(struct_name) => struct_name.as_str(),
-                WrapperType::Enum(enum_name) => enum_name.as_str()
+                WrapperType::Enum(enum_name) => enum_name.as_str(),
+                WrapperType::Result(_) => unimplemented!("Vector of Result type not implemented yet as inner Vec type"),
             };
             cpp_args.push(format!("const std::vector<{inner_type}>& {arg_name}"));
             includes.insert("#include <vector>".to_string());
@@ -98,6 +99,12 @@ pub fn map_args<'a>(
             call_args.push(arg_name.to_string());
             includes.insert(format!("#include \"{enum_type}.h\""));
         },
+        FunctionArgWrapper {
+            wrapper_type: WrapperType::Result(_),
+            ..
+        } => {
+            panic!("Result function arguments are not supported");
+        }
     });
 
     let cpp_args = cpp_args.join(", ");

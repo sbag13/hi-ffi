@@ -4,7 +4,9 @@ use quote::ToTokens;
 
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::impl_block_wrapper::ImplBlockWrapper;
-use crate::wrapper::python::{ClassCode, arg_cast, set_extern_fn_resttype, type_hint};
+use crate::wrapper::python::{
+    ClassCode, arg_cast, set_extern_fn_resttype, type_hint_from_wrapper_type,
+};
 
 pub fn gen_methods_mod(impl_block: &ImplBlockWrapper) -> ClassCode {
     let class_name = impl_block.struct_name.to_string();
@@ -50,7 +52,11 @@ class {class_name}:"#
                 imports.insert("List".to_string(), "from typing import List".to_string());
             }
 
-            py_args_sig.push(format!("{}: {}", arg_name, type_hint(&arg.arg_type)));
+            py_args_sig.push(format!(
+                "{}: {}",
+                arg_name,
+                type_hint_from_wrapper_type(&arg.wrapper_type)
+            ));
 
             // For vector arguments, we need to store the wrapper object to prevent garbage collection
             if let crate::wrapper::WrapperType::Vec(_) = &arg.wrapper_type {
@@ -96,12 +102,9 @@ class {class_name}:"#
                 );
             }
 
-            ret_hint = format!(" -> {}", type_hint(&ret.return_type));
-            restype_set = set_extern_fn_resttype(&ret.return_type, extern_fn_name);
-            ret_line = format!(
-                "return {}",
-                crate::wrapper::python::result_cast(&ret.return_type, "result")
-            );
+            ret_hint = format!(" -> {}", type_hint_from_wrapper_type(&ret.wrapper_type));
+            restype_set = set_extern_fn_resttype(&ret.wrapper_type, extern_fn_name);
+            ret_line = crate::wrapper::python::result_cast_and_return(&ret.wrapper_type);
         }
 
         let recv_and_args = if method.is_static {

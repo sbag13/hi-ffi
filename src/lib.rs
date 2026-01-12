@@ -99,6 +99,7 @@ fn write_rust_code(wrapper: &Wrapper) {
     for reusable_wrapper in &wrapper.reusable_wrappers {
         let file_name = match reusable_wrapper {
             ReusableWrapper::Vec(inner) => format!("vec_{}.rs", inner.name()),
+            ReusableWrapper::Result(inner) => format!("result_{}.rs", inner.name()),
         };
         let full_file_path = rust_path.join(&file_name);
         if RUST_WRAPPER_FILE_GENERATED

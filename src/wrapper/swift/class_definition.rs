@@ -140,7 +140,7 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
                 .map(|g| map_primitive_setter_as_extern_fn(g, field_type)),
         ),
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Custom,
+            wrapper_type: FieldWrapperType::Custom(_),
             getter,
             setter,
             ..
@@ -280,7 +280,7 @@ fn gen_property(field: &FieldWrapper) -> String {
         ),
 
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Custom,
+            wrapper_type: FieldWrapperType::Custom(_),
             setter,
             getter,
             field_type,
@@ -318,6 +318,7 @@ fn gen_property(field: &FieldWrapper) -> String {
                 WrapperType::Bool => "bool".to_string(),
                 WrapperType::String => "String".to_string(),
                 WrapperType::Vec(_) => "Array".to_string(), // Nested vectors not supported yet
+                WrapperType::Result(_) => panic!("Vec of results not supported as property"),
             };
             (
                 getter

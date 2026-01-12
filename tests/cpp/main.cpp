@@ -10,6 +10,7 @@ int main()
     assert_functions();
     assert_vectors();
     assert_enums();
+    assert_results();
 
     std::cout << "All assertions passed!" << std::endl;
 

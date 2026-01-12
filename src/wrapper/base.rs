@@ -9,8 +9,89 @@ pub const RUST_STRING_DROP_FN_NAME: &str = "hiFfi__rust_string_drop";
 pub const RUST_STRING_DATA_FN_NAME: &str = "hiFfi__rust_string_data";
 pub const RUST_STRING_LEN_FN_NAME: &str = "hiFfi__rust_string_len";
 
+pub const RUST_ARC_DYN_ERR_DROP_FN_NAME: &str = "hiFfi__rust_arc_dyn_err_drop";
+pub const RUST_ARC_DYN_ERR_DESC_FN_NAME: &str = "hiFfi__rust_arc_dyn_err_desc";
+pub const RUST_ARC_DYN_ERR_SOURCE_FN_NAME: &str = "hiFfi__rust_arc_dyn_err_source";
+pub const RUST_ARC_DYN_ERR_CLONE_FN_NAME: &str = "hiFfi__rust_arc_dyn_err_clone";
+
+pub const RUST_REF_DYN_ERR_DROP_FN_NAME: &str = "hiFfi__rust_ref_dyn_err_drop";
+pub const RUST_REF_DYN_ERR_DESC_FN_NAME: &str = "hiFfi__rust_ref_dyn_err_desc";
+pub const RUST_REF_DYN_ERR_SOURCE_FN_NAME: &str = "hiFfi__rust_ref_dyn_err_source";
+
 pub fn rust_code_base() -> TokenStream2 {
     quote! {
+        #[doc(hidden)]
+        #[unsafe(export_name = #RUST_REF_DYN_ERR_DROP_FN_NAME)]
+        pub unsafe extern "C" fn rust_ref_dyn_err_drop(_self: *const &dyn std::error::Error) {
+            unsafe {
+                let _ = Box::from_raw(_self as *mut &dyn std::error::Error);
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(export_name = #RUST_REF_DYN_ERR_DESC_FN_NAME)]
+        pub unsafe extern "C" fn rust_ref_dyn_err_desc(_self: *const &dyn std::error::Error) -> *const String {
+            unsafe {
+                let err = &*(_self);
+                Box::into_raw(Box::new(err.to_string())) as _
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(export_name = #RUST_REF_DYN_ERR_SOURCE_FN_NAME)]
+        pub unsafe extern "C" fn rust_ref_dyn_err_source(_self: *const &dyn std::error::Error) -> *const std::ffi::c_void {
+            unsafe {
+                let err = &*(_self);
+                match err.source() {
+                    Some(source_err) => {
+                        Box::into_raw(Box::new(source_err.clone())) as *const std::ffi::c_void
+                    },
+                    None => std::ptr::null(),
+                }
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(export_name = #RUST_ARC_DYN_ERR_CLONE_FN_NAME)]
+        pub unsafe extern "C" fn rust_arc_dyn_err_clone(_self: *const std::sync::Arc<dyn std::error::Error>) -> *mut std::sync::Arc<dyn std::error::Error> {
+            unsafe {
+                let arc_err = &*(_self);
+                let arc_err_clone = std::sync::Arc::clone(arc_err);
+                Box::into_raw(Box::new(arc_err_clone))
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(export_name = #RUST_ARC_DYN_ERR_DROP_FN_NAME)]
+        pub unsafe extern "C" fn rust_arc_dyn_err_drop(_self: *mut std::sync::Arc<dyn std::error::Error>) {
+            unsafe {
+                let _ = Box::from_raw(_self);
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(export_name = #RUST_ARC_DYN_ERR_DESC_FN_NAME)]
+        pub unsafe extern "C" fn rust_arc_dyn_err_desc(_self: *const std::sync::Arc<dyn std::error::Error>) -> *const String {
+            unsafe {
+                let err = &*(_self);
+                Box::into_raw(Box::new(err.to_string())) as _
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(export_name = #RUST_ARC_DYN_ERR_SOURCE_FN_NAME)]
+        pub unsafe extern "C" fn rust_arc_dyn_err_source(_self: *const std::sync::Arc<dyn std::error::Error>) -> *const std::ffi::c_void {
+            unsafe {
+                let err = &*(_self);
+                match err.source() {
+                    Some(source_err) => {
+                        Box::into_raw(Box::new(source_err.clone())) as *const std::ffi::c_void
+                    },
+                    None => std::ptr::null(),
+                }
+            }
+        }
+
         #[repr(C)]
         pub struct FfiSlice {
             pub ptr: *const u8,

@@ -186,7 +186,7 @@ impl TestStruct {
 
 #[ffi]
 #[derive(Default, Clone, Serialize, Debug, PartialEq)]
-struct TestStruct2 {
+pub struct TestStruct2 {
     pub i32_field: i32,
 }
 
@@ -379,9 +379,150 @@ pub fn function_returning_vec_of_enums() -> Vec<TestStatus> {
 
 #[ffi]
 #[derive(Debug, Clone, Default)]
-pub(crate) struct StructWithVecs {
+pub struct StructWithVecs {
     pub vec_of_ints: Vec<i32>,
     pub vec_of_bools: Vec<bool>,
     pub vec_of_strings: Vec<String>,
     pub vec_of_structs: Vec<TestStruct2>,
+}
+
+#[derive(Debug)]
+pub struct StructError(EnumError);
+impl std::fmt::Display for StructError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "StructError: {}", self.0)
+    }
+}
+impl std::error::Error for StructError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
+#[derive(Debug)]
+pub struct SimpleError;
+impl std::fmt::Display for SimpleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SimpleError")
+    }
+}
+impl std::error::Error for SimpleError {}
+
+#[derive(Debug)]
+pub enum EnumError {
+    VariantOne,
+    VariantTwo(SimpleError),
+}
+impl std::fmt::Display for EnumError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EnumError::VariantOne => write!(f, "EnumError: VariantOne"),
+            EnumError::VariantTwo(_) => write!(f, "EnumError: VariantTwo"),
+        }
+    }
+}
+impl std::error::Error for EnumError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            EnumError::VariantOne => None,
+            EnumError::VariantTwo(ctx) => Some(ctx),
+        }
+    }
+}
+
+#[ffi]
+pub fn function_with_primitive_result(error: bool) -> Result<i32, StructError> {
+    if error {
+        Err(StructError(EnumError::VariantTwo(SimpleError)))
+    } else {
+        Ok(123)
+    }
+}
+
+#[ffi]
+pub fn function_with_bool_result(error: bool) -> Result<bool, SimpleError> {
+    if error { Err(SimpleError) } else { Ok(true) }
+}
+
+#[ffi]
+pub fn function_with_string_result(error: bool) -> Result<String, EnumError> {
+    if error {
+        Err(EnumError::VariantOne)
+    } else {
+        Ok("No error".to_string())
+    }
+}
+
+#[ffi]
+pub fn function_with_struct_result(error: bool) -> Result<TestStruct2, StructError> {
+    if error {
+        Err(StructError(EnumError::VariantTwo(SimpleError)))
+    } else {
+        Ok(TestStruct2 { i32_field: 256 })
+    }
+}
+
+#[ffi]
+pub fn function_with_enum_result(error: bool) -> Result<TestStatus, EnumError> {
+    if error {
+        Err(EnumError::VariantOne)
+    } else {
+        Ok(TestStatus::Pending)
+    }
+}
+
+#[ffi]
+pub fn function_with_vec_int_result(error: bool) -> Result<Vec<i32>, StructError> {
+    if error {
+        Err(StructError(EnumError::VariantTwo(SimpleError)))
+    } else {
+        Ok(vec![10, 20, 30])
+    }
+}
+
+#[ffi]
+pub fn function_with_vec_bool_result(error: bool) -> Result<Vec<bool>, SimpleError> {
+    if error {
+        Err(SimpleError)
+    } else {
+        Ok(vec![true, false, false])
+    }
+}
+
+#[ffi]
+pub fn function_with_vec_string_result(error: bool) -> Result<Vec<String>, EnumError> {
+    if error {
+        Err(EnumError::VariantOne)
+    } else {
+        Ok(vec![
+            "One".to_string(),
+            "Two".to_string(),
+            "Three".to_string(),
+        ])
+    }
+}
+
+#[ffi]
+pub fn function_with_vec_struct_result(error: bool) -> Result<Vec<TestStruct2>, StructError> {
+    if error {
+        Err(StructError(EnumError::VariantTwo(SimpleError)))
+    } else {
+        Ok(vec![
+            TestStruct2 { i32_field: 512 },
+            TestStruct2 { i32_field: 1024 },
+        ])
+    }
+}
+
+#[ffi]
+pub fn function_with_vec_enum_result(error: bool) -> Result<Vec<TestStatus>, EnumError> {
+    if error {
+        Err(EnumError::VariantOne)
+    } else {
+        Ok(vec![
+            TestStatus::Pending,
+            TestStatus::Active,
+            TestStatus::Inactive,
+        ])
+    }
 }

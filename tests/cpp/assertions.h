@@ -6,4 +6,4 @@ void assert_struct_methods_with_vectors();
 void assert_functions();
 void assert_vectors();
 void assert_enums();
-
+void assert_results();

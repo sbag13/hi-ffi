@@ -25,19 +25,127 @@ pub mod python;
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub enum ReusableWrapper {
     Vec(WrapperType),
+    Result(WrapperType),
 }
 
 impl From<&ReusableWrapper> for TokenStream2 {
     fn from(wrapper: &ReusableWrapper) -> TokenStream2 {
         match wrapper {
             ReusableWrapper::Vec(inner) => generate_vec_wrapper(inner),
+            ReusableWrapper::Result(inner) => generate_result_wrapper(inner),
+        }
+    }
+}
+
+fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
+    let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_result", inner.name());
+    let wrapper_fn_name_drop = match inner {
+        WrapperType::Vec(vec_inner) => format_ident!("drop_{}_vec_result", vec_inner.name()),
+        _ => format_ident!("drop_{}_result", inner.name()),
+    };
+
+    let unwrap_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_result", inner.name());
+    let wrapper_fn_name_unwrap = format_ident!("unwrap_{}_result", inner.name());
+
+    let unwrap_err_ext_fn_name = format!(
+        "{EXPORTED_SYMBOLS_PREFIX}__unwrap_err_{}_result",
+        inner.name()
+    );
+    let wrapper_fn_name_unwrap_err = format_ident!("unwrap_err_{}_result", inner.name());
+
+    let is_err_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_err_{}_result", inner.name());
+    let wrapper_fn_name_is_err = format_ident!("is_err_{}_result", inner.name());
+
+    let inner_type: TokenStream2 = match inner {
+        WrapperType::Vec(vec_inner) => {
+            let vec_inner_name: TokenStream2 = vec_inner.name().parse().unwrap();
+            quote! {Vec<#vec_inner_name>}
+        }
+        _ => inner.name().parse().unwrap(),
+    };
+
+    let unwrap_clone_expr = match &inner {
+        WrapperType::String | WrapperType::Struct(_) | WrapperType::Vec(_) => quote! {
+            Box::into_raw(Box::new(value.clone()))
+        },
+        WrapperType::Bool
+        | WrapperType::Enum(_)
+        | WrapperType::FloatingPointNumber(_)
+        | WrapperType::IntegerNumber(_) => quote! {
+            value.clone()
+        },
+        WrapperType::Result(_) => {
+            panic!("Nested Result types are not supported")
+        }
+    };
+
+    let clone_ret_type: TokenStream2 = match &inner {
+        WrapperType::String => "*mut std::string::String".parse().unwrap(),
+        WrapperType::Struct(name) => format!("*mut {name}").parse().unwrap(),
+        WrapperType::Vec(vec_inner) => {
+            let vec_inner_name = vec_inner.name();
+            format!("*mut Vec<{}>", vec_inner_name).parse().unwrap()
+        }
+        _ => inner.name().parse().unwrap(),
+    };
+
+    quote! {
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #drop_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_drop(_self: *mut std::result::Result<#inner_type, std::sync::Arc<dyn std::error::Error>>) {
+            unsafe {
+                if !_self.is_null() {
+                    let _ = Box::from_raw(_self);
+                }
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #unwrap_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_unwrap(_self: *mut std::result::Result<#inner_type, std::sync::Arc<dyn std::error::Error>>) -> #clone_ret_type {
+            unsafe {
+                match &* _self {
+                    Ok(value) => {
+                        #unwrap_clone_expr
+                    },
+                    Err(_) => panic!("Called unwrap on an Err value"),
+                }
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #unwrap_err_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_unwrap_err(_self: *mut std::result::Result<#inner_type, std::sync::Arc<dyn std::error::Error>>) -> *mut std::sync::Arc<dyn std::error::Error> {
+            unsafe {
+                match &* _self {
+                    Ok(_) => panic!("Called unwrap_err on an Ok value"),
+                    Err(err) => {
+                        Box::into_raw(Box::new((*err).clone()))
+                    },
+                }
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #is_err_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_is_err(_self: *mut std::result::Result<#inner_type, std::sync::Arc<dyn std::error::Error>>) -> bool {
+            unsafe {
+                match &* _self {
+                    Ok(_) => false,
+                    Err(_) => true,
+                }
+            }
         }
     }
 }
 
 fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
     let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_vec", inner.name());
-    let wrapper_fn_name = format_ident!("drop_{}_vec", inner.name());
+    let wrapper_fn_name_drop = format_ident!("drop_{}_vec", inner.name());
 
     let with_capacity_ext_fn_name = format!(
         "{EXPORTED_SYMBOLS_PREFIX}__with_capacity_{}_vec",
@@ -63,6 +171,9 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::String => "ptr: *const i8, _len: usize".parse().unwrap(),
         WrapperType::Struct(name) => format!("value: *mut {name}").parse().unwrap(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Result(_) => {
+            panic!("Vec of Result type not supported yet!")
+        }
         WrapperType::Enum(name) => format!("value: {name}").parse().unwrap(),
     };
     let value_cast = match inner {
@@ -89,6 +200,9 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::Struct(name) => format!("*mut {name}").parse().unwrap(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
         WrapperType::Enum(name) => name.parse().unwrap(),
+        WrapperType::Result(_) => {
+            panic!("Vec of Result type not supported yet!")
+        }
     };
 
     let get_body: TokenStream2 = match inner {
@@ -105,13 +219,16 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::Enum(_) => quote! {
             (&*_self)[index]
         },
+        WrapperType::Result(_) => {
+            panic!("Vec of Result type not supported yet!")
+        }
     };
 
     quote! {
         #[doc(hidden)]
         #[unsafe(no_mangle)]
         #[unsafe(export_name = #drop_ext_fn_name)]
-        pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #vec_type) {
+        pub unsafe extern "C" fn #wrapper_fn_name_drop(_self: *mut #vec_type) {
             unsafe {
                 if !_self.is_null() {
                     let _ = Box::from_raw(_self);

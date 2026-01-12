@@ -45,7 +45,7 @@ fn fields_wrappers(item_struct: &ItemStruct) -> Vec<FieldWrapper> {
                         "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64"
                         | "u128" | "f32" | "f64" | "bool" => FieldWrapperType::Primitive,
                         "String" => FieldWrapperType::String,
-                        _custom_type => FieldWrapperType::Custom,
+                        _custom_type => FieldWrapperType::Custom(ident.to_string()),
                     };
 
                     FieldWrapper {

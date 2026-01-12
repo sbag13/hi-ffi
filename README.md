@@ -53,9 +53,18 @@ struct Person {
     _internal_id: u64,
 }
 
+#[derive(Debug)]
+pub struct SimpleError;
+impl std::fmt::Display for SimpleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SimpleError")
+    }
+}
+impl std::error::Error for SimpleError {}
+
 #[ffi]
-fn greet(name: String) -> String {
-    format!("Hello, {}!", name)
+fn greet(name: String) -> Result<String, SimpleError> {
+    Ok(format!("Hello, {}!", name))
 }
 ```
 
@@ -75,14 +84,15 @@ These examples demonstrate how to use the generated bindings in real application
 
 ### Structs
 
-| Feature                   | C++ | Swift | Python |
-| ------------------------- | --- | ----- | ------ |
-| Primitive getters/setters | ✅  | ✅    | ✅     |
-| String getters/setters    | ✅  | ✅    | ✅     |
-| Struct getters/setters    | ✅  | ✅    | ✅     |
-| Vec getters/setters       | ✅  | ✅    | ✅     |
-| Default constructor       | ✅  | ✅    | ✅     |
-| PartialEq                 | ❌  | ❌    | ❌     |
+| Feature                     | C++ | Swift | Python |
+| --------------------------- | --- | ----- | ------ |
+| Primitive getters/setters   | ✅  | ✅    | ✅     |
+| String getters/setters      | ✅  | ✅    | ✅     |
+| Struct getters/setters      | ✅  | ✅    | ✅     |
+| Vec getters/setters         | ✅  | ✅    | ✅     |
+| C-like Enum getters/setters | ❌  | ❌    | ❌     |
+| Default constructor         | ✅  | ✅    | ✅     |
+| PartialEq                   | ❌  | ❌    | ❌     |
 
 ### Methods
 
@@ -139,6 +149,27 @@ These examples demonstrate how to use the generated bindings in real application
 | Single element variants | ❌  | ❌    | ❌     |
 | Tuple variants          | ❌  | ❌    | ❌     |
 
+### Results
+
+| Feature                  | C++ | Swift | Python |
+| ------------------------ | --- | ----- | ------ |
+| Fn primitive Result      | ✅  | ✅    | ✅     |
+| Fn struct Result         | ✅  | ✅    | ✅     |
+| Fn string Result         | ✅  | ✅    | ✅     |
+| Fn vec results           | ✅  | ✅    | ✅     |
+| Fn enum Result           | ✅  | ✅    | ✅     |
+| Methods primitive Result | ❌  | ❌    | ❌     |
+| Methods struct Result    | ❌  | ❌    | ❌     |
+| Methods string Result    | ❌  | ❌    | ❌     |
+| Methods vec results      | ❌  | ❌    | ❌     |
+| Methods enum Result      | ❌  | ❌    | ❌     |
+
+### Option
+
+| Feature | C++ | Swift | Python |
+| ------- | --- | ----- | ------ |
+| -       | ❌  | ❌    | ❌     |
+
 ## Architecture
 
 `hi-ffi` is built with a modular architecture:
@@ -174,9 +205,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 ## Roadmap
 
 - [ ] Doc strings
-- [ ] Vectors
-- [ ] Enums
-- [ ] Errors
+- [ ] Options
 - [ ] Traits
 - [ ] Async
 

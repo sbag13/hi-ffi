@@ -239,6 +239,60 @@ func assert_struct_vector_fields() {
     assert(vecOfStructs2[1].i32_field == 567, "Second struct should have i32_field 567")
 }
 
+func assert_results() {
+    print("assert_results")
+
+    do {
+        let i32_ok = try function_with_primitive_result(false)
+        assert(i32_ok == 123, "function_with_primitive_result should return 123 on success")
+    } catch {
+        assert(false, "function_with_primitive_result should not throw on success")
+    }
+
+    do {
+        let _ = try function_with_primitive_result(true)
+        assert(false)
+    } catch let rustError as RustError {
+        assert(rustError.description() == "StructError: EnumError: VariantTwo")
+        let source = rustError.source()
+        assert(source?.description() == "EnumError: VariantTwo")
+        let source2 = source?.source()
+        assert(source2?.description() == "SimpleError")
+        assert(source2?.source() == nil)
+    } catch {
+        assert(false, "function_with_primitive_result threw unexpected error type")
+    }
+
+    do {
+        let bool_ok = try function_with_bool_result(false)
+        assert(bool_ok)
+        let string_ok = try function_with_string_result(false)
+        assert(string_ok == "No error")
+        let struct_ok = try function_with_struct_result(false)
+        assert(struct_ok.i32_field == 256)
+        let status_ok = try function_with_enum_result(false)
+        assert(status_ok == TestStatus.Pending)
+        let vec_int_ok = try function_with_vec_int_result(false)
+        let expected_vec: [i32] = [10, 20, 30]
+        assert(vec_int_ok == expected_vec)
+        let vec_bool_ok = try function_with_vec_bool_result(false)
+        let expected_vec_bool: [bool] = [true, false, false]
+        assert(vec_bool_ok == expected_vec_bool)
+        let vec_string_ok = try function_with_vec_string_result(false)
+        let expected_vec_string: [String] = ["One", "Two", "Three"]
+        assert(vec_string_ok == expected_vec_string)
+        let vec_struct_ok = try function_with_vec_struct_result(false)
+        assert(vec_struct_ok.count == 2)
+        assert(vec_struct_ok[0].i32_field == 512)
+        assert(vec_struct_ok[1].i32_field == 1024)
+        let vec_enum_ok = try function_with_vec_enum_result(false)
+        let expected_vec_enum: [TestStatus] = [TestStatus.Pending, TestStatus.Active, TestStatus.Inactive]
+        assert(vec_enum_ok == expected_vec_enum)
+    } catch {
+        assert(false)
+    }
+}
+
 func run() {
     assert_struct_basics()
     assert_functions()
@@ -248,6 +302,7 @@ func run() {
     assert_vec_methods()
     assert_struct_vector_fields()
     assert_enums()
+    assert_results()
     print("All assertions passed.")
 }
 

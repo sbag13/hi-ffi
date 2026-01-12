@@ -1,11 +1,15 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 
 use crate::ReusableWrapper;
+use crate::prepend_each_line_with_n_tabs;
 use crate::python::PYTHON_LIB_GETTER_NAME;
+use crate::wrapper::FieldWrapperType;
 use crate::wrapper::WrapperType;
 use quote::ToTokens;
 use syn::Type;
 
+use crate::EXPORTED_SYMBOLS_PREFIX;
 use crate::Wrapper;
 use crate::wrapper::ParsedWrapper;
 
@@ -18,8 +22,60 @@ impl ReusableWrapper {
     pub fn python(&self) -> String {
         match self {
             ReusableWrapper::Vec(inner) => gen_vec_wrapper_python(inner),
+            ReusableWrapper::Result(inner) => gen_result_wrapper_python(inner),
         }
     }
+}
+
+pub fn gen_result_wrapper_python(inner: &WrapperType) -> String {
+    let inner_name = inner.name();
+    let inner_type_hint = type_hint_from_wrapper_type(inner);
+    let inner_import = inner_import(inner);
+    let is_err_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_err_{inner_name}_result");
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_result", inner_name);
+    let unwrap_ext_call = format!("{PYTHON_LIB_GETTER_NAME}().{unwrap_ext_name}(self._ptr)");
+
+    let unwrap_val_cast = match inner {
+        WrapperType::String => format!("result = RustString({unwrap_ext_call}).py_str();"),
+        WrapperType::Struct(struct_name) => {
+            format!("result = {struct_name}({unwrap_ext_call});")
+        }
+        WrapperType::Vec(vec_inner) => {
+            let vec_inner_name = vec_inner.name();
+            format!("result = {vec_inner_name}Vec({unwrap_ext_call}).to_list()")
+        }
+        WrapperType::Bool => format!("result = ctypes.c_byte({unwrap_ext_call}).value != 0"),
+        WrapperType::Enum(inner) => {
+            format!("result = {inner}.from_ffi({unwrap_ext_call})")
+        }
+        _ => format!("result = {unwrap_ext_call}"),
+    };
+    let unwrap_val_cast = prepend_each_line_with_n_tabs(&unwrap_val_cast, 2);
+
+    format!(
+        r#"
+from .global_state import get_ffi_lib
+import ctypes
+{inner_import}
+
+class {inner_name}Result:
+    def __init__(self, ptr):
+        self._ptr = ptr
+
+    def is_err(self) -> bool:
+        return ctypes.c_byte({PYTHON_LIB_GETTER_NAME}().{is_err_ext_fn_name}(self._ptr)).value != 0
+
+    def unwrap(self) -> {inner_type_hint}:
+{unwrap_val_cast}
+        return result
+
+    def unwrap_err(self):
+        return {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}__unwrap_err_{inner_name}_result(self._ptr)
+    
+    def __del__(self):
+        {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_result(self._ptr)
+"#
+    )
 }
 
 pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
@@ -46,6 +102,9 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
         WrapperType::Struct(_) => "value.raw_ptr()".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
         WrapperType::Enum(_) => "value.to_ffi()".to_string(),
+        WrapperType::Result(_) => {
+            panic!("Result types are not supported in Vec wrappers for python");
+        }
     };
 
     // Generate result casting for get function
@@ -59,6 +118,9 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
         WrapperType::Enum(_) => {
             format!("{}.from_ffi(result)", type_name)
+        }
+        WrapperType::Result(_) => {
+            panic!("Result types are not supported in Vec wrappers for python");
         }
     };
 
@@ -102,14 +164,12 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
                 get_ext_fn_name
             )
         }
+        WrapperType::Result(_) => {
+            panic!("Result types are not supported in Vec wrappers for python");
+        }
     };
 
-    let inner_import = match inner {
-        WrapperType::Struct(name) => format!("from .{} import {}", name, name),
-        WrapperType::String => "from .global_state import RustString".to_string(),
-        WrapperType::Enum(name) => format!("from .{} import {}", name, name),
-        _ => String::new(),
-    };
+    let inner_import = inner_import(inner);
 
     format!(
         r#"
@@ -165,6 +225,30 @@ class {type_name}Vec:
     )
 }
 
+fn inner_import(inner: &WrapperType) -> String {
+    match inner {
+        WrapperType::Struct(name) => format!("from .{} import {}", name, name),
+        WrapperType::String => "from .global_state import RustString".to_string(),
+        WrapperType::Enum(name) => format!("from .{} import {}", name, name),
+        WrapperType::Vec(inner) => {
+            let inner_name = inner.name();
+
+            let inner_import = match inner.deref() {
+                WrapperType::Struct(_) => inner_import(inner),
+                WrapperType::Enum(_) => inner_import(inner),
+                _ => String::new(),
+            };
+
+            format!(
+                "{inner_import}
+from .vec_{inner_name} import {inner_name}Vec
+from typing import List"
+            )
+        }
+        _ => String::new(),
+    }
+}
+
 pub struct PythonFiles {
     pub fn_code: Option<FunctionCode>,
     pub class_mod: Option<ClassCode>,
@@ -206,32 +290,6 @@ impl Wrapper {
     }
 }
 
-fn type_hint(ty: &syn::Type) -> String {
-    match ty {
-        syn::Type::Path(type_path) => {
-            let segment = type_path.path.segments.last().unwrap();
-            match segment.ident.to_string().as_str() {
-                "i32" | "i64" | "u32" | "u64" => "int".into(),
-                "f32" | "f64" => "float".into(),
-                "bool" => "bool".into(),
-                "String" => "str".into(),
-                _ => {
-                    // Check if it's a Vec type
-                    if segment.ident.to_string().starts_with("Vec")
-                        && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
-                        && let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
-                    {
-                        let inner_hint = type_hint(inner_type);
-                        return format!("List[{}]", inner_hint);
-                    }
-                    segment.ident.to_string()
-                }
-            }
-        }
-        _ => unimplemented!("Type hint not implemented for this type"),
-    }
-}
-
 fn type_hint_from_wrapper_type(wrapper_type: &crate::wrapper::WrapperType) -> String {
     match wrapper_type {
         WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) => "int".into(),
@@ -240,38 +298,49 @@ fn type_hint_from_wrapper_type(wrapper_type: &crate::wrapper::WrapperType) -> St
         WrapperType::Struct(name) => name.to_string(),
         WrapperType::Vec(inner) => format!("List[{}]", type_hint_from_wrapper_type(inner)),
         WrapperType::Enum(name) => name.to_string(),
+        WrapperType::Result(inner) => type_hint_from_wrapper_type(inner),
     }
 }
 
-fn result_cast(ty: &Type, result_var_name: &str) -> String {
-    match ty {
-        syn::Type::Path(type_path) => {
-            let segment = type_path.path.segments.last().unwrap();
-            match segment.ident.to_string().as_str() {
-                "i32" | "i64" | "u32" | "u64" | "f32" | "f64" => result_var_name.to_string(),
-                "bool" => format!("ctypes.c_byte({result_var_name}).value != 0"),
-                "String" => format!("RustString({result_var_name}).py_str()"),
-                _ => {
-                    // Check if it's a Vec type
-                    if segment.ident.to_string().starts_with("Vec")
-                        && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
-                        && let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
-                    {
-                        // Use vector wrapper to convert Rust vector pointer to Python list
-                        let inner_type_str = inner_type.to_token_stream().to_string();
-                        return format!(r#"{inner_type_str}Vec(result).to_list()"#);
-                    }
-                    // Check if it's an enum by looking for registered enum types
-                    let type_name = ty.to_token_stream().to_string();
-                    if crate::wrapper::function_wrapper::is_enum_type(&type_name) {
-                        format!("{}.from_ffi({})", type_name, result_var_name)
-                    } else {
-                        format!("{}({})", ty.to_token_stream(), result_var_name)
-                    }
-                }
-            }
+fn type_hint_from_field_wrapper_type(wrapper_type: &FieldWrapperType) -> String {
+    match wrapper_type {
+        FieldWrapperType::Primitive => "int".into(),
+        FieldWrapperType::String => "str".into(),
+        FieldWrapperType::Custom(inner) => inner.into(), // Placeholder
+        FieldWrapperType::Vec(inner) => {
+            format!("List[{}]", type_hint_from_wrapper_type(inner))
         }
-        _ => unimplemented!("Result cast not implemented for this type"),
+    }
+}
+
+fn result_cast_and_return(wrapper: &WrapperType) -> String {
+    match wrapper {
+        WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) => {
+            "return result".to_string()
+        }
+        WrapperType::Bool => "return ctypes.c_byte(result).value != 0".to_string(),
+        WrapperType::String => "return RustString(result).py_str()".to_string(),
+        WrapperType::Vec(inner_vec) => {
+            // Use vector wrapper to convert Rust vector pointer to Python list
+            let inner_type_str = inner_vec.name();
+            format!(r#"return {inner_type_str}Vec(result).to_list()"#)
+        }
+        WrapperType::Enum(name) => {
+            format!("return {}.from_ffi(result)", name)
+        }
+        WrapperType::Struct(ty) => {
+            format!("return {}(result)", ty)
+        }
+        WrapperType::Result(inner) => {
+            let inner_name = inner.name();
+            format!(
+                r#"rust_result = {inner_name}Result(result)
+if rust_result.is_err():
+    raise RustException(rust_result.unwrap_err())
+else:
+    return rust_result.unwrap()"#,
+            )
+        }
     }
 }
 
@@ -311,40 +380,67 @@ fn arg_cast(ty: &Type, arg_name: &str) -> String {
     }
 }
 
-fn set_extern_fn_resttype(ty: &Type, extern_fn_name: &str) -> String {
-    match ty {
-        syn::Type::Path(type_path) => {
-            let segment = type_path.path.segments.last().unwrap();
-            match segment.ident.to_string().as_str() {
-                "f32" => {
-                    format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_float")
-                }
-                "f64" => {
-                    format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_double")
-                }
-                "String" => {
-                    format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p")
-                }
-                _ => {
-                    // Check if it's a Vec type
-                    if segment.ident.to_string().starts_with("Vec") {
-                        format!(
-                            "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p"
-                        )
-                    } else {
-                        // Check if it's an enum by looking for registered enum types
-                        let type_name = ty.to_token_stream().to_string();
-                        if crate::wrapper::function_wrapper::is_enum_type(&type_name) {
-                            format!(
-                                "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int"
-                            )
-                        } else {
-                            "".to_string()
-                        }
-                    }
-                }
+fn set_extern_fn_resttype(wrapper: &WrapperType, extern_fn_name: &str) -> String {
+    match wrapper {
+        WrapperType::FloatingPointNumber(floating_type) => {
+            if floating_type == "f32" {
+                format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_float")
+            } else {
+                format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_double")
             }
         }
-        _ => unimplemented!("Extern fn resttype not implemented for this type"),
+        WrapperType::String
+        | WrapperType::Vec(_)
+        | WrapperType::Result(_)
+        | WrapperType::Struct(_) => {
+            format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p")
+        }
+        WrapperType::Enum(_name) => {
+            format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int")
+        }
+        WrapperType::Bool | WrapperType::IntegerNumber(_) => {
+            format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int")
+        }
+    }
+}
+
+fn set_extern_fn_resttype_field(
+    ty: &Type,
+    wrapper: &FieldWrapperType,
+    extern_fn_name: &str,
+) -> String {
+    match wrapper {
+        FieldWrapperType::Primitive => match ty {
+            syn::Type::Path(type_path) => {
+                let segment = type_path.path.segments.last().unwrap();
+                match segment.ident.to_string().as_str() {
+                    "i32" | "i64" | "u32" | "u64" => {
+                        format!(
+                            "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int"
+                        )
+                    }
+                    "f32" => {
+                        format!(
+                            "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_float"
+                        )
+                    }
+                    "f64" => {
+                        format!(
+                            "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_double"
+                        )
+                    }
+                    "bool" => {
+                        format!(
+                            "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int"
+                        )
+                    }
+                    _ => panic!("Unsupported primitive type for field"),
+                }
+            }
+            _ => panic!("Unsupported type for primitive field"),
+        },
+        FieldWrapperType::String | FieldWrapperType::Custom(_) | FieldWrapperType::Vec(_) => {
+            format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p")
+        }
     }
 }

@@ -1,5 +1,6 @@
 rm -rf CFfiModule
 rm -rf FfiModule
+rm -rf ModuleTest/.build
 
 cp -r ../generated_code/swift/CFfiModule/ ./ && \
 cp -r ../generated_code/swift/FfiModule/ ./ && \

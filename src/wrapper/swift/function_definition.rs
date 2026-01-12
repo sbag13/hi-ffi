@@ -19,7 +19,11 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
             }
             FunctionArgWrapper {
                 arg_name,
-                wrapper_type: WrapperType::Struct(_) | WrapperType::String | WrapperType::Vec(_),
+                wrapper_type:
+                    WrapperType::Struct(_)
+                    | WrapperType::String
+                    | WrapperType::Vec(_)
+                    | WrapperType::Result(_),
                 ..
             } => {
                 format!("void* {arg_name}")
@@ -111,6 +115,7 @@ pub fn map_args<'a>(
                     WrapperType::String => "[String]".to_string(),
                     WrapperType::Struct(name) => format!("[{}]", name),
                     WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+                    WrapperType::Result(_) => panic!("Vec of results not supported"),
                     WrapperType::Enum(name) => format!("[{}]", name),
                 };
                 args_signatures.push(format!("_ {arg_name}: {swift_type}"));
@@ -130,6 +135,11 @@ pub fn map_args<'a>(
                 args_names.push(format!("CFfiModule.{arg_type}(rawValue: UInt32({arg_name}.rawValue))", arg_type = arg_type.to_token_stream())); // Convert to C enum type with UInt32
                 args_casts.push(String::new()); // No casting needed for enums
             },
+
+            FunctionArgWrapper {
+                wrapper_type: WrapperType::Result(_),
+                ..
+            } => panic!("Result type not supported as function argument"),
 
             // No other variants
         });
@@ -256,6 +266,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 WrapperType::String => "[String]".to_string(),
                 WrapperType::Struct(name) => format!("[{}]", name),
                 WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+                WrapperType::Result(_) => panic!("Vec of results not supported"),
                 WrapperType::Enum(name) => format!("[{}]", name),
             };
             ReturnTypes {
@@ -279,6 +290,43 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 return_type.to_token_stream()
             )),
         },
+
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Result(inner),
+            ..
+        }) => {
+            let inner_name = inner.name();
+            let swift_type = match &**inner {
+                WrapperType::IntegerNumber(_)
+                | WrapperType::FloatingPointNumber(_)
+                | WrapperType::Bool => {
+                    inner.name().to_string()
+                }
+                WrapperType::String => "String".to_string(),
+                WrapperType::Struct(name) => name.to_string(),
+                WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
+                WrapperType::Enum(name) => name.to_string(),
+                WrapperType::Result(_) => panic!("Nested Results not supported"),
+            };
+            ReturnTypes {
+                return_type_sig: Some(format!(" throws -> {swift_type}")),
+                cpp_return_type: match &**inner {
+                    WrapperType::Result(_) => panic!("Nested Results not supported"),
+                    _ => "void*".to_string(),
+                },
+                result_cast: Some(format!(
+                    "
+let wrapped_rust_result = Rust{inner_name}Result(result!)
+let casted_result: {swift_type}
+if wrapped_rust_result.isErr() {{
+    throw RustError(wrapped_rust_result.unwrapErr())
+}} else {{
+    casted_result = wrapped_rust_result.unwrap()
+}}
+"
+                )),
+            }
+        }
 
         None => ReturnTypes {
             return_type_sig: None,

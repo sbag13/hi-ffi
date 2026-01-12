@@ -1,8 +1,10 @@
+use core::panic;
 use std::collections::HashMap;
 
+use crate::prepend_each_line_with_n_tabs;
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::python::{
-    FunctionCode, result_cast, set_extern_fn_resttype, type_hint, type_hint_from_wrapper_type,
+    FunctionCode, result_cast_and_return, set_extern_fn_resttype, type_hint_from_wrapper_type,
 };
 use crate::wrapper::{FunctionWrapper, WrapperType};
 use quote::ToTokens;
@@ -21,7 +23,7 @@ pub fn gen_function(function: &FunctionWrapper) -> FunctionCode {
     {set_restype}
     {arg_casts}
     result = {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}({call_args_list})
-    {return_expression}
+{return_expression}
 "#
     );
 
@@ -33,13 +35,18 @@ pub fn gen_function(function: &FunctionWrapper) -> FunctionCode {
 fn return_expression(function: &FunctionWrapper) -> (String, String, String) {
     match &function.return_wrapper {
         Some(return_wrapper) => {
-            let type_hint_str = format!(" -> {}", type_hint(&return_wrapper.return_type));
-            let ret_expt = format!(
-                "return {}",
-                result_cast(&return_wrapper.return_type, "result")
+            let type_hint_str = format!(
+                " -> {}",
+                type_hint_from_wrapper_type(&return_wrapper.wrapper_type)
             );
-            let set_restype =
-                set_extern_fn_resttype(&return_wrapper.return_type, &function.extern_function_name);
+            let ret_expt = prepend_each_line_with_n_tabs(
+                &result_cast_and_return(&return_wrapper.wrapper_type),
+                1,
+            );
+            let set_restype = set_extern_fn_resttype(
+                &return_wrapper.wrapper_type,
+                &function.extern_function_name,
+            );
             (type_hint_str, ret_expt, set_restype)
         }
         None => ("".to_string(), "".to_string(), "".to_string()),
@@ -91,6 +98,10 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
                     casts.push(cast_line);
                     call_list.push(format!("{arg_name}_ffi"));
                 }
+
+                WrapperType::Result(_) => {
+                    panic!("Result types are not supported as function arguments in python");
+                }
             }
             (casts, call_list)
         },
@@ -133,13 +144,27 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
         },
     );
 
-    if let Some(return_wrapper) = &function.return_wrapper
-        && let WrapperType::Vec(inner) = &return_wrapper.wrapper_type
-    {
-        imports.insert(
-            format!("{}Vec", inner.name()),
-            format!("from .vec_{} import {}Vec", inner.name(), inner.name()),
-        );
+    if let Some(return_wrapper) = &function.return_wrapper {
+        match &return_wrapper.wrapper_type {
+            WrapperType::Vec(inner) => {
+                imports.insert(
+                    format!("{}Vec", inner.name()),
+                    format!("from .vec_{} import {}Vec", inner.name(), inner.name()),
+                );
+            }
+            WrapperType::Result(inner) => {
+                let inner_type_name = inner.name();
+                imports.insert(
+                    format!("{inner_type_name}Result"),
+                    format!("from .result_{inner_type_name} import {inner_type_name}Result"),
+                );
+                imports.insert(
+                    "RustException".to_string(),
+                    "from .global_state import RustException".to_string(),
+                );
+            }
+            _ => {}
+        }
     }
 
     imports
@@ -178,6 +203,9 @@ fn arg_receiver(arg_wrapper: &crate::wrapper::FunctionArgWrapper) -> String {
                 arg_wrapper.arg_name,
                 arg_wrapper.arg_type.to_token_stream()
             )
+        }
+        WrapperType::Result(_) => {
+            panic!("Result types are not supported as function arguments in python");
         }
     }
 }

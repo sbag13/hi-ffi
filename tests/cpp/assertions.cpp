@@ -26,8 +26,19 @@
 #include "assert_active.h"
 #include "assert_inactive.h"
 #include "StructWithVecs.h"
+#include "function_with_primitive_result.h"
+#include "function_with_bool_result.h"
+#include "function_with_string_result.h"
+#include "function_with_struct_result.h"
+#include "function_with_enum_result.h"
+#include "function_with_vec_int_result.h"
+#include "function_with_vec_bool_result.h"
+#include "function_with_vec_string_result.h"
+#include "function_with_vec_struct_result.h"
+#include "function_with_vec_enum_result.h"
 #include <iostream>
 #include <cassert>
+#include <cstring>
 
 void assert_vectors()
 {
@@ -75,7 +86,8 @@ void assert_vectors()
     assert(returned_enums.size() == 4);
     std::vector<TestStatus> expected_enums = {TestStatus::Pending, TestStatus::Active, TestStatus::Inactive, TestStatus::Active};
     assert(returned_enums.size() == expected_enums.size());
-    for (size_t i = 0; i < returned_enums.size(); ++i) {
+    for (size_t i = 0; i < returned_enums.size(); ++i)
+    {
         assert(returned_enums[i] == expected_enums[i]);
     }
 }
@@ -194,14 +206,14 @@ void assert_struct_methods_with_vectors()
     std::cout << "assert_struct_methods_with_vectors" << std::endl;
 
     auto test_struct = TestStruct();
-    
+
     // Test instance methods with vectors
     std::vector<i32> vec_primitives = {1, 2, 3, 4, 5};
     test_struct.public_method_taking_vec_of_primitives(vec_primitives);
-    
+
     std::vector<std::string> vec_strings = {"Hello", "World"};
     test_struct.public_method_taking_vec_of_strings(vec_strings);
-    
+
     std::vector<TestStruct2> vec_structs;
     auto s1 = TestStruct2();
     s1.set_i32_field(42);
@@ -210,14 +222,14 @@ void assert_struct_methods_with_vectors()
     vec_structs.push_back(s1);
     vec_structs.push_back(s2);
     test_struct.public_method_taking_vec_of_structs(vec_structs);
-    
+
     // Test static methods with vectors
     std::vector<i32> static_vec_primitives = {6, 7, 8, 9, 10};
     TestStruct::static_method_taking_vec_of_primitives(static_vec_primitives);
-    
+
     std::vector<std::string> static_vec_strings = {"Static", "Method"};
     TestStruct::static_method_taking_vec_of_strings(static_vec_strings);
-    
+
     std::vector<TestStruct2> static_vec_structs;
     auto s3 = TestStruct2();
     s3.set_i32_field(100);
@@ -226,30 +238,30 @@ void assert_struct_methods_with_vectors()
     static_vec_structs.push_back(s3);
     static_vec_structs.push_back(s4);
     TestStruct::static_method_taking_vec_of_structs(static_vec_structs);
-    
+
     // Test instance methods returning vectors
     auto returned_primitives = test_struct.public_method_returning_vec_of_primitives();
     std::vector<i32> expected_primitives = {10, 20, 30, 40, 50};
     assert(returned_primitives == expected_primitives);
-    
+
     auto returned_strings = test_struct.public_method_returning_vec_of_strings();
     std::vector<std::string> expected_strings = {"Method", "Vector", "Return"};
     assert(returned_strings == expected_strings);
-    
+
     auto returned_structs = test_struct.public_method_returning_vec_of_structs();
     assert(returned_structs.size() == 2);
     assert(returned_structs[0].get_i32_field() == 300);
     assert(returned_structs[1].get_i32_field() == 400);
-    
+
     // Test static methods returning vectors
     auto static_returned_primitives = TestStruct::static_method_returning_vec_of_primitives();
     std::vector<i32> static_expected_primitives = {60, 70, 80, 90, 100};
     assert(static_returned_primitives == static_expected_primitives);
-    
+
     auto static_returned_strings = TestStruct::static_method_returning_vec_of_strings();
     std::vector<std::string> static_expected_strings = {"Static", "Method", "Vector"};
     assert(static_returned_strings == static_expected_strings);
-    
+
     auto static_returned_structs = TestStruct::static_method_returning_vec_of_structs();
     assert(static_returned_structs.size() == 2);
     assert(static_returned_structs[0].get_i32_field() == 500);
@@ -284,3 +296,42 @@ void assert_enums()
     assert_inactive(TestStatus::Inactive);
 }
 
+void assert_results()
+{
+    std::cout << "assert_results" << std::endl;
+
+    // Test function that returns Result<i32, Error>
+    assert(function_with_primitive_result(false) == 123);
+    try
+    {
+        function_with_primitive_result(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "StructError: EnumError: VariantTwo") == 0);
+        auto source_err = e.source().value();
+        assert(strcmp(source_err.what(), "EnumError: VariantTwo") == 0);
+        auto source_of_source = source_err.source().value();
+        assert(strcmp(source_of_source.what(), "SimpleError") == 0);
+        auto source_of_source_2 = source_of_source.source();
+        assert(!source_of_source_2.has_value());
+    }
+
+    assert(function_with_bool_result(false) == true);
+    assert(function_with_string_result(false) == "No error");
+    assert(function_with_struct_result(false).get_i32_field() == 256);
+    assert(function_with_enum_result(false) == TestStatus::Pending);
+    assert(function_with_vec_int_result(false) == std::vector<i32>({10, 20, 30}));
+    assert(function_with_vec_bool_result(false) == std::vector<bool>({true, false, false}));
+    assert(function_with_vec_string_result(false) == std::vector<std::string>({"One", "Two", "Three"}));
+    auto vec_of_structs = function_with_vec_struct_result(false);
+    assert(vec_of_structs.size() == 2);
+    assert(vec_of_structs[0].get_i32_field() == 512);
+    assert(vec_of_structs[1].get_i32_field() == 1024);
+    auto vec_of_enums = function_with_vec_enum_result(false);
+    assert(vec_of_enums.size() == 3);
+    assert(vec_of_enums[0] == TestStatus::Pending);
+    assert(vec_of_enums[1] == TestStatus::Active);
+    assert(vec_of_enums[2] == TestStatus::Inactive);
+}

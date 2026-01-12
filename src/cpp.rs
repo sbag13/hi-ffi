@@ -33,6 +33,7 @@ pub(crate) fn write_cpp_code(wrapper: &Wrapper) {
     for reusable_wrapper in &wrapper.reusable_wrappers {
         let file_name = match reusable_wrapper {
             ReusableWrapper::Vec(inner) => format!("vec_{}.h", inner.name()),
+            ReusableWrapper::Result(inner) => format!("result_{}.h", inner.name()),
         };
         let source_full_path = cpp_path.join(file_name);
         if CPP_REUSABLE_WRAPPER_GENERATED
@@ -85,6 +86,7 @@ fn cpp_code_base() -> String {
 #include <cstdint>
 #include <cstddef>
 #include <string>
+#include <optional>
 
 using u8 = uint8_t;
 using u16 = uint16_t;
@@ -109,6 +111,15 @@ extern "C" {{
     void {RUST_STRING_DROP_FN_NAME}(void*);
     char* {RUST_STRING_DATA_FN_NAME}(void*);
     usize {RUST_STRING_LEN_FN_NAME}(void*);
+
+    void {RUST_ARC_DYN_ERR_DROP_FN_NAME}(void*);
+    void* {RUST_ARC_DYN_ERR_DESC_FN_NAME}(void*);
+    void* {RUST_ARC_DYN_ERR_SOURCE_FN_NAME}(void*);
+    void* {RUST_ARC_DYN_ERR_CLONE_FN_NAME}(void*);
+
+    void {RUST_REF_DYN_ERR_DROP_FN_NAME}(void*);
+    void* {RUST_REF_DYN_ERR_DESC_FN_NAME}(void*);
+    void* {RUST_REF_DYN_ERR_SOURCE_FN_NAME}(void*);
 }}
 
 class RustString {{
@@ -122,6 +133,59 @@ public:
         auto ptr = {RUST_STRING_DATA_FN_NAME}(self);
         auto len = {RUST_STRING_LEN_FN_NAME}(self);
         return std::string(ptr, len);
+    }}
+}};
+
+class RustException : public std::exception {{
+    void* rust_error;
+    void* source_error;
+    std::string description;
+
+public:
+    // Move constructor
+    RustException(RustException&& other) noexcept
+        : rust_error(other.rust_error),
+        source_error(other.source_error),
+        description(std::move(other.description)) {{
+        other.rust_error = nullptr;
+        other.source_error = nullptr;
+    }}
+
+    RustException(void* rust_error) : rust_error(rust_error), source_error(nullptr) {{
+        auto rust_desc_string = RustString({RUST_ARC_DYN_ERR_DESC_FN_NAME}(rust_error));
+        this->description = rust_desc_string.to_string();
+    }}
+    RustException(void* rust_error, void* source_error) : rust_error(rust_error), source_error(source_error) {{
+        auto rust_desc_string = RustString({RUST_REF_DYN_ERR_DESC_FN_NAME}(source_error));
+        this->description = rust_desc_string.to_string();
+    }}
+    ~RustException() {{
+        if (rust_error != nullptr) {{
+            {RUST_ARC_DYN_ERR_DROP_FN_NAME}(rust_error);
+        }}
+        if (source_error != nullptr) {{
+            {RUST_REF_DYN_ERR_DROP_FN_NAME}(source_error);
+        }}
+    }}
+    char const* what() const noexcept override {{
+        return this->description.c_str();
+    }}
+
+    std::optional<RustException> source() const {{
+
+        void* source_dyn_err_ptr = nullptr;
+        if (source_error == nullptr) {{
+            source_dyn_err_ptr = {RUST_ARC_DYN_ERR_SOURCE_FN_NAME}(rust_error);
+        }} else {{
+            source_dyn_err_ptr = {RUST_REF_DYN_ERR_SOURCE_FN_NAME}(source_error);
+        }}
+        
+        if (source_dyn_err_ptr == nullptr) {{
+            return std::nullopt;
+        }}
+        
+        auto err_clone_ptr = {RUST_ARC_DYN_ERR_CLONE_FN_NAME}(rust_error);
+        return std::optional(RustException(err_clone_ptr, source_dyn_err_ptr));
     }}
 }};
 

@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::{LazyLock, Mutex};
 
@@ -73,6 +74,24 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
             return_type_sig: quote! {-> #return_type},
             result_cast: quote! {result},
         },
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Result(inner_wrapper_type),
+            ..
+        }) => {
+            let ok_type: TokenStream2 = match inner_wrapper_type.deref() {
+                WrapperType::Vec(vec_inner) => {
+                    let vec_inner_name: TokenStream2 = vec_inner.name().parse().unwrap();
+                    quote! {Vec<#vec_inner_name>}
+                }
+                _ => inner_wrapper_type.name().parse().unwrap(),
+            };
+            MappedReturnType {
+                return_type_sig: quote! {-> *mut std::result::Result<#ok_type, std::sync::Arc<dyn std::error::Error>>},
+                result_cast: quote! {
+                    Box::into_raw(Box::new(result.map_err(|e| std::sync::Arc::new(e) as std::sync::Arc<dyn std::error::Error>)))
+                },
+            }
+        }
         None => MappedReturnType {
             return_type_sig: quote! {},
             result_cast: quote! {result},
@@ -172,6 +191,13 @@ pub fn map_function_arg_wrappers<'a>(
             arg_signatures.push(quote! {#arg_name: #arg_type});
             arg_names.push(quote! {#arg_name});
         }
+
+        FunctionArgWrapper {
+            wrapper_type: WrapperType::Result(_),
+            ..
+        } => {
+            panic!("Result function arguments are not supported");
+        }
     });
     MappedFunctionArgsTokens {
         arg_signatures,
@@ -203,6 +229,7 @@ pub enum WrapperType {
     Struct(String),
     Vec(Box<WrapperType>),
     Enum(String),
+    Result(Box<WrapperType>),
 }
 
 impl WrapperType {
@@ -215,6 +242,7 @@ impl WrapperType {
             WrapperType::Vec(inner) => format!("vec_of_{}", inner.name()),
             WrapperType::Bool => "bool".to_string(),
             WrapperType::String => "String".to_string(),
+            WrapperType::Result(inner) => format!("{}_result", inner.name()),
         }
     }
 }

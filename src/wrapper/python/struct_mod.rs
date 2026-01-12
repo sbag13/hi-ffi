@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use crate::python::PYTHON_LIB_GETTER_NAME;
-use crate::wrapper::python::{ClassCode, arg_cast, set_extern_fn_resttype, type_hint};
+use crate::wrapper::python::{
+    ClassCode, arg_cast, set_extern_fn_resttype_field, type_hint_from_field_wrapper_type,
+};
 use crate::wrapper::{FieldWrapper, FieldWrapperType, StructWrapper, WrapperType};
 use quote::ToTokens;
 use syn::Type;
@@ -38,7 +40,7 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
         imports,
         |mut acc: HashMap<String, String>, field_wrapper| {
             match &field_wrapper.wrapper_type {
-                FieldWrapperType::Custom => {
+                FieldWrapperType::Custom(_) => {
                     let type_name = field_wrapper.field_type.to_token_stream().to_string();
                     acc.insert(
                         type_name.clone(),
@@ -152,9 +154,10 @@ fn gen_property(field_wrapper: &FieldWrapper) -> String {
 
     let getter = if let Some(getter) = &field_wrapper.getter {
         let extern_fn_name = &getter.extern_fn_name;
-        let type_hint = type_hint(field_type);
+        let type_hint = type_hint_from_field_wrapper_type(&field_wrapper.wrapper_type);
         let result_cast = prop_result_cast(&field_wrapper.field_type, "result");
-        let set_extern_fn_resttype = set_extern_fn_resttype(field_type, extern_fn_name);
+        let set_extern_fn_resttype =
+            set_extern_fn_resttype_field(field_type, &field_wrapper.wrapper_type, extern_fn_name);
 
         format!(
             r#"    

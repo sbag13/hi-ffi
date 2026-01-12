@@ -325,7 +325,7 @@ fn map_fields(field: &FieldWrapper) -> Methods {
         }
 
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Custom,
+            wrapper_type: FieldWrapperType::Custom(_),
             setter,
             getter,
             field_type,

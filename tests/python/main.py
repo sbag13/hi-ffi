@@ -282,6 +282,36 @@ def enum_tests():
     assert_inactive(TestStatus.Inactive)
 
 
+def result_tests():
+    print("result_tests")
+    try:
+        _ = function_with_primitive_result(True)
+    except Exception as e:
+        assert str(e) == "StructError: EnumError: VariantTwo"
+        source = e.source()
+        assert str(source) == "EnumError: VariantTwo"
+        source_of_source = source.source()
+        assert str(source_of_source) == "SimpleError"
+        assert source_of_source.source() is None
+
+    assert function_with_primitive_result(False) == 123
+    assert function_with_string_result(False) == "No error"
+    assert function_with_struct_result(False).i32_field == 256
+    assert function_with_enum_result(False) == TestStatus.Pending
+    assert function_with_vec_int_result(False) == [10, 20, 30]
+    assert function_with_vec_bool_result(False) == [True, False, False]
+    assert function_with_vec_string_result(False) == ["One", "Two", "Three"]
+    ok_structs = function_with_vec_struct_result(False)
+    assert len(ok_structs) == 2
+    assert ok_structs[0].i32_field == 512
+    assert ok_structs[1].i32_field == 1024
+    ok_enums = function_with_vec_enum_result(False)
+    assert len(ok_enums) == 3
+    assert ok_enums[0] == TestStatus.Pending
+    assert ok_enums[1] == TestStatus.Active
+    assert ok_enums[2] == TestStatus.Inactive
+
+
 if __name__ == "__main__":
     struct_tests()
     functions_tests()
@@ -290,4 +320,5 @@ if __name__ == "__main__":
     vector_tests()
     vector_methods_tests()
     enum_tests()
+    result_tests()
     print("All tests passed!")

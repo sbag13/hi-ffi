@@ -1,6 +1,6 @@
 use crate::wrapper::base::*;
 use crate::wrapper::swift::class_definition::gen_empty_class_definition;
-use crate::wrapper::swift::{SwiftCode, gen_swift_vec_declarations};
+use crate::wrapper::swift::{SwiftCode, gen_swift_result_declarations, gen_swift_vec_declarations};
 use crate::{GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, insert_after};
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -55,6 +55,7 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
     for reusable_wrapper in &wrapper.reusable_wrappers {
         let declarations = match reusable_wrapper {
             ReusableWrapper::Vec(inner) => gen_swift_vec_declarations(inner),
+            ReusableWrapper::Result(inner) => gen_swift_result_declarations(inner),
         };
         append_to_file(declarations, &swift_header_path);
     }
@@ -84,6 +85,7 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
     for reusable_wrapper in &wrapper.reusable_wrappers {
         let file_name = match reusable_wrapper {
             ReusableWrapper::Vec(inner) => format!("vec_{}.swift", inner.name()),
+            ReusableWrapper::Result(inner) => format!("result_{}.swift", inner.name()),
         };
         let source_full_path = ffi_module_path.join(file_name);
         if SWIFT_CLASS_GENERATED
@@ -129,6 +131,53 @@ public class RustString: Opaque {{
     }}
 }}
 
+public class RustError: Error {{
+    private var rust_error: UnsafeMutableRawPointer
+    private var source_error: UnsafeMutableRawPointer?
+    private var desc: String
+
+    public init(_ rust_error: UnsafeMutableRawPointer) {{
+        self.rust_error = rust_error
+        self.source_error = nil
+        let rust_desc = RustString({RUST_ARC_DYN_ERR_DESC_FN_NAME}(rust_error));
+        self.desc = rust_desc.to_string();
+    }}
+
+    public init(_ rust_error: UnsafeMutableRawPointer, _ source_ptr: UnsafeMutableRawPointer) {{
+        self.rust_error = rust_error
+        self.source_error = source_ptr
+        let rust_desc = RustString({RUST_REF_DYN_ERR_DESC_FN_NAME}(source_ptr));
+        self.desc = rust_desc.to_string();
+    }}
+
+    public func description() -> String {{
+        return self.desc
+    }}
+
+    public func source() -> RustError? {{
+        var source_dyn_err_ptr: UnsafeMutableRawPointer? = nil
+        if self.source_error == nil {{
+            source_dyn_err_ptr = {RUST_ARC_DYN_ERR_SOURCE_FN_NAME}(self.rust_error);
+        }} else {{
+            source_dyn_err_ptr = {RUST_REF_DYN_ERR_SOURCE_FN_NAME}(self.source_error);
+        }}
+
+        if source_dyn_err_ptr == nil {{
+            return nil
+        }} else {{
+            let root_err_clone = {RUST_ARC_DYN_ERR_CLONE_FN_NAME}(self.rust_error);
+            let source_error = RustError(root_err_clone!, source_dyn_err_ptr!)
+            return source_error
+        }}
+    }}
+
+    deinit {{
+        if self.source_error != nil {{
+            {RUST_REF_DYN_ERR_DROP_FN_NAME}(self.source_error!)
+        }}
+        {RUST_ARC_DYN_ERR_DROP_FN_NAME}(self.rust_error)
+    }}
+}}
 "#
     )
 }
@@ -162,6 +211,15 @@ void {RUST_STRING_DROP_FN_NAME}(void* self);
 void* {SLICE_GET_PTR_FN_NAME}(void* self);
 unsigned int {SLICE_GET_LEN_FN_NAME}(void* self);
 void {SLICE_DROP_FN_NAME}(void* self);
+
+void {RUST_ARC_DYN_ERR_DROP_FN_NAME}(void* self);
+void* {RUST_ARC_DYN_ERR_DESC_FN_NAME}(void* self);
+void* {RUST_ARC_DYN_ERR_SOURCE_FN_NAME}(void* self);
+void* {RUST_ARC_DYN_ERR_CLONE_FN_NAME}(void* self);
+
+void {RUST_REF_DYN_ERR_DROP_FN_NAME}(void* self);
+void* {RUST_REF_DYN_ERR_DESC_FN_NAME}(void* self);
+void* {RUST_REF_DYN_ERR_SOURCE_FN_NAME}(void* self);
 "#
     )
 }

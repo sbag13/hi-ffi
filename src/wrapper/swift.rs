@@ -4,7 +4,7 @@ use class_definition::{
 };
 use function_definition::{gen_function_definition, gen_function_header};
 
-use crate::wrapper::swift::enum_definition::gen_enum_code;
+use crate::{prepend_each_line_with_n_tabs, wrapper::swift::enum_definition::gen_enum_code};
 
 use super::*;
 
@@ -16,8 +16,104 @@ impl ReusableWrapper {
     pub fn swift(&self) -> String {
         match self {
             ReusableWrapper::Vec(inner) => gen_vec_wrapper_swift(inner),
+            ReusableWrapper::Result(inner) => gen_result_wrapper_swift(inner),
         }
     }
+}
+
+pub fn gen_swift_result_declarations(inner: &WrapperType) -> String {
+    let inner_name = inner.name();
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{inner_name}_result");
+    let unwrap_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_err_{inner_name}_result");
+    let drop_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_result");
+    let is_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_err_{inner_name}_result");
+
+    let unwrap_return_type = match inner {
+        WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
+        WrapperType::Bool => "u8".to_string(),
+        WrapperType::String => "void*".to_string(),
+        WrapperType::Struct(_) => "void*".to_string(),
+        WrapperType::Vec(_) => "void*".to_string(),
+        WrapperType::Result(_) => panic!("Result of results not supported"),
+        WrapperType::Enum(name) => format!("enum {}", name),
+    };
+
+    format!(
+        r#"
+{unwrap_return_type} {unwrap_ext_name}(void* self);
+void* {unwrap_err_ext_name}(void* self);
+void {drop_err_ext_name}(void* self);
+u8 {is_err_ext_name}(void* self);
+"#
+    )
+}
+
+pub fn gen_result_wrapper_swift(inner: &WrapperType) -> String {
+    let inner_name = inner.name();
+
+    let unwrap_ret_type = match inner {
+        WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
+        WrapperType::Bool => "bool".to_string(),
+        WrapperType::String => "String".to_string(),
+        WrapperType::Struct(name) => name.to_string(),
+        WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
+        WrapperType::Result(_) => panic!("Result of results not supported"),
+        WrapperType::Enum(name) => name.to_string(),
+    };
+
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_result", inner_name);
+    let unwrap_ext_call = format!("{unwrap_ext_name}(self.rawPtr())");
+    let unwrap_val_cast = match inner {
+        WrapperType::String => format!("let result = RustString({unwrap_ext_call}).to_string();"),
+        WrapperType::Struct(struct_name) => {
+            format!("let result = {struct_name}({unwrap_ext_call});")
+        }
+        WrapperType::Vec(vec_inner) => {
+            let vec_inner_name = vec_inner.name();
+            format!("let result = Rust{vec_inner_name}Vec({unwrap_ext_call}).toSwift();")
+        }
+        WrapperType::Bool => format!("let result = {unwrap_ext_call} != 0;"),
+        WrapperType::Enum(inner) => {
+            format!(
+                "let raw_result = {unwrap_ext_call}
+let result = {inner}(rawValue: Int32(raw_result.rawValue))!;"
+            )
+        }
+        _ => format!("let result = {unwrap_ext_call};"),
+    };
+
+    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_result", inner_name);
+
+    let unwrap_val_cast = prepend_each_line_with_n_tabs(&unwrap_val_cast, 2);
+
+    format!(
+        r#"
+import Foundation
+
+open class Rust{inner_name}Result: Opaque {{
+    public required init(_ _self: UnsafeMutableRawPointer) {{
+        super.init(_self)
+    }}
+
+    func isErr() -> Bool {{
+        return {EXPORTED_SYMBOLS_PREFIX}__is_err_{inner_name}_result(self.rawPtr()) != 0
+    }}
+
+    func unwrap() -> {unwrap_ret_type} {{
+{unwrap_val_cast}
+        return result;
+    }}
+
+    func unwrapErr() -> UnsafeMutableRawPointer {{
+        return {EXPORTED_SYMBOLS_PREFIX}__unwrap_err_{inner_name}_result(self.rawPtr())
+    }}
+
+    deinit {{
+        {drop_ext_name}(self.rawPtr())
+    }}
+}}
+"#
+    )
 }
 
 pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
@@ -37,6 +133,7 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::String => "const char* value, unsigned int len".to_string(),
         WrapperType::Struct(_) => "void* value".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+        WrapperType::Result(_) => panic!("Vec of results not supported"),
         WrapperType::Enum(name) => format!("enum {} value", name),
     };
 
@@ -46,6 +143,7 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::String => "void*".to_string(),
         WrapperType::Struct(_) => "void*".to_string(),
         WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+        WrapperType::Result(_) => panic!("Vec of results not supported"),
         WrapperType::Enum(name) => format!("enum {}", name),
     };
 
@@ -74,26 +172,6 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
     let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__push_{inner_name}_vec");
     let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__len_{inner_name}_vec");
     let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__get_{inner_name}_vec");
-
-    let _push_ext_receiver = match inner {
-        WrapperType::IntegerNumber(inner) | WrapperType::FloatingPointNumber(inner) => {
-            format!("value: {inner}")
-        }
-        WrapperType::Bool => "value: bool".to_string(),
-        WrapperType::String => "value: UnsafePointer<Int8>?, _ len: usize".to_string(),
-        WrapperType::Struct(_inner) => "value: UnsafeMutableRawPointer?".to_string(),
-        WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
-        WrapperType::Enum(name) => format!("value: {}", name),
-    };
-
-    let _get_ext_return_type = match inner {
-        WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
-        WrapperType::Bool => "bool".to_string(),
-        WrapperType::String => "UnsafeMutableRawPointer?".to_string(),
-        WrapperType::Struct(_) => "UnsafeMutableRawPointer?".to_string(),
-        WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
-        WrapperType::Enum(name) => name.to_string(),
-    };
 
     let loop_expressions = match inner {
         WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool => {
@@ -138,6 +216,7 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
             )
         }
         WrapperType::Vec(_) => unreachable!(),
+        WrapperType::Result(_) => panic!("Vec of results not supported"),
     };
 
     format!(

@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex, Once};
 
+use crate::wrapper::base::*;
 use crate::wrapper::python::{FunctionCode, PythonFiles};
 use crate::{GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, prepend_to_file};
 
@@ -84,6 +85,7 @@ pub(crate) fn write_python_code(wrapper: &Wrapper) {
     for reusable_wrapper in &wrapper.reusable_wrappers {
         let file_name = match reusable_wrapper {
             ReusableWrapper::Vec(inner) => format!("vec_{}.py", inner.name()),
+            ReusableWrapper::Result(inner) => format!("result_{}.py", inner.name()),
         };
         let file_path = python_path.join(file_name);
         if WRAPPER_GENERATED
@@ -116,24 +118,65 @@ class RustString:
         self._self_ptr = ptr
 
     def py_str(self) -> str:
-        data = ctypes.c_char_p(get_ffi_lib().hiFfi__rust_string_data(self._self_ptr))
-        length = get_ffi_lib().hiFfi__rust_string_len(self._self_ptr)
+        data = ctypes.c_char_p({PYTHON_LIB_GETTER_NAME}().{RUST_STRING_DATA_FN_NAME}(self._self_ptr))
+        length = {PYTHON_LIB_GETTER_NAME}().{RUST_STRING_LEN_FN_NAME}(self._self_ptr)
         return data.value[0:length].decode("utf-8") if length != 0 else ""
 
     def __del__(self):
-        get_ffi_lib().hiFfi__rust_string_drop(self._self_ptr)
+        {PYTHON_LIB_GETTER_NAME}().{RUST_STRING_DROP_FN_NAME}(self._self_ptr)
+
 
 class FfiSlice:
     def __init__(self, ptr):
         self._self_ptr = ptr
 
     def py_str(self) -> str:
-        data = ctypes.c_char_p(get_ffi_lib().hiFfi__slice_ptr(self._self_ptr))
-        length = get_ffi_lib().hiFfi__slice_len(self._self_ptr)
+        data = ctypes.c_char_p({PYTHON_LIB_GETTER_NAME}().{SLICE_GET_PTR_FN_NAME}(self._self_ptr))
+        length = {PYTHON_LIB_GETTER_NAME}().{SLICE_GET_LEN_FN_NAME}(self._self_ptr)
         return data.value[0:length].decode("utf-8") if length != 0 else ""
 
     def __del__(self):
-        get_ffi_lib().hiFfi__slice_drop(self._self_ptr)
+        {PYTHON_LIB_GETTER_NAME}().{SLICE_DROP_FN_NAME}(self._self_ptr)
+
+
+class RustException(Exception):
+    def __init__(self, rust_error_ptr, source_error_ptr=None):
+        self.rust_error_ptr = rust_error_ptr
+        self.source_error_ptr = source_error_ptr
+        if source_error_ptr is None:
+            desc_ptr = {PYTHON_LIB_GETTER_NAME}().{RUST_ARC_DYN_ERR_DESC_FN_NAME}(rust_error_ptr)
+        else:
+            desc_ptr = {PYTHON_LIB_GETTER_NAME}().{RUST_REF_DYN_ERR_DESC_FN_NAME}(source_error_ptr)
+        rust_string = RustString(desc_ptr)
+        self.description = rust_string.py_str()
+
+    def __str__(self):
+        return self.description
+
+    def description(self) -> str:
+        return self.description
+
+    def __cause__(self):
+        return self.source()
+
+    def source(self) -> 'RustException | None':
+        source_dyn_err_ptr = None
+        if self.source_error_ptr is None:
+            source_dyn_err_ptr = {PYTHON_LIB_GETTER_NAME}().{RUST_ARC_DYN_ERR_SOURCE_FN_NAME}(self.rust_error_ptr)
+        else:
+            source_dyn_err_ptr = {PYTHON_LIB_GETTER_NAME}().{RUST_REF_DYN_ERR_SOURCE_FN_NAME}(self.source_error_ptr)
+
+        if source_dyn_err_ptr is None or source_dyn_err_ptr == 0:
+            return None
+        else:
+            root_err_clone = {PYTHON_LIB_GETTER_NAME}().{RUST_ARC_DYN_ERR_CLONE_FN_NAME}(self.rust_error_ptr)
+            source_exception = RustException(root_err_clone, source_dyn_err_ptr)
+            return source_exception
+
+    def __del__(self):
+        {PYTHON_LIB_GETTER_NAME}().{RUST_ARC_DYN_ERR_DROP_FN_NAME}(self.rust_error_ptr)
+        if self.source_error_ptr is not None:
+            {PYTHON_LIB_GETTER_NAME}().{RUST_REF_DYN_ERR_DROP_FN_NAME}(self.source_error_ptr)
 "#
     )
 }
