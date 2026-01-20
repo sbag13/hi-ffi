@@ -14,7 +14,7 @@ pub fn translate_enum(item_enum: ItemEnum) -> Wrapper {
     validate_c_like_enum(&item_enum);
 
     // Register the enum type for later detection in function return types
-    crate::wrapper::function_wrapper::register_enum_type(enum_name.to_string());
+    register_enum_type(enum_name.to_string());
 
     Wrapper {
         original_definition: quote! {#item_enum},

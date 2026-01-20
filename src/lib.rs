@@ -6,7 +6,8 @@ use std::sync::Once;
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use std::collections::HashSet;
+use quote::{ToTokens, quote};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 use syn::{Item, parse_macro_input};
@@ -37,10 +38,39 @@ static RUST_CODE_BASE_TOKENS_GENERATED: Once = Once::new();
 static RUST_WRAPPER_TOKENS_GENERATED: LazyLock<Mutex<HashSet<ReusableWrapper>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
+static WAITING_FOR_WRAPPERS: LazyLock<Mutex<HashMap<String, Vec<String>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
 #[proc_macro_attribute]
 pub fn ffi(_attr: TokenStream, input: TokenStream) -> TokenStream {
+    handle_ffi(input)
+}
+
+fn handle_ffi(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as Item);
-    let wrapper = translate(input);
+    let wrapper = match translate(input.clone()) {
+        Ok(wrapper) => wrapper,
+        Err(wrapper_name) => {
+            WAITING_FOR_WRAPPERS
+                .lock()
+                .unwrap()
+                .entry(wrapper_name.0.to_string())
+                .or_default()
+                .push(input.to_token_stream().to_string());
+
+            let wrapper_name_token: TokenStream2 = wrapper_name.0.parse().unwrap();
+            return quote! { impl #wrapper_name_token {} }.into();
+        }
+    };
+
+    let waiting_tokens = { WAITING_FOR_WRAPPERS.lock().unwrap().remove(&wrapper.name()) }.map(
+        |waiting_definitions| {
+            waiting_definitions
+                .iter()
+                .map(|tokens: &String| handle_ffi(tokens.parse().unwrap()))
+                .collect::<TokenStream>()
+        },
+    );
 
     write_rust_code(&wrapper);
     #[cfg(feature = "cpp")]
@@ -51,6 +81,10 @@ pub fn ffi(_attr: TokenStream, input: TokenStream) -> TokenStream {
     python::write_python_code(&wrapper);
 
     let mut tokens: TokenStream2 = (&wrapper).into();
+
+    if let Some(waiting_tokens) = waiting_tokens {
+        tokens.extend(TokenStream2::from(waiting_tokens));
+    }
 
     RUST_CODE_BASE_TOKENS_GENERATED.call_once(|| tokens.extend(rust_code_base()));
 
@@ -119,6 +153,16 @@ fn insert_after(marker: &str, content: impl Display, path: impl AsRef<Path>) {
     let file_content = std::fs::read_to_string(path.as_ref()).expect("Unable to read file");
     let new_content = file_content.replace(marker, &format!("{}\n{}", marker, content));
     create_file(new_content, path);
+}
+
+#[cfg(feature = "cpp")]
+fn insert_after_if_not_present(marker: &str, content: impl Display, path: impl AsRef<Path>) {
+    let content = content.to_string();
+    let file_content = std::fs::read_to_string(path.as_ref()).expect("Unable to read file");
+    if !file_content.contains(&content) {
+        let new_content = file_content.replace(marker, &format!("{}\n{}", marker, content));
+        create_file(new_content, path);
+    }
 }
 
 fn create_file(content: impl Display, path: impl AsRef<Path>) {

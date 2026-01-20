@@ -38,6 +38,10 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
                     arg_type = arg_type.to_token_stream()
                 )
             }
+            FunctionArgWrapper {
+                wrapper_type: WrapperType::UnitExpr,
+                ..
+            } => panic!("Unsupported type for function argument (empty expression)"),
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -117,6 +121,7 @@ pub fn map_args<'a>(
                     WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
                     WrapperType::Result(_) => panic!("Vec of results not supported"),
                     WrapperType::Enum(name) => format!("[{}]", name),
+                    WrapperType::UnitExpr => panic!("Empty expression is not supported as vec inner type")
                 };
                 args_signatures.push(format!("_ {arg_name}: {swift_type}"));
                 args_names.push(format!("casted_{arg_name}.rawPtr()"));
@@ -140,6 +145,11 @@ pub fn map_args<'a>(
                 wrapper_type: WrapperType::Result(_),
                 ..
             } => panic!("Result type not supported as function argument"),
+
+             FunctionArgWrapper {
+                wrapper_type: WrapperType::UnitExpr,
+                ..
+            } => panic!("Unsupported type for function argument (empty expression)"),
 
             // No other variants
         });
@@ -268,6 +278,9 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
                 WrapperType::Result(_) => panic!("Vec of results not supported"),
                 WrapperType::Enum(name) => format!("[{}]", name),
+                WrapperType::UnitExpr => {
+                    panic!("Empty expression is not supported as vec inner type")
+                }
             };
             ReturnTypes {
                 return_type_sig: Some(format!(" -> {}", swift_type)),
@@ -299,14 +312,13 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
             let swift_type = match &**inner {
                 WrapperType::IntegerNumber(_)
                 | WrapperType::FloatingPointNumber(_)
-                | WrapperType::Bool => {
-                    inner.name().to_string()
-                }
+                | WrapperType::Bool => inner.name().to_string(),
                 WrapperType::String => "String".to_string(),
                 WrapperType::Struct(name) => name.to_string(),
                 WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
                 WrapperType::Enum(name) => name.to_string(),
                 WrapperType::Result(_) => panic!("Nested Results not supported"),
+                WrapperType::UnitExpr => "Void".to_string(),
             };
             ReturnTypes {
                 return_type_sig: Some(format!(" throws -> {swift_type}")),
@@ -328,7 +340,11 @@ if wrapped_rust_result.isErr() {{
             }
         }
 
-        None => ReturnTypes {
+        None
+        | Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::UnitExpr,
+            ..
+        }) => ReturnTypes {
             return_type_sig: None,
             cpp_return_type: "void".to_string(),
             result_cast: None,

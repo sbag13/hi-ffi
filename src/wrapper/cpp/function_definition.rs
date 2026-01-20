@@ -79,6 +79,7 @@ pub fn map_args<'a>(
                 WrapperType::Struct(struct_name) => struct_name.as_str(),
                 WrapperType::Enum(enum_name) => enum_name.as_str(),
                 WrapperType::Result(_) => unimplemented!("Vector of Result type not implemented yet as inner Vec type"),
+                WrapperType::UnitExpr => panic!("UnitExpr not supported yet inside vector as function argument!"),
             };
             cpp_args.push(format!("const std::vector<{inner_type}>& {arg_name}"));
             includes.insert("#include <vector>".to_string());
@@ -105,13 +106,18 @@ pub fn map_args<'a>(
         } => {
             panic!("Result function arguments are not supported");
         }
+        FunctionArgWrapper {
+            wrapper_type: WrapperType::UnitExpr,
+            ..
+        } => {
+            panic!("UnitExpr function arguments are not supported");
+        }
     });
 
     let cpp_args = cpp_args.join(", ");
     let wrapper_args = wrapper_args.join(", ");
     let call_args = call_args.join(", ");
     let arg_casts = arg_casts.join("\n");
-    let includes = includes.into_iter().collect::<HashSet<_>>();
 
     MappedCppFunctionArgsTokens {
         cpp_args,
@@ -139,7 +145,7 @@ pub fn gen_function_declaration(function_wrapper: &FunctionWrapper) -> String {
         ..
     } = map_return_type(&function_wrapper.return_wrapper);
 
-    includes.insert(return_type_includes);
+    includes.extend(return_type_includes);
     let includes = includes.into_iter().collect::<Vec<_>>().join("\n");
 
     format!(

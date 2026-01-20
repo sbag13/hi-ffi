@@ -102,6 +102,8 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
                 WrapperType::Result(_) => {
                     panic!("Result types are not supported as function arguments in python");
                 }
+
+                WrapperType::UnitExpr => unreachable!(),
             }
             (casts, call_list)
         },
@@ -207,5 +209,6 @@ fn arg_receiver(arg_wrapper: &crate::wrapper::FunctionArgWrapper) -> String {
         WrapperType::Result(_) => {
             panic!("Result types are not supported as function arguments in python");
         }
+        WrapperType::UnitExpr => unreachable!(),
     }
 }

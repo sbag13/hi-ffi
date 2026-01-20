@@ -6,6 +6,7 @@ use crate::prepend_each_line_with_n_tabs;
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::FieldWrapperType;
 use crate::wrapper::WrapperType;
+use crate::wrapper::is_enum_type;
 use quote::ToTokens;
 use syn::Type;
 
@@ -105,6 +106,7 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
         WrapperType::Result(_) => {
             panic!("Result types are not supported in Vec wrappers for python");
         }
+        WrapperType::UnitExpr => unreachable!(),
     };
 
     // Generate result casting for get function
@@ -122,6 +124,7 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
         WrapperType::Result(_) => {
             panic!("Result types are not supported in Vec wrappers for python");
         }
+        WrapperType::UnitExpr => unreachable!(),
     };
 
     // Generate restype settings for extern functions
@@ -142,31 +145,28 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
     );
 
     let get_restype = match inner {
-        WrapperType::IntegerNumber(_) | WrapperType::Bool | WrapperType::FloatingPointNumber(_) => {
-            format!(
-                "{}().{}.restype = ctypes.c_int",
-                crate::python::PYTHON_LIB_GETTER_NAME,
-                get_ext_fn_name
-            )
+        WrapperType::IntegerNumber(r_int) => format!(
+            "{PYTHON_LIB_GETTER_NAME}().{get_ext_fn_name}.restype = ctypes.{}",
+            rust_int_to_c_types(r_int)
+        ),
+        WrapperType::FloatingPointNumber(r_float) => {
+            if r_float == "f32" {
+                format!("{PYTHON_LIB_GETTER_NAME}().{get_ext_fn_name}.restype = ctypes.c_float")
+            } else {
+                format!("{PYTHON_LIB_GETTER_NAME}().{get_ext_fn_name}.restype = ctypes.c_double")
+            }
         }
         WrapperType::String | WrapperType::Struct(_) => {
-            format!(
-                "{}().{}.restype = ctypes.c_void_p",
-                crate::python::PYTHON_LIB_GETTER_NAME,
-                get_ext_fn_name
-            )
+            format!("{PYTHON_LIB_GETTER_NAME}().{get_ext_fn_name}.restype = ctypes.c_void_p")
         }
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
-        WrapperType::Enum(_) => {
-            format!(
-                "{}().{}.restype = ctypes.c_int",
-                crate::python::PYTHON_LIB_GETTER_NAME,
-                get_ext_fn_name
-            )
+        WrapperType::Enum(_) | WrapperType::Bool => {
+            format!("{PYTHON_LIB_GETTER_NAME}().{get_ext_fn_name}.restype = ctypes.c_int")
         }
         WrapperType::Result(_) => {
             panic!("Result types are not supported in Vec wrappers for python");
         }
+        WrapperType::UnitExpr => unreachable!(),
     };
 
     let inner_import = inner_import(inner);
@@ -299,6 +299,7 @@ fn type_hint_from_wrapper_type(wrapper_type: &crate::wrapper::WrapperType) -> St
         WrapperType::Vec(inner) => format!("List[{}]", type_hint_from_wrapper_type(inner)),
         WrapperType::Enum(name) => name.to_string(),
         WrapperType::Result(inner) => type_hint_from_wrapper_type(inner),
+        WrapperType::UnitExpr => "None".to_string(),
     }
 }
 
@@ -331,6 +332,7 @@ fn result_cast_and_return(wrapper: &WrapperType) -> String {
         WrapperType::Struct(ty) => {
             format!("return {}(result)", ty)
         }
+        WrapperType::UnitExpr => "return None".to_string(),
         WrapperType::Result(inner) => {
             let inner_name = inner.name();
             format!(
@@ -367,7 +369,7 @@ fn arg_cast(ty: &Type, arg_name: &str) -> String {
                     } else {
                         // Check if it's an enum by looking for registered enum types
                         let type_name = ty.to_token_stream().to_string();
-                        if crate::wrapper::function_wrapper::is_enum_type(&type_name) {
+                        if is_enum_type(&type_name) {
                             format!("{}.to_ffi()", arg_name)
                         } else {
                             format!("{arg_name}.raw_ptr()")
@@ -398,9 +400,32 @@ fn set_extern_fn_resttype(wrapper: &WrapperType, extern_fn_name: &str) -> String
         WrapperType::Enum(_name) => {
             format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int")
         }
-        WrapperType::Bool | WrapperType::IntegerNumber(_) => {
+        WrapperType::Bool => {
             format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int")
         }
+        WrapperType::IntegerNumber(r_int) => {
+            format!(
+                "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.{}",
+                rust_int_to_c_types(r_int)
+            )
+        }
+        WrapperType::UnitExpr => {
+            format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void")
+        }
+    }
+}
+
+fn rust_int_to_c_types(r_int: &str) -> &'static str {
+    match r_int {
+        "i8" => "c_int8",
+        "i16" => "c_int16",
+        "i32" => "c_int",
+        "i64" => "c_int64",
+        "u8" => "c_uint8",
+        "u16" => "c_uint16",
+        "u32" => "c_uint",
+        "u64" => "c_uint64",
+        _ => panic!("Int type not supported: {r_int}"),
     }
 }
 

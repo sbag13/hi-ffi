@@ -36,6 +36,7 @@ pub fn gen_swift_result_declarations(inner: &WrapperType) -> String {
         WrapperType::Vec(_) => "void*".to_string(),
         WrapperType::Result(_) => panic!("Result of results not supported"),
         WrapperType::Enum(name) => format!("enum {}", name),
+        WrapperType::UnitExpr => "void".to_string(),
     };
 
     format!(
@@ -59,6 +60,7 @@ pub fn gen_result_wrapper_swift(inner: &WrapperType) -> String {
         WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
         WrapperType::Result(_) => panic!("Result of results not supported"),
         WrapperType::Enum(name) => name.to_string(),
+        WrapperType::UnitExpr => "Void".to_string(),
     };
 
     let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_result", inner_name);
@@ -79,7 +81,13 @@ pub fn gen_result_wrapper_swift(inner: &WrapperType) -> String {
 let result = {inner}(rawValue: Int32(raw_result.rawValue))!;"
             )
         }
+        WrapperType::UnitExpr => format!("{unwrap_ext_call};"),
         _ => format!("let result = {unwrap_ext_call};"),
+    };
+
+    let unwrap_return_expr = match inner {
+        WrapperType::UnitExpr => "return",
+        _ => "return result",
     };
 
     let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_result", inner_name);
@@ -101,7 +109,7 @@ open class Rust{inner_name}Result: Opaque {{
 
     func unwrap() -> {unwrap_ret_type} {{
 {unwrap_val_cast}
-        return result;
+        {unwrap_return_expr};
     }}
 
     func unwrapErr() -> UnsafeMutableRawPointer {{
@@ -135,6 +143,7 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
         WrapperType::Result(_) => panic!("Vec of results not supported"),
         WrapperType::Enum(name) => format!("enum {} value", name),
+        WrapperType::UnitExpr => unreachable!(),
     };
 
     let get_return_type = match inner {
@@ -145,6 +154,7 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
         WrapperType::Result(_) => panic!("Vec of results not supported"),
         WrapperType::Enum(name) => format!("enum {}", name),
+        WrapperType::UnitExpr => unreachable!(),
     };
 
     format!(
@@ -217,6 +227,7 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
         }
         WrapperType::Vec(_) => unreachable!(),
         WrapperType::Result(_) => panic!("Vec of results not supported"),
+        WrapperType::UnitExpr => unreachable!(),
     };
 
     format!(

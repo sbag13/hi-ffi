@@ -5,14 +5,14 @@ use quote::ToTokens;
 use syn::ItemImpl;
 
 use crate::EXPORTED_SYMBOLS_PREFIX;
-use crate::translator::map_arg;
+use crate::translator::{NoWrapperErr, map_arg, map_wrapper_to_reusable};
 use crate::wrapper::Wrapper;
 use crate::wrapper::impl_block_wrapper::MethodWrapper;
 
 use super::impl_block_wrapper::ImplBlockWrapper;
 use super::{ParsedWrapper, return_wrapper};
 
-pub fn translate_impl(item_impl: ItemImpl) -> Wrapper {
+pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
     let struct_name = if let syn::Type::Path(path) = item_impl.self_ty.deref() {
         if let Some(ident) = path.path.get_ident() {
             ident.to_owned()
@@ -23,12 +23,26 @@ pub fn translate_impl(item_impl: ItemImpl) -> Wrapper {
         panic!("Self type is not a path")
     };
 
-    let methods = item_impl
+    let mut reusable_wrappers = HashSet::new();
+
+    let methods: Vec<_> = item_impl
         .items
         .iter()
         .map(|item| {
             if let syn::ImplItem::Fn(method) = item {
-                MethodWrapper {
+                let args = method
+                    .sig
+                    .inputs
+                    .iter()
+                    .filter(|arg| !matches!(arg, syn::FnArg::Receiver(_))) // ignore receiver
+                    .map(map_arg)
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                for arg in &args {
+                    reusable_wrappers.extend(map_wrapper_to_reusable(&arg.wrapper_type));
+                }
+
+                Ok(MethodWrapper {
                     name: method.sig.ident.clone(),
                     extern_function_name: format!(
                         "{EXPORTED_SYMBOLS_PREFIX}_{}_{}",
@@ -36,27 +50,34 @@ pub fn translate_impl(item_impl: ItemImpl) -> Wrapper {
                     ),
                     public: matches!(method.vis, syn::Visibility::Public(_)),
                     is_static: method.sig.receiver().is_none(),
-                    args: method
-                        .sig
-                        .inputs
-                        .iter()
-                        .filter(|arg| !matches!(arg, syn::FnArg::Receiver(_))) // ignore receiver
-                        .map(map_arg)
-                        .collect::<Vec<_>>(),
-                    return_wrapper: return_wrapper(&method.sig.output),
-                }
+                    args,
+                    return_wrapper: return_wrapper(&method.sig.output)?,
+                })
             } else {
                 panic!("Unsupported impl item")
             }
         })
-        .collect();
+        .collect::<Result<Vec<MethodWrapper>, NoWrapperErr>>()?;
 
-    Wrapper {
+    reusable_wrappers.extend(
+        methods
+            .iter()
+            .filter_map(|method| {
+                // Ensure vec reusable wrapper is generated for return vecs too
+                method
+                    .return_wrapper
+                    .as_ref()
+                    .map(|fn_wrapper| map_wrapper_to_reusable(&fn_wrapper.wrapper_type))
+            })
+            .flatten(),
+    );
+
+    Ok(Wrapper {
         original_definition: item_impl.into_token_stream(),
         parsed: ParsedWrapper::ImplBlock(ImplBlockWrapper {
             struct_name,
             methods,
         }),
-        reusable_wrappers: HashSet::new(),
-    }
+        reusable_wrappers,
+    })
 }

@@ -1,11 +1,15 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 
 use quote::ToTokens;
 
+use crate::prepend_each_line_with_n_tabs;
 use crate::python::PYTHON_LIB_GETTER_NAME;
+use crate::wrapper::WrapperType;
 use crate::wrapper::impl_block_wrapper::ImplBlockWrapper;
 use crate::wrapper::python::{
-    ClassCode, arg_cast, set_extern_fn_resttype, type_hint_from_wrapper_type,
+    ClassCode, arg_cast, result_cast_and_return, set_extern_fn_resttype,
+    type_hint_from_wrapper_type,
 };
 
 pub fn gen_methods_mod(impl_block: &ImplBlockWrapper) -> ClassCode {
@@ -47,10 +51,7 @@ class {class_name}:"#
                 );
             }
 
-            // Check if this is a vector argument and add List import
-            if let crate::wrapper::WrapperType::Vec(_) = &arg.wrapper_type {
-                imports.insert("List".to_string(), "from typing import List".to_string());
-            }
+            insert_imports_for_vec_inner(&arg.wrapper_type, &mut imports);
 
             py_args_sig.push(format!(
                 "{}: {}",
@@ -59,7 +60,7 @@ class {class_name}:"#
             ));
 
             // For vector arguments, we need to store the wrapper object to prevent garbage collection
-            if let crate::wrapper::WrapperType::Vec(_) = &arg.wrapper_type {
+            if let WrapperType::Vec(_) = &arg.wrapper_type {
                 pre_casts.push(format!(
                     "casted_{name}_wrapper = {cast}",
                     name = arg_name,
@@ -91,20 +92,67 @@ class {class_name}:"#
         let mut ret_hint = String::new();
         let mut ret_line = String::new();
         let mut restype_set = String::new();
+        let mut local_imports = String::new();
         if let Some(ret) = &method.return_wrapper {
             // Check if this is a vector return type and add proper imports
-            if let crate::wrapper::WrapperType::Vec(inner) = &ret.wrapper_type {
-                imports.insert("List".to_string(), "from typing import List".to_string());
-                let vec_name = format!("{}Vec", inner.name());
-                imports.insert(
-                    vec_name.clone(),
-                    format!("from .vec_{} import {}", inner.name(), vec_name),
-                );
+
+            match &ret.wrapper_type {
+                WrapperType::Vec(inner) => {
+                    insert_imports_for_vec_inner(inner.deref(), &mut imports);
+                }
+                WrapperType::Result(inner) => {
+                    let inner_name = inner.name();
+                    let result_type = format!("{inner_name}Result");
+                    match inner.deref() {
+                        // Avoid cyclic imports
+                        WrapperType::Enum(n) | WrapperType::Struct(n) if n == &class_name => {
+                            local_imports =
+                                format!("from .result_{inner_name} import {result_type}");
+                        }
+                        _ => {
+                            imports.insert(
+                                result_type.clone(),
+                                format!("from .result_{inner_name} import {result_type}"),
+                            );
+                        }
+                    }
+
+                    imports.insert(
+                        "RustException".to_string(),
+                        "from .global_state import RustException".to_string(),
+                    );
+
+                    match inner.deref() {
+                        WrapperType::Enum(inner) | WrapperType::Struct(inner)
+                            if inner != &class_name =>
+                        {
+                            imports
+                                .insert(inner.to_string(), format!("from .{inner} import {inner}"));
+                        }
+                        WrapperType::Vec(inner) => {
+                            insert_imports_for_vec_inner(inner.deref(), &mut imports);
+                        }
+                        _ => (),
+                    }
+                }
+                _ => (),
             }
 
-            ret_hint = format!(" -> {}", type_hint_from_wrapper_type(&ret.wrapper_type));
+            let self_ret = match &ret.wrapper_type {
+                WrapperType::Result(inner) | WrapperType::Vec(inner) => inner.name() == class_name,
+                WrapperType::Struct(s_name) => s_name == &class_name,
+                _ => false,
+            };
+
+            if self_ret {
+                imports.insert("Self".to_string(), "from typing import Self".to_string());
+                ret_hint = " -> Self".to_string();
+            } else {
+                ret_hint = format!(" -> {}", type_hint_from_wrapper_type(&ret.wrapper_type));
+            };
+
             restype_set = set_extern_fn_resttype(&ret.wrapper_type, extern_fn_name);
-            ret_line = crate::wrapper::python::result_cast_and_return(&ret.wrapper_type);
+            ret_line = prepend_each_line_with_n_tabs(&result_cast_and_return(&ret.wrapper_type), 2);
         }
 
         let recv_and_args = if method.is_static {
@@ -125,9 +173,9 @@ class {class_name}:"#
             r#"
     {decorator}def {py_name}({recv_and_args}){ret_hint}:
         {restype_set}
-        {pre_casts}
+        {pre_casts}{local_imports}
         result = {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}({call_target}{call_args})
-        {ret_line}"#,
+{ret_line}"#,
             pre_casts = if pre_casts.is_empty() {
                 "".into()
             } else {
@@ -144,5 +192,16 @@ class {class_name}:"#
         body: body_sections.join("\n"),
         name: class_name,
         imports,
+    }
+}
+
+fn insert_imports_for_vec_inner(inner: &WrapperType, imports: &mut HashMap<String, String>) {
+    if let WrapperType::Vec(inner) = inner {
+        imports.insert("List".to_string(), "from typing import List".to_string());
+        let vec_name = format!("{}Vec", inner.name());
+        imports.insert(
+            vec_name.clone(),
+            format!("from .vec_{} import {}", inner.name(), vec_name),
+        );
     }
 }

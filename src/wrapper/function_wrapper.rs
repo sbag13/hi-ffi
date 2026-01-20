@@ -1,21 +1,12 @@
+use core::panic;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::str::FromStr;
-use std::sync::{LazyLock, Mutex};
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 
-static ENUM_TYPES: LazyLock<Mutex<std::collections::HashSet<String>>> =
-    LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
-
-pub fn register_enum_type(name: String) {
-    ENUM_TYPES.lock().unwrap().insert(name);
-}
-
-pub fn is_enum_type(name: &str) -> bool {
-    ENUM_TYPES.lock().unwrap().contains(name)
-}
+use crate::wrapper::{is_enum_type, is_struct_type};
 
 #[derive(Debug)]
 pub struct FunctionWrapper {
@@ -83,6 +74,9 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
                     let vec_inner_name: TokenStream2 = vec_inner.name().parse().unwrap();
                     quote! {Vec<#vec_inner_name>}
                 }
+                WrapperType::UnitExpr => {
+                    quote! {()}
+                }
                 _ => inner_wrapper_type.name().parse().unwrap(),
             };
             MappedReturnType {
@@ -92,7 +86,11 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
                 },
             }
         }
-        None => MappedReturnType {
+        None
+        | Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::UnitExpr,
+            ..
+        }) => MappedReturnType {
             return_type_sig: quote! {},
             result_cast: quote! {result},
         },
@@ -193,11 +191,17 @@ pub fn map_function_arg_wrappers<'a>(
         }
 
         FunctionArgWrapper {
-            wrapper_type: WrapperType::Result(_),
+            wrapper_type: WrapperType::Result(_) ,
             ..
         } => {
             panic!("Result function arguments are not supported");
         }
+
+        FunctionArgWrapper {
+            wrapper_type: WrapperType::UnitExpr,..}
+            => {
+                panic!("UnitExpr function arguments are not supported");
+            }
     });
     MappedFunctionArgsTokens {
         arg_signatures,
@@ -230,6 +234,7 @@ pub enum WrapperType {
     Vec(Box<WrapperType>),
     Enum(String),
     Result(Box<WrapperType>),
+    UnitExpr,
 }
 
 impl WrapperType {
@@ -243,6 +248,7 @@ impl WrapperType {
             WrapperType::Bool => "bool".to_string(),
             WrapperType::String => "String".to_string(),
             WrapperType::Result(inner) => format!("{}_result", inner.name()),
+            WrapperType::UnitExpr => "unit".to_string(),
         }
     }
 }
@@ -261,8 +267,10 @@ impl FromStr for WrapperType {
             _ => {
                 if is_enum_type(s) {
                     Ok(WrapperType::Enum(s.to_string()))
-                } else {
+                } else if is_struct_type(s) {
                     Ok(WrapperType::Struct(s.to_string()))
+                } else {
+                    Err(s.to_string())
                 }
             }
         }

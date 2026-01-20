@@ -1,6 +1,10 @@
 use crate::wrapper::base::*;
-use crate::wrapper::cpp::{CppFiles, CppHeader};
-use crate::{CPP_CODE_DIR, GEN_CODE_DIR, ReusableWrapper, Wrapper, create_file, insert_after};
+use crate::wrapper::cpp::class_definition::ClassSourceParts;
+use crate::wrapper::cpp::{CppFiles, CppHeader, CppSource};
+use crate::{
+    CPP_CODE_DIR, GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file,
+    insert_after, insert_after_if_not_present,
+};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
@@ -27,22 +31,56 @@ pub(crate) fn write_cpp_code(wrapper: &Wrapper) {
     write_header(header, header_full_path);
 
     if let Some(source) = source {
-        create_file(source, source_full_path);
+        write_source(source, source_full_path);
     }
 
     for reusable_wrapper in &wrapper.reusable_wrappers {
-        let file_name = match reusable_wrapper {
-            ReusableWrapper::Vec(inner) => format!("vec_{}.h", inner.name()),
-            ReusableWrapper::Result(inner) => format!("result_{}.h", inner.name()),
+        let (header_file_name, source_file_name) = match reusable_wrapper {
+            ReusableWrapper::Vec(inner) => (
+                format!("vec_{}.h", inner.name()),
+                format!("vec_{}.cpp", inner.name()),
+            ),
+            ReusableWrapper::Result(inner) => (
+                format!("result_{}.h", inner.name()),
+                format!("result_{}.cpp", inner.name()),
+            ),
         };
-        let source_full_path = cpp_path.join(file_name);
+        let header_full_path = cpp_path.join(header_file_name);
+        let source_full_path = cpp_path.join(source_file_name);
         if CPP_REUSABLE_WRAPPER_GENERATED
             .lock()
             .expect("Mutex lock failed during locking for reusable wrapper")
             .insert(source_full_path.clone())
         {
-            create_file(reusable_wrapper.cpp(), source_full_path);
+            let CppFiles { header, source } = reusable_wrapper.cpp();
+            let CppHeader::Reusable(header) = header else {
+                panic!("Unexpected cpp header type for reusable wrapper");
+            };
+            let Some(CppSource::Reusable(source)) = source else {
+                panic!("Unexpected cpp source type for reusable wrapper");
+            };
+            create_file(header, header_full_path);
+            create_file(source, source_full_path);
         }
+    }
+}
+
+fn write_source(source: CppSource, path: impl AsRef<Path>) {
+    match source {
+        CppSource::Function(fn_source) => {
+            create_file(fn_source, path);
+        }
+        CppSource::Class(ClassSourceParts {
+            base,
+            methods_definitions,
+        }) => {
+            let mut locked_set = CPP_CLASS_GENERATED.lock().expect("Mutex lock failed");
+            if locked_set.insert(path.as_ref().into()) {
+                create_file(base, path.as_ref());
+            }
+            append_to_file(methods_definitions, path);
+        }
+        _ => (),
     }
 }
 
@@ -57,11 +95,13 @@ fn write_header(header: CppHeader, path: impl AsRef<Path>) {
                 create_file(class_header_parts.class_definition, path.as_ref());
             }
 
-            insert_after(
-                crate::wrapper::cpp::class_definition::INCLUDES_MARKER,
-                class_header_parts.includes,
-                &path,
-            );
+            for include in &class_header_parts.includes {
+                insert_after_if_not_present(
+                    crate::wrapper::cpp::class_definition::INCLUDES_MARKER,
+                    include,
+                    &path,
+                );
+            }
             insert_after(
                 crate::wrapper::cpp::class_definition::EXTERN_FNS_MARKER,
                 class_header_parts.extern_fns,
@@ -69,11 +109,12 @@ fn write_header(header: CppHeader, path: impl AsRef<Path>) {
             );
             insert_after(
                 crate::wrapper::cpp::class_definition::METHOD_DEFINITIONS_MARKER,
-                class_header_parts.method_definitions,
+                class_header_parts.method_declarations,
                 &path,
             );
         }
         CppHeader::Function(function_header) => create_file(function_header, path),
+        _ => (),
     }
 }
 
@@ -125,7 +166,7 @@ extern "C" {{
 class RustString {{
     void* self;
 public:
-    RustString(void* self) : self(self) {{}}
+    RustString(void* self) : self(self) {{}};
     ~RustString() {{
         {RUST_STRING_DROP_FN_NAME}(self);
     }}

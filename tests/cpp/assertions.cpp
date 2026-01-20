@@ -36,6 +36,11 @@
 #include "function_with_vec_string_result.h"
 #include "function_with_vec_struct_result.h"
 #include "function_with_vec_enum_result.h"
+#include "function_return_float.h"
+#include "function_return_negated_bool.h"
+#include "function_with_unit_expression_result.h"
+#include "take_status_before_it_is_defined.h"
+#include "take_struct_and_return_status_before_they_are_defined.h"
 #include <iostream>
 #include <cassert>
 #include <cstring>
@@ -174,22 +179,29 @@ void assert_struct_impl_block()
     auto test_struct = TestStruct();
     test_struct.public_method();
     TestStruct::static_method();
-    test_struct.public_method_taking_primitives(5, true);
-    TestStruct::static_method_taking_primitives(6, false);
-    test_struct.public_method_taking_string("Hello, Rust!");
-    TestStruct::static_method_taking_string("Hello, Rust!");
+    test_struct.public_method_taking_primitives(10, false);
+    TestStruct::static_method_taking_primitives(20, true);
+    assert(test_struct.public_method_returning_primitive() == 24);
+    assert(test_struct.public_method_returning_bool() == true);
+    assert(test_struct.public_method_returning_string() == "String returned from Rust method");
+    assert(test_struct.combo_method("str1", "str2", true) == "str1");
+    test_struct.public_method_taking_string("Test string from caller");
+    TestStruct::static_method_taking_string("static method string");
+    assert(TestStruct::static_method_returning_primitive() == 22);
+    assert(TestStruct::static_method_returning_string() == "String returned from Rust static method");
+    assert(test_struct.combo_method("first", "second", false) == "second");
 }
 
 void assert_struct_methods_with_structs()
 {
     auto test_struct = TestStruct();
     auto test_struct2_arg = TestStruct2();
-    test_struct2_arg.set_i32_field(100);
+    test_struct2_arg.set_i32_field(55);
     test_struct.public_method_taking_struct(test_struct2_arg);
     auto returned_struct = test_struct.public_method_returning_struct();
     assert(returned_struct.get_i32_field() == 99);
     auto static_arg = TestStruct2();
-    static_arg.set_i32_field(200);
+    static_arg.set_i32_field(77);
     TestStruct::static_method_taking_struct(static_arg);
     auto static_returned = TestStruct::static_method_returning_struct();
     assert(static_returned.get_i32_field() == 77);
@@ -224,7 +236,7 @@ void assert_struct_methods_with_vectors()
     test_struct.public_method_taking_vec_of_structs(vec_structs);
 
     // Test static methods with vectors
-    std::vector<i32> static_vec_primitives = {6, 7, 8, 9, 10};
+    std::vector<u16> static_vec_primitives = {6, 7, 8, 9, 10};
     TestStruct::static_method_taking_vec_of_primitives(static_vec_primitives);
 
     std::vector<std::string> static_vec_strings = {"Static", "Method"};
@@ -270,13 +282,21 @@ void assert_struct_methods_with_vectors()
 
 void assert_functions()
 {
+    take_status_before_it_is_defined(TestStatus::Pending);
+    auto ts1 = TestStruct();
+    ts1.set_i32_field(-5);
+    assert(take_struct_and_return_status_before_they_are_defined(ts1) == TestStatus::Pending);
     simple_function();
-    function_with_primitive_args(3, true);
-    function_with_string_arg("CPP string arg: Hello, World!");
+    function_with_primitive_args(100, true);
+    function_with_string_arg("Hello, World!");
     function_with_primitive_and_string_arg(42, false, "Complex function!");
     assert(function_return_primitive() == 42);
+    assert(function_return_float() == 5.21);
     assert(function_return_string() == "String returned from Rust");
-    function_taking_struct(TestStruct2());
+    assert(function_return_negated_bool(true) == false);
+    auto ts2 = TestStruct2();
+    ts2.set_i32_field(55);
+    function_taking_struct(ts2);
     auto struct2_from_function = function_returning_struct();
     assert(struct2_from_function.get_i32_field() == 48);
     assert(combo_function("str1", "str2", true, TestStruct()) == "str1");
@@ -318,6 +338,7 @@ void assert_results()
         assert(!source_of_source_2.has_value());
     }
 
+    function_with_unit_expression_result(); // just no exception
     assert(function_with_bool_result(false) == true);
     assert(function_with_string_result(false) == "No error");
     assert(function_with_struct_result(false).get_i32_field() == 256);
@@ -334,4 +355,30 @@ void assert_results()
     assert(vec_of_enums[0] == TestStatus::Pending);
     assert(vec_of_enums[1] == TestStatus::Active);
     assert(vec_of_enums[2] == TestStatus::Inactive);
+
+    auto ts1 = TestStruct();
+    try
+    {
+        ts1.method_with_int_result(true);
+        assert(false);
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "StructError: EnumError: VariantTwo") == 0);
+    }
+
+    assert(ts1.method_with_int_result(false) == 16);
+    assert(TestStruct::static_method_with_bool_result(false));
+    assert(ts1.method_with_string_result() == "Ok!");
+    assert(TestStruct::static_method_with_struct_result().get_i32_field() == 267);
+    assert(ts1.method_with_enum_result() == TestStatus::Pending);
+    assert(ts1.method_with_vec_of_ints_result() == std::vector<i8>({1, 2, 7}));
+    assert(TestStruct::static_method_with_vec_of_bools_result() == std::vector<bool>({true, false, false}));
+    assert(ts1.method_with_vec_of_strings_result() == std::vector<std::string>({"some", "string"}));
+    auto ok_vec_of_structs = TestStruct::static_method_with_vec_of_structs_result();
+    assert(ok_vec_of_structs.size() == 2);
+    assert(ok_vec_of_structs[0].get_i32_field() == 2);
+    assert(ok_vec_of_structs[1].get_i32_field() == -5);
+    assert(ts1.method_with_vec_of_bools_result() == std::vector<bool>({false, true, true, true}));
+    assert(TestStruct::static_method_with_vec_of_enum_result() == std::vector<TestStatus>({TestStatus::Inactive, TestStatus::Pending, TestStatus::Active}));
 }

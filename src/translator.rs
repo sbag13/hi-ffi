@@ -1,5 +1,5 @@
 use core::panic;
-use std::any::Any;
+use std::{any::Any, fmt::Display, ops::Deref};
 
 use syn::Item;
 
@@ -14,12 +14,41 @@ use function_translator::*;
 use impl_translator::*;
 use struct_translator::*;
 
-pub(crate) fn translate(input: Item) -> Wrapper {
-    match input {
+pub struct NoWrapperErr(pub String);
+
+impl<T: Display> From<T> for NoWrapperErr {
+    fn from(value: T) -> Self {
+        NoWrapperErr(value.to_string())
+    }
+}
+
+pub(crate) fn translate(input: Item) -> Result<Wrapper, NoWrapperErr> {
+    Ok(match input {
         Item::Struct(item_struct) => translate_struct(item_struct),
-        Item::Fn(item_fn) => translate_function(item_fn),
-        Item::Impl(item_impl) => translate_impl(item_impl),
+        Item::Fn(item_fn) => translate_function(item_fn)?,
+        Item::Impl(item_impl) => translate_impl(item_impl)?,
         Item::Enum(item_enum) => translate_enum(item_enum),
         _ => panic!("Unsupported type: {:?}", input.type_id()),
+    })
+}
+
+pub(crate) fn map_wrapper_to_reusable(wrapper_type: &WrapperType) -> Vec<ReusableWrapper> {
+    match wrapper_type {
+        WrapperType::Vec(inner_wrapper_type) => {
+            vec![ReusableWrapper::Vec(*inner_wrapper_type.clone())]
+        }
+        WrapperType::Result(inner_wrapper_type) => {
+            let result_wrapper = ReusableWrapper::Result(*inner_wrapper_type.clone());
+            match inner_wrapper_type.deref() {
+                WrapperType::Vec(vec_inner) => {
+                    vec![
+                        result_wrapper,
+                        ReusableWrapper::Vec(vec_inner.deref().clone()),
+                    ]
+                }
+                _ => vec![result_wrapper],
+            }
+        }
+        _ => vec![],
     }
 }

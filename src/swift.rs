@@ -1,7 +1,10 @@
-use crate::wrapper::base::*;
 use crate::wrapper::swift::class_definition::gen_empty_class_definition;
 use crate::wrapper::swift::{SwiftCode, gen_swift_result_declarations, gen_swift_vec_declarations};
-use crate::{GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, insert_after};
+use crate::wrapper::{ParsedWrapper, base::*};
+use crate::{
+    GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, insert_after,
+    prepend_to_file,
+};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -49,7 +52,10 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
 
     let swift_code = wrapper.swift();
 
-    append_to_file(swift_code.header(), &swift_header_path);
+    match wrapper.parsed {
+        ParsedWrapper::Enum(_) => prepend_to_file(swift_code.header(), &swift_header_path),
+        _ => append_to_file(swift_code.header(), &swift_header_path),
+    };
 
     // Add vector function declarations to header
     for reusable_wrapper in &wrapper.reusable_wrappers {

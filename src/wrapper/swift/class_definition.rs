@@ -319,6 +319,7 @@ fn gen_property(field: &FieldWrapper) -> String {
                 WrapperType::String => "String".to_string(),
                 WrapperType::Vec(_) => "Array".to_string(), // Nested vectors not supported yet
                 WrapperType::Result(_) => panic!("Vec of results not supported as property"),
+                WrapperType::UnitExpr => panic!("Empty expression cannot be a swift property"),
             };
             (
                 getter

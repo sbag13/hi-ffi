@@ -1,10 +1,32 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::sync::{LazyLock, Mutex};
 
 use impl_block_wrapper::ImplBlockWrapper;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+
+static ENUM_TYPES: LazyLock<Mutex<std::collections::HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
+static STRUCT_TYPES: LazyLock<Mutex<std::collections::HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
+
+pub fn register_enum_type(name: String) {
+    ENUM_TYPES.lock().unwrap().insert(name);
+}
+
+pub fn is_enum_type(name: &str) -> bool {
+    ENUM_TYPES.lock().unwrap().contains(name)
+}
+
+pub fn is_struct_type(name: &str) -> bool {
+    STRUCT_TYPES.lock().unwrap().contains(name)
+}
+
+pub fn register_struct_type(name: String) {
+    STRUCT_TYPES.lock().unwrap().insert(name);
+}
 
 pub mod base;
 #[cfg(feature = "cpp")]
@@ -61,6 +83,7 @@ fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
             let vec_inner_name: TokenStream2 = vec_inner.name().parse().unwrap();
             quote! {Vec<#vec_inner_name>}
         }
+        WrapperType::UnitExpr => quote! {()},
         _ => inner.name().parse().unwrap(),
     };
 
@@ -77,6 +100,7 @@ fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::Result(_) => {
             panic!("Nested Result types are not supported")
         }
+        WrapperType::UnitExpr => quote! {()},
     };
 
     let clone_ret_type: TokenStream2 = match &inner {
@@ -86,6 +110,7 @@ fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
             let vec_inner_name = vec_inner.name();
             format!("*mut Vec<{}>", vec_inner_name).parse().unwrap()
         }
+        WrapperType::UnitExpr => quote! {()},
         _ => inner.name().parse().unwrap(),
     };
 
@@ -175,6 +200,7 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
             panic!("Vec of Result type not supported yet!")
         }
         WrapperType::Enum(name) => format!("value: {name}").parse().unwrap(),
+        WrapperType::UnitExpr => panic!("UnitExpr as vec inner type is not supported"),
     };
     let value_cast = match inner {
         WrapperType::String => quote! {
@@ -203,6 +229,7 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::Result(_) => {
             panic!("Vec of Result type not supported yet!")
         }
+        WrapperType::UnitExpr => panic!("UnitExpr not supported yet as get return type!"),
     };
 
     let get_body: TokenStream2 = match inner {
@@ -221,6 +248,9 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         },
         WrapperType::Result(_) => {
             panic!("Vec of Result type not supported yet!")
+        }
+        WrapperType::UnitExpr => {
+            panic!("UnitExpr not supported yet as get return type!")
         }
     };
 

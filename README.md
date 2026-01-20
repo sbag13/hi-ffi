@@ -20,7 +20,7 @@ Add `hi-ffi` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hi_ffi = { version = "0.3", features = ["cpp", "swift", "python"] }
+hi_ffi = { version = "0.4", features = ["cpp", "swift", "python"] }
 ```
 
 **Note**: `hi-ffi` is a procedural macro crate. Enable the `cpp` and/or `swift`, `python` features based on your target languages.
@@ -63,8 +63,8 @@ impl std::fmt::Display for SimpleError {
 impl std::error::Error for SimpleError {}
 
 #[ffi]
-fn greet(name: String) -> Result<String, SimpleError> {
-    Ok(format!("Hello, {}!", name))
+fn greet(names: Vec<String>) -> Result<String, SimpleError> {
+    Ok(format!("Hello, {:?}!", names))
 }
 ```
 
@@ -158,11 +158,11 @@ These examples demonstrate how to use the generated bindings in real application
 | Fn string Result         | ✅  | ✅    | ✅     |
 | Fn vec results           | ✅  | ✅    | ✅     |
 | Fn enum Result           | ✅  | ✅    | ✅     |
-| Methods primitive Result | ❌  | ❌    | ❌     |
-| Methods struct Result    | ❌  | ❌    | ❌     |
-| Methods string Result    | ❌  | ❌    | ❌     |
-| Methods vec results      | ❌  | ❌    | ❌     |
-| Methods enum Result      | ❌  | ❌    | ❌     |
+| Methods primitive Result | ✅  | ✅    | ✅     |
+| Methods struct Result    | ✅  | ✅    | ✅     |
+| Methods string Result    | ✅  | ✅    | ✅     |
+| Methods vec results      | ✅  | ✅    | ✅     |
+| Methods enum Result      | ✅  | ✅    | ✅     |
 
 ### Option
 

@@ -13,15 +13,48 @@ pub const METHOD_DEFINITIONS_MARKER: &str = "// methods definitions";
 
 pub struct ClassHeaderParts {
     pub class_definition: String,
-    pub includes: String,
+    pub includes: HashSet<String>,
     pub extern_fns: String,
-    pub method_definitions: String,
+    pub method_declarations: String,
+}
+
+pub fn gen_class_source_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -> ClassSourceParts {
+    let methods_definitions = impl_block_wrapper
+        .methods
+        .iter()
+        .filter_map(|m| {
+            if !m.public {
+                return None;
+            }
+            let MappedCppFunctionArgsTokens {
+                cpp_args,
+                call_args,
+                arg_casts,
+                ..
+            } = map_args(m.args.iter());
+            let return_types = map_return_type(&m.return_wrapper);
+            Some(method_definition(
+                &m.name,
+                &m.extern_function_name,
+                m.is_static,
+                &cpp_args,
+                &call_args,
+                &arg_casts,
+                &return_types,
+                &impl_block_wrapper.struct_name.to_string(),
+            ))
+        })
+        .collect();
+    ClassSourceParts {
+        base: class_source_base(&impl_block_wrapper.struct_name),
+        methods_definitions,
+    }
 }
 
 pub fn gen_class_definition_parts_from_impl_block(
     impl_block_wrapper: &ImplBlockWrapper,
 ) -> ClassHeaderParts {
-    let (method_definitions, extern_fns, includes) = impl_block_wrapper
+    let (method_declarations, extern_fns, includes) = impl_block_wrapper
         .methods
         .iter()
         .filter(|method| method.public)
@@ -33,21 +66,17 @@ pub fn gen_class_definition_parts_from_impl_block(
 
                 let MappedCppFunctionArgsTokens {
                     cpp_args,
-                    call_args: arg_names,
-                    arg_casts,
                     wrapper_args,
                     includes: arg_includes,
+                    ..
                 } = map_args(method_wrapper.args.iter());
 
                 let return_types = map_return_type(&method_wrapper.return_wrapper);
 
-                let method = method_definition(
+                let method = method_declaration(
                     method_name,
-                    extern_function_name,
                     method_wrapper.is_static,
                     &cpp_args,
-                    &arg_names,
-                    &arg_casts,
                     &return_types,
                 );
                 let extern_fn = method_extern_fn(
@@ -60,23 +89,13 @@ pub fn gen_class_definition_parts_from_impl_block(
                 methods.push_str(&method);
                 externs.push_str(&extern_fn);
                 // Add includes from arguments
-                for include in arg_includes {
-                    includes.insert(include);
-                }
+                includes.extend(arg_includes);
                 // Add includes from return type
-                if !return_types.return_type_includes.is_empty() {
-                    includes.insert(return_types.return_type_includes);
-                }
+                includes.extend(return_types.return_type_includes);
 
                 (methods, externs, includes)
             },
         );
-
-    let includes = includes.into_iter().fold(String::new(), |mut acc, i| {
-        acc.push_str(&i);
-        acc.push('\n');
-        acc
-    });
 
     ClassHeaderParts {
         class_definition: gen_empty_class_definition(&impl_block_wrapper.struct_name),
@@ -88,7 +107,7 @@ extern "C" {{
 }}
 "#
         ),
-        method_definitions,
+        method_declarations,
     }
 }
 
@@ -114,6 +133,29 @@ fn method_extern_fn(
     )
 }
 
+pub struct ClassSourceParts {
+    /// inserted one time only per file
+    pub base: String,
+    pub methods_definitions: String,
+}
+
+fn method_declaration(
+    method_name: impl Display,
+    is_static: bool,
+    cpp_args: &str,
+    return_types: &ReturnTypes,
+) -> String {
+    let static_keyword = if is_static { "static " } else { "" };
+
+    let ReturnTypes { return_type, .. } = return_types;
+
+    format!(
+        r#"    {static_keyword}{return_type} {method_name}({cpp_args});
+"#
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 fn method_definition(
     method_name: impl Display,
     extern_function_name: impl Display,
@@ -122,6 +164,7 @@ fn method_definition(
     arg_names: &str,
     arg_casts: &str,
     return_types: &ReturnTypes,
+    class_name: &str,
 ) -> String {
     let arg_names = if is_static {
         arg_names.to_string()
@@ -135,49 +178,112 @@ fn method_definition(
         ext_return_type,
         return_type,
         return_cast,
-        return_type_includes: _,
+        ..
     } = return_types;
 
-    let static_keyword = if is_static { "static " } else { "" };
-
-    let arg_casts = prepend_each_line_with_n_tabs(arg_casts, 2);
-    let return_casts = prepend_each_line_with_n_tabs(return_cast, 2);
+    let arg_casts = prepend_each_line_with_n_tabs(arg_casts, 1);
+    let return_casts = prepend_each_line_with_n_tabs(return_cast, 1);
 
     format!(
         r#"
-    {static_keyword}{return_type} {method_name}({cpp_args}) {{
+{return_type} {class_name}::{method_name}({cpp_args}) {{
 {arg_casts}
-        {ext_return_type} result = {extern_function_name}({arg_names});
+    {ext_return_type} result = {extern_function_name}({arg_names});
 {return_casts}
-    }}
+}}
+"#
+    )
+}
+
+pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> ClassSourceParts {
+    let class_name = &struct_wrapper.name;
+
+    let pointer_constructor_definition = pointer_constructor_definition(class_name);
+    let copy_constructor = copy_constructor_definition(struct_wrapper);
+    let move_constructor = move_constructor_definition(struct_wrapper);
+
+    let default_constructor = default_constructor(struct_wrapper);
+    let default_constructor_definition = default_constructor.definition;
+
+    let destructor = destructor(struct_wrapper);
+    let destructor_definition = destructor.definition;
+
+    let method_definitions = struct_wrapper
+        .fields
+        .iter()
+        .map(|f| map_fields(f, &struct_wrapper.name))
+        .fold(String::new(), |mut methods, Methods { getter, setter }| {
+            if let Some(Method { definition, .. }) = getter {
+                methods.push_str(&definition);
+            }
+
+            if let Some(Method { definition, .. }) = setter {
+                methods.push_str(&definition);
+            }
+
+            methods
+        });
+
+    let definitions = format!(
+        r#"
+{pointer_constructor_definition}
+{copy_constructor}
+{move_constructor}
+{default_constructor_definition}
+{destructor_definition}
+{method_definitions}
+"#
+    );
+
+    ClassSourceParts {
+        base: class_source_base(class_name),
+        methods_definitions: definitions,
+    }
+}
+
+fn class_source_base(class_name: impl Display) -> String {
+    format!(
+        r#"#include "{class_name}.h"
+
+void* {class_name}::self_ptr() const {{
+    return self;
+}}
+void {class_name}::set_self_ptr(void* ptr) {{
+    self = ptr;
+}}
 "#
     )
 }
 
 pub fn gen_class_definition_parts_from_struct(struct_wrapper: &StructWrapper) -> ClassHeaderParts {
     let class_name = &struct_wrapper.name;
-    let (method_definitions, extern_fns, includes) =
-        struct_wrapper.fields.iter().map(map_fields).fold(
+    let (method_declarations, extern_fns, includes) = struct_wrapper
+        .fields
+        .iter()
+        .map(|f| map_fields(f, &struct_wrapper.name))
+        .fold(
             (String::new(), String::new(), HashSet::new()),
             |(mut methods, mut externs, mut includes), Methods { getter, setter }| {
                 if let Some(Method {
-                    definition,
+                    declaration,
                     extern_fn,
                     include,
+                    ..
                 }) = getter
                 {
-                    methods.push_str(&definition);
+                    methods.push_str(&declaration);
                     externs.push_str(&extern_fn);
                     includes.insert(include);
                 }
 
                 if let Some(Method {
-                    definition,
+                    declaration,
                     extern_fn,
                     include,
+                    ..
                 }) = setter
                 {
-                    methods.push_str(&definition);
+                    methods.push_str(&declaration);
                     externs.push_str(&extern_fn);
                     includes.insert(include);
                 }
@@ -186,22 +292,16 @@ pub fn gen_class_definition_parts_from_struct(struct_wrapper: &StructWrapper) ->
             },
         );
     let default_constructor = default_constructor(struct_wrapper);
-    let default_constructor_definition = default_constructor.definition;
+    let default_constructor_declaration = default_constructor.declaration;
     let default_constructor_extern_fn = default_constructor.extern_fn;
 
     let destructor = destructor(struct_wrapper);
-    let destructor_definition = destructor.definition;
+    let destructor_declaration = destructor.declaration;
     let destructor_extern_fn = destructor.extern_fn;
 
-    let includes = includes.into_iter().fold(String::new(), |mut acc, i| {
-        acc.push_str(&i);
-        acc.push('\n');
-        acc
-    });
-
-    let pointer_constructor_definition = pointer_constructor_definition(class_name);
-    let copy_constructor = copy_constructor_definition(struct_wrapper);
-    let move_constructor = move_constructor_definition(struct_wrapper);
+    let pointer_constructor_declaration = pointer_constructor_declaration(class_name);
+    let copy_constructor = copy_constructor_declaration(struct_wrapper);
+    let move_constructor = move_constructor_declaration(struct_wrapper);
     let clone_extern_fn = clone_ext_fn(struct_wrapper);
 
     ClassHeaderParts {
@@ -217,14 +317,14 @@ extern "C" {{
 }}
 "#
         ),
-        method_definitions: format!(
+        method_declarations: format!(
             r#"
-{pointer_constructor_definition}
+{pointer_constructor_declaration}
 {copy_constructor}
 {move_constructor}
-{default_constructor_definition}
-{destructor_definition}
-{method_definitions}
+{default_constructor_declaration}
+{destructor_declaration}
+{method_declarations}
 "#
         ),
     }
@@ -246,12 +346,8 @@ class {class_name} {{
     void* self = nullptr;
 public:
 
-    void* self_ptr() const {{
-        return self;
-    }}
-    void set_self_ptr(void* ptr) {{
-        self = ptr;
-    }}
+    void* self_ptr() const;
+    void set_self_ptr(void* ptr);
 
     {METHOD_DEFINITIONS_MARKER}
 }};
@@ -271,28 +367,42 @@ fn copy_constructor_definition(struct_wrapper: &StructWrapper) -> String {
     let clone_ext_fn_name = &struct_wrapper.clone_ext_fn_name;
     format!(
         r#"
-    {class_name}(const {class_name}& other) {{
-        this->self = {clone_ext_fn_name}(other.self);
-    }}"#,
+{class_name}::{class_name}(const {class_name}& other) {{
+    this->self = {clone_ext_fn_name}(other.self);
+}}"#,
     )
+}
+fn copy_constructor_declaration(struct_wrapper: &StructWrapper) -> String {
+    let class_name = &struct_wrapper.name;
+    format!(r#"    {class_name}(const {class_name}& other);"#,)
 }
 
 fn move_constructor_definition(struct_wrapper: &StructWrapper) -> String {
     let class_name = &struct_wrapper.name;
     format!(
         r#"
-    {class_name}({class_name}&& other) {{
-        this->self = other.self;
-        other.self = nullptr;
-    }}"#,
+{class_name}::{class_name}({class_name}&& other) {{
+    this->self = other.self;
+    other.self = nullptr;
+}}"#,
+    )
+}
+fn move_constructor_declaration(struct_wrapper: &StructWrapper) -> String {
+    let class_name = &struct_wrapper.name;
+    format!(
+        r#"
+    {class_name}({class_name}&& other);"#,
     )
 }
 
 fn pointer_constructor_definition(class_name: impl Display) -> String {
-    format!(r#"    {class_name}(void* self) : self(self) {{}}"#,)
+    format!(r#"{class_name}::{class_name}(void* self) : self(self) {{}}"#)
+}
+fn pointer_constructor_declaration(class_name: impl Display) -> String {
+    format!(r#"    {class_name}(void* self);"#)
 }
 
-fn map_fields(field: &FieldWrapper) -> Methods {
+fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
     match field {
         FieldWrapper {
             field_type,
@@ -305,10 +415,10 @@ fn map_fields(field: &FieldWrapper) -> Methods {
 
             let getter = getter
                 .as_ref()
-                .map(|g| map_primitive_getter(g, &field_type));
+                .map(|g| map_primitive_getter(g, &field_type, &class_name));
             let setter = setter
                 .as_ref()
-                .map(|s| map_primitive_setter(s, &field_type));
+                .map(|s| map_primitive_setter(s, &field_type, &class_name));
 
             Methods { getter, setter }
         }
@@ -319,8 +429,8 @@ fn map_fields(field: &FieldWrapper) -> Methods {
             getter,
             ..
         } => {
-            let getter = getter.as_ref().map(map_string_getter);
-            let setter = setter.as_ref().map(map_string_setter);
+            let getter = getter.as_ref().map(|g| map_string_getter(g, &class_name));
+            let setter = setter.as_ref().map(|s| map_string_setter(s, &class_name));
             Methods { getter, setter }
         }
 
@@ -331,12 +441,12 @@ fn map_fields(field: &FieldWrapper) -> Methods {
             field_type,
             ..
         } => {
-            let getter = getter
-                .as_ref()
-                .map(|g| map_custom_getter(g, field_type.to_token_stream().to_string()));
-            let setter = setter
-                .as_ref()
-                .map(|s| map_custom_setter(s, field_type.to_token_stream().to_string()));
+            let getter = getter.as_ref().map(|g| {
+                map_custom_getter(g, field_type.to_token_stream().to_string(), &class_name)
+            });
+            let setter = setter.as_ref().map(|s| {
+                map_custom_setter(s, field_type.to_token_stream().to_string(), &class_name)
+            });
             Methods { getter, setter }
         }
 
@@ -346,8 +456,12 @@ fn map_fields(field: &FieldWrapper) -> Methods {
             setter,
             ..
         } => {
-            let getter = getter.as_ref().map(|g| map_vec_getter(g, inner));
-            let setter = setter.as_ref().map(|s| map_vec_setter(s, inner));
+            let getter = getter
+                .as_ref()
+                .map(|g| map_vec_getter(g, inner, &class_name));
+            let setter = setter
+                .as_ref()
+                .map(|s| map_vec_setter(s, inner, &class_name));
 
             Methods { getter, setter }
         }
@@ -360,6 +474,7 @@ fn map_vec_getter(
         extern_fn_name,
     }: &Getter,
     inner: &WrapperType,
+    class_name: impl Display,
 ) -> Method {
     let inner_name = inner.name();
     let cpp_inner_name = match inner {
@@ -370,16 +485,17 @@ fn map_vec_getter(
     let cpp_vec_class_name = format!("Rust{inner_name}Vec");
 
     Method {
+        declaration: format!("    std::vector<{cpp_inner_name}> {name}();\n"),
         definition: format!(
             r#"
-    std::vector<{cpp_inner_name}> {name}() {{
-        void* result = {extern_fn_name}(this->self);
-        auto rust_vec = {cpp_vec_class_name}::from_raw(result);
-        auto std_vec = rust_vec.to_std();
-        // this vec is still owned by a Rust struct - avoid calling drop by cpp
-        rust_vec.leak();
-        return std_vec;
-    }}
+std::vector<{cpp_inner_name}> {class_name}::{name}() {{
+    void* result = {extern_fn_name}(this->self);
+    auto rust_vec = {cpp_vec_class_name}::from_raw(result);
+    auto std_vec = rust_vec.to_std();
+    // this vec is still owned by a Rust struct - avoid calling drop by cpp
+    rust_vec.leak();
+    return std_vec;
+}}
 "#
         ),
         extern_fn: format!("    void* {extern_fn_name}(void*);\n"),
@@ -393,6 +509,7 @@ fn map_vec_setter(
         extern_fn_name,
     }: &Setter,
     inner: &WrapperType,
+    class_name: impl Display,
 ) -> Method {
     let inner_name = inner.name();
     let cpp_inner_name = match inner {
@@ -404,12 +521,13 @@ fn map_vec_setter(
     let cpp_vec_class_name = format!("Rust{inner_name}Vec");
 
     Method {
+        declaration: format!("    void {name}(std::vector<{cpp_inner_name}>& value);\n"),
         definition: format!(
             r#"
-    void {name}(std::vector<{cpp_inner_name}>& value) {{
-        auto rust_vec = {cpp_vec_class_name}::from_std(value);
-        {extern_fn_name}(this->self, rust_vec.raw_ptr()); // Rust side makes swap
-    }}"#
+void {class_name}::{name}(std::vector<{cpp_inner_name}>& value) {{
+    auto rust_vec = {cpp_vec_class_name}::from_std(value);
+    {extern_fn_name}(this->self, rust_vec.raw_ptr()); // Rust side makes swap
+}}"#
         ),
         extern_fn: format!("    void {extern_fn_name}(void*, void*);\n"),
         include: custom_type_include(cpp_vec_file_name),
@@ -422,13 +540,15 @@ fn map_custom_getter(
         extern_fn_name,
     }: &Getter,
     field_type: impl Display,
+    class_name: impl Display,
 ) -> Method {
     Method {
+        declaration: format!("    {field_type} {name}();\n"),
         definition: format!(
             r#"
-    {field_type} {name}() {{
-        return {field_type}({extern_fn_name}(this->self));
-    }}"#
+{field_type} {class_name}::{name}() {{
+    return {field_type}({extern_fn_name}(this->self));
+}}"#
         ),
         extern_fn: format!("    void* {extern_fn_name}(void*);\n"),
         include: custom_type_include(field_type),
@@ -441,13 +561,15 @@ fn map_custom_setter(
         extern_fn_name,
     }: &Setter,
     field_type: impl Display,
+    class_name: impl Display,
 ) -> Method {
     Method {
+        declaration: format!("    void {name}({field_type}& value);\n"),
         definition: format!(
             r#"
-    void {name}({field_type}& value) {{
-        {extern_fn_name}(this->self, value.self_ptr()); // Rust side makes clone
-    }}"#
+void {class_name}::{name}({field_type}& value) {{
+    {extern_fn_name}(this->self, value.self_ptr()); // Rust side makes clone
+}}"#
         ),
         extern_fn: format!("    void {extern_fn_name}(void*, void*);\n"),
         include: custom_type_include(field_type),
@@ -463,18 +585,20 @@ fn map_string_getter(
         name,
         extern_fn_name,
     }: &Getter,
+    class_name: impl Display,
 ) -> Method {
     Method {
+        declaration: format!("    std::string {name}();\n"),
         definition: format!(
             r#"
-    std::string {name}() {{
-        void* slice_ptr = {extern_fn_name}(this->self);
-        char* ptr = {SLICE_GET_PTR_FN_NAME}(slice_ptr);
-        auto len = {SLICE_GET_LEN_FN_NAME}(slice_ptr);
-        auto result = std::string(ptr, len);
-        {SLICE_DROP_FN_NAME}(slice_ptr);
-        return result;
-    }}"#
+std::string {class_name}::{name}() {{
+    void* slice_ptr = {extern_fn_name}(this->self);
+    char* ptr = {SLICE_GET_PTR_FN_NAME}(slice_ptr);
+    auto len = {SLICE_GET_LEN_FN_NAME}(slice_ptr);
+    auto result = std::string(ptr, len);
+    {SLICE_DROP_FN_NAME}(slice_ptr);
+    return result;
+}}"#
         ),
         extern_fn: format!("    void* {extern_fn_name}(void*);\n"),
         include: String::new(),
@@ -486,19 +610,24 @@ fn map_string_setter(
         name,
         extern_fn_name,
     }: &Setter,
+    class_name: impl Display,
 ) -> Method {
     Method {
+        declaration: format!(
+            "    void {name}(std::string&& value);
+    void {name}(std::string& value);\n"
+        ),
         definition: format!(
             r#"
-    void {name}(std::string&& value) {{
-        auto ptr = value.data();
-        auto len = value.size();
-        {extern_fn_name}(this->self, ptr, len);
-    }}
-    
-    void {name}(std::string& value) {{
-        this->{name}(std::move(value));
-    }}"#
+void {class_name}::{name}(std::string&& value) {{
+    auto ptr = value.data();
+    auto len = value.size();
+    {extern_fn_name}(this->self, ptr, len);
+}}
+
+void {class_name}::{name}(std::string& value) {{
+    this->{name}(std::move(value));
+}}"#
         ),
         extern_fn: format!("    void {extern_fn_name}(void*, const char*, size_t);\n"),
         include: String::new(),
@@ -511,13 +640,15 @@ fn map_primitive_getter(
         extern_fn_name,
     }: &Getter,
     field_type: impl Display,
+    class_name: impl Display,
 ) -> Method {
     Method {
+        declaration: format!("    {field_type} {name}();\n"),
         definition: format!(
             r#"
-    {field_type} {name}() {{
-        return {field_type}({extern_fn_name}(this->self));
-    }}"#
+{field_type} {class_name}::{name}() {{
+    return {field_type}({extern_fn_name}(this->self));
+}}"#
         ),
         extern_fn: format!("    {field_type} {extern_fn_name}(void*);\n"),
         include: String::new(),
@@ -530,13 +661,15 @@ fn map_primitive_setter(
         extern_fn_name,
     }: &Setter,
     field_type: impl Display,
+    class_name: impl Display,
 ) -> Method {
     Method {
+        declaration: format!("    void {name}({field_type} value);\n"),
         definition: format!(
             r#"
-    void {name}({field_type} value) {{
-        {extern_fn_name}(this->self, value);
-    }}"#
+void {class_name}::{name}({field_type} value) {{
+    {extern_fn_name}(this->self, value);
+}}"#
         ),
         extern_fn: format!("    void {extern_fn_name}(void*, {field_type});\n"),
         include: String::new(),
@@ -551,20 +684,23 @@ fn default_constructor(struct_wrapper: &StructWrapper) -> Method {
 
         let definition = format!(
             r#"
-    {class_name}() {{
-        this->self = {default_constructor_ext_fn_name}();
-    }}"#,
+{class_name}::{class_name}() {{
+    this->self = {default_constructor_ext_fn_name}();
+}}
+"#,
         );
 
         let extern_fn = format!("    void* {default_constructor_ext_fn_name}();");
 
         Method {
+            declaration: format!("    {class_name}();"),
             definition,
             extern_fn,
             include: String::new(),
         }
     } else {
         Method {
+            declaration: String::new(),
             definition: String::new(),
             extern_fn: String::new(),
             include: String::new(),
@@ -578,15 +714,16 @@ fn destructor(struct_wrapper: &StructWrapper) -> Method {
 
     let definition = format!(
         r#"
-    virtual ~{class_name}() {{
-        if (this->self != nullptr)
-            {drop_ext_fn_name}(this->self);
-    }}"#,
+{class_name}::~{class_name}() {{
+    if (this->self != nullptr)
+        {drop_ext_fn_name}(this->self);
+}}"#,
     );
 
     let extern_fn = format!("    void {drop_ext_fn_name}(void*);");
 
     Method {
+        declaration: format!("    virtual ~{class_name}();\n"),
         definition,
         extern_fn,
         include: String::new(),

@@ -1,5 +1,16 @@
 use hi_ffi::ffi;
 
+#[ffi]
+pub fn take_status_before_it_is_defined(status: TestStatus) {
+    assert_eq!(status, TestStatus::Pending);
+}
+
+#[ffi]
+pub fn take_struct_and_return_status_before_they_are_defined(s: TestStruct) -> TestStatus {
+    assert_eq!(s.i32_field, -5);
+    TestStatus::Pending
+}
+
 use serde::Serialize;
 
 #[ffi]
@@ -52,16 +63,17 @@ impl TestStruct {
     #[allow(dead_code)]
     fn private_method(&self) {}
 
-    pub fn public_method_taking_primitives(&self, _i: i32, _b: bool) {
-        // println!("Rust: Public method called: i = {_i}, b = {_b}");
+    pub fn public_method_taking_primitives(&self, i: i32, b: bool) {
+        assert_eq!(i, 10);
+        assert!(!b);
     }
 
-    pub fn public_method_taking_string(&self, _s: String) {
-        // println!("Rust: Public method called: s = {_s}");
+    pub fn public_method_taking_string(&self, s: String) {
+        assert_eq!(s, "Test string from caller");
     }
 
-    pub fn public_method_taking_struct(&self, _s: TestStruct2) {
-        // println!("Rust: Public method called: s = {_s:?}");
+    pub fn public_method_taking_struct(&self, s: TestStruct2) {
+        assert_eq!(s, TestStruct2 { i32_field: 55 });
     }
 
     pub fn public_method_returning_primitive(&self) -> i32 {
@@ -81,22 +93,21 @@ impl TestStruct {
     }
 
     pub fn combo_method(&self, str1: String, str2: String, b: bool) -> String {
-        // println!("{str1} {str2} {b}");
         if b { str1 } else { str2 }
     }
 
     // static method
-    pub fn static_method() {
-        // println!("Rust: Static public method called");
+    pub fn static_method() {}
+
+    pub fn static_method_taking_primitives(i: i32, b: bool) {
+        assert_eq!(i, 20);
+        assert!(b);
     }
-    pub fn static_method_taking_primitives(_i: i32, _b: bool) {
-        // println!("Rust: Static public method called: i = {_i}, b = {_b}");
+    pub fn static_method_taking_string(s: String) {
+        assert_eq!(s, "static method string");
     }
-    pub fn static_method_taking_string(_s: String) {
-        // println!("Rust: Static public method called: s = {_s}");
-    }
-    pub fn static_method_taking_struct(_s: TestStruct2) {
-        // println!("Rust: Static public method called: s = {_s:?}");
+    pub fn static_method_taking_struct(s: TestStruct2) {
+        assert_eq!(s, TestStruct2 { i32_field: 77 });
     }
     pub fn static_method_returning_primitive() -> i32 {
         22
@@ -108,11 +119,9 @@ impl TestStruct {
         TestStruct2 { i32_field: 77 }
     }
     pub fn static_combo_method(str1: String, str2: String, b: bool) -> String {
-        // println!("{str1} {str2} {b}");
         if b { str1 } else { str2 }
     }
     pub fn static_combo_struct_method(s1: TestStruct2, _s2: TestStruct2) -> TestStruct2 {
-        // println!("Rust: Static combo struct method: s1 = {s1:?}, s2 = {_s2:?}");
         s1
     }
 
@@ -129,7 +138,7 @@ impl TestStruct {
         assert_eq!(expected, vec);
     }
 
-    pub fn static_method_taking_vec_of_primitives(vec: Vec<i32>) {
+    pub fn static_method_taking_vec_of_primitives(vec: Vec<u16>) {
         assert_eq!(vec![6, 7, 8, 9, 10], vec);
     }
 
@@ -182,6 +191,63 @@ impl TestStruct {
             TestStruct2 { i32_field: 600 },
         ]
     }
+
+    pub fn method_with_int_result(&self, error: bool) -> Result<i64, StructError> {
+        if error {
+            Err(StructError(EnumError::VariantTwo(SimpleError)))
+        } else {
+            Ok(16)
+        }
+    }
+
+    pub fn static_method_with_bool_result(error: bool) -> Result<bool, SimpleError> {
+        if error { Err(SimpleError) } else { Ok(true) }
+    }
+
+    pub fn method_with_string_result(&self) -> Result<String, SimpleError> {
+        Ok("Ok!".to_string())
+    }
+
+    pub fn static_method_with_struct_result() -> Result<TestStruct, SimpleError> {
+        Ok(TestStruct {
+            i32_field: 267,
+            ..Default::default()
+        })
+    }
+
+    pub fn method_with_enum_result(&self) -> Result<TestStatus, SimpleError> {
+        Ok(TestStatus::Pending)
+    }
+
+    pub fn method_with_vec_of_ints_result(&self) -> Result<Vec<i8>, SimpleError> {
+        Ok(vec![1, 2, 7])
+    }
+
+    pub fn static_method_with_vec_of_bools_result() -> Result<Vec<bool>, SimpleError> {
+        Ok(vec![true, false, false])
+    }
+
+    pub fn method_with_vec_of_strings_result(&self) -> Result<Vec<String>, SimpleError> {
+        Ok(vec!["some".to_string(), "string".to_string()])
+    }
+
+    pub fn static_method_with_vec_of_structs_result() -> Result<Vec<TestStruct2>, SimpleError> {
+        let s1 = TestStruct2 { i32_field: 2 };
+        let s2 = TestStruct2 { i32_field: -5 };
+        Ok(vec![s1, s2])
+    }
+
+    pub fn method_with_vec_of_bools_result(&self) -> Result<Vec<bool>, SimpleError> {
+        Ok(vec![false, true, true, true])
+    }
+
+    pub fn static_method_with_vec_of_enum_result() -> Result<Vec<TestStatus>, SimpleError> {
+        Ok(vec![
+            TestStatus::Inactive,
+            TestStatus::Pending,
+            TestStatus::Active,
+        ])
+    }
 }
 
 #[ffi]
@@ -191,23 +257,24 @@ pub struct TestStruct2 {
 }
 
 #[ffi]
-fn simple_function() {
-    // println!("Rust: Simple function called"); // This line causes still reachable resources in valgrind report
+fn simple_function() {}
+
+#[ffi]
+fn function_with_primitive_args(i: i32, b: bool) {
+    assert_eq!(i, 100);
+    assert!(b);
 }
 
 #[ffi]
-fn function_with_primitive_args(_i: i32, _b: bool) {
-    // println!("Rust: Function with args called: i = {_i}, s = {_b}"); // This line causes still reachable resources in valgrind report
+fn function_with_string_arg(s: String) {
+    assert_eq!(s, "Hello, World!");
 }
 
 #[ffi]
-fn function_with_string_arg(_s: String) {
-    // println!("Rust: Function with string arg called: s = {_s}"); // This line causes still reachable resources in valgrind report
-}
-
-#[ffi]
-fn function_with_primitive_and_string_arg(_i: i32, _b: bool, _s: String) {
-    // println!("Rust: Function with args called: i = {_i}, s = {_b}, s = {_s}"); // This line causes still reachable resources in valgrind report
+fn function_with_primitive_and_string_arg(i: i32, b: bool, s: String) {
+    assert_eq!(i, 42);
+    assert!(!b);
+    assert_eq!(s, "Complex function!");
 }
 
 #[ffi]
@@ -231,14 +298,14 @@ fn function_return_string() -> String {
 }
 
 #[ffi]
-fn combo_function(str1: String, str2: String, b: bool, _s: TestStruct) -> String {
-    // println!("{str1} {str2} {b} {_s:?}");
+fn combo_function(str1: String, str2: String, b: bool, s: TestStruct) -> String {
+    assert_eq!(s.i32_field, 0);
     if b { str1 } else { str2 }
 }
 
 #[ffi]
-fn function_taking_struct(_s: TestStruct2) {
-    // println!("Rust: Function with struct arg called: s = {_s:?}");
+fn function_taking_struct(s: TestStruct2) {
+    assert_eq!(s, TestStruct2 { i32_field: 55 });
 }
 
 #[ffi]
@@ -248,28 +315,21 @@ fn function_returning_struct() -> TestStruct2 {
 
 #[ffi]
 fn combo_struct_function(s1: TestStruct, _s2: TestStruct, _s3: TestStruct2) -> TestStruct {
-    // println!("Rust: Combo struct function called: s1 = {s1:?}, s2 = {_s2:?}, s3 = {_s3:?}");
     s1
 }
 
 #[ffi]
 fn function_taking_vec_of_primitives(vec: Vec<i32>) {
-    // println!(
-    //     "Rust: Function with vector of primitives called: {:?}",
-    //     vec
-    // );
     assert_eq!(vec![1, 2, 3, 4, 5], vec);
 }
 
 #[ffi]
 fn function_taking_vec_of_bools(vec: Vec<bool>) {
-    // println!("Rust: Function with vector of bools called: {:?}", _vec);
     assert_eq!(vec![true, false, true, true], vec);
 }
 
 #[ffi]
 fn function_taking_vec_of_strings(vec: Vec<String>) {
-    // println!("Rust: Function with vector of strings called: {:?}", _vec);
     assert_eq!(
         vec![
             "Hello, Rust!",
@@ -283,11 +343,14 @@ fn function_taking_vec_of_strings(vec: Vec<String>) {
 
 #[ffi]
 fn function_taking_vec_of_structs(vec: Vec<TestStruct>) {
-    // println!("Rust: Function with vector of structs called: {:?}", vec);
-    let mut s1 = TestStruct::default();
-    s1.i32_field = 15;
-    let mut s2 = TestStruct::default();
-    s2.i32_field = 17;
+    let s1 = TestStruct {
+        i32_field: 15,
+        ..Default::default()
+    };
+    let s2 = TestStruct {
+        i32_field: 17,
+        ..Default::default()
+    };
     let expected = vec![s1, s2];
     assert_eq!(expected, vec);
 }
@@ -310,19 +373,6 @@ fn function_returning_vec_of_structs() -> Vec<TestStruct2> {
 #[ffi]
 fn function_returning_vec_of_string() -> Vec<String> {
     vec!["Hello".to_string(), "World".to_string(), "Rust".to_string()]
-}
-
-// Having Drop defined causes still reachable resources in valgrind report
-impl Drop for TestStruct {
-    fn drop(&mut self) {
-        // println!("Dropping TestStruct");
-    }
-}
-
-impl Drop for TestStruct2 {
-    fn drop(&mut self) {
-        // println!("Dropping TestStruct2");
-    }
 }
 
 #[repr(C)]
@@ -428,6 +478,11 @@ impl std::error::Error for EnumError {
             EnumError::VariantTwo(ctx) => Some(ctx),
         }
     }
+}
+
+#[ffi]
+pub fn function_with_unit_expression_result() -> Result<(), SimpleError> {
+    Ok(())
 }
 
 #[ffi]

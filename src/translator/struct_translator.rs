@@ -11,6 +11,8 @@ use crate::wrapper::*;
 pub fn translate_struct(item_struct: ItemStruct) -> Wrapper {
     let class_name = &item_struct.ident;
 
+    register_struct_type(class_name.to_string());
+
     Wrapper {
         original_definition: quote! {#item_struct},
         parsed: ParsedWrapper::Struct(StructWrapper {
