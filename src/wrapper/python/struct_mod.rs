@@ -75,6 +75,25 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
                         );
                     }
                 }
+                FieldWrapperType::Option(inner) => {
+                    let inner_type_name = inner.name();
+                    acc.insert("Optional".to_string(), "from typing import Optional".to_string());
+                    acc.insert(
+                        format!("{}Option", inner_type_name),
+                        format!(
+                            "from .option_{} import {}Option",
+                            inner_type_name, inner_type_name
+                        ),
+                    );
+                    acc.insert("ctypes".to_owned(), "import ctypes".to_string());
+
+                    if let WrapperType::Struct(struct_name) = &**inner {
+                        acc.insert(
+                            struct_name.to_owned(),
+                            format!("from .{struct_name} import {struct_name}"),
+                        );
+                    }
+                }
             };
 
             acc
@@ -150,6 +169,11 @@ fn gen_property(field_wrapper: &FieldWrapper) -> String {
     // Handle Vec fields specially
     if let FieldWrapperType::Vec(inner) = &field_wrapper.wrapper_type {
         return gen_vec_property(field_wrapper, inner);
+    }
+
+    // Handle Option fields specially
+    if let FieldWrapperType::Option(inner) = &field_wrapper.wrapper_type {
+        return gen_option_property(field_wrapper, inner);
     }
 
     let getter = if let Some(getter) = &field_wrapper.getter {
@@ -243,6 +267,50 @@ fn gen_vec_property(field_wrapper: &FieldWrapper, inner: &crate::wrapper::Wrappe
     def {field_name}(self, value: List[{inner_type_hint}]):
         rust_vec = {vec_class_name}.from_list(value)
         {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}(self._self_ptr, rust_vec.raw_ptr())"#
+        )
+    } else {
+        String::new()
+    };
+
+    format!(
+        r#"
+{getter}
+{setter}"#
+    )
+}
+fn gen_option_property(field_wrapper: &FieldWrapper, inner: &crate::wrapper::WrapperType) -> String {
+    use crate::wrapper::python::type_hint_from_wrapper_type;
+
+    let field_name = &field_wrapper.field_name;
+    let inner_type_name = inner.name();
+    let option_class_name = format!("{inner_type_name}Option");
+    let inner_type_hint = type_hint_from_wrapper_type(inner);
+
+    let getter = if let Some(getter) = &field_wrapper.getter {
+        let extern_fn_name = &getter.extern_fn_name;
+
+        format!(
+            r#"    
+    @property
+    def {field_name}(self) -> Optional[{inner_type_hint}]:
+        {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p
+        result_ptr = {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}(self._self_ptr)
+        rust_option = {option_class_name}(result_ptr)
+        return rust_option.to_python()"#
+        )
+    } else {
+        String::new()
+    };
+
+    let setter = if let Some(setter) = &field_wrapper.setter {
+        let extern_fn_name = &setter.extern_fn_name;
+
+        format!(
+            r#"
+    @{field_name}.setter
+    def {field_name}(self, value: Optional[{inner_type_hint}]):
+        rust_option = {option_class_name}.from_python(value)
+        {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}(self._self_ptr, rust_option.raw_ptr())"#
         )
     } else {
         String::new()

@@ -36,6 +36,7 @@ impl From<&StructWrapper> for TokenStream2 {
                 FieldWrapperType::String => map_string_field(field, class_name),
                 FieldWrapperType::Custom(_) => map_custom_field(field, class_name),
                 FieldWrapperType::Vec(_) => map_vec_field(field, class_name),
+                FieldWrapperType::Option(_) => map_option_field(field, class_name),
             });
 
         let default_constructor =
@@ -259,6 +260,55 @@ fn map_vec_field(
     tokens
 }
 
+fn map_option_field(
+    FieldWrapper {
+        setter,
+        getter,
+        field_type,
+        field_name,
+        ..
+    }: &FieldWrapper,
+    class_name: impl ToTokens + Display,
+) -> TokenStream2 {
+    let mut tokens = quote! {};
+
+    if let Some(Getter {
+        name,
+        extern_fn_name,
+    }) = getter
+    {
+        let wrapper_fn_name = wrapper_fn_name(&class_name, name);
+        tokens.extend(quote! {
+            #[doc(hidden)]
+            #[unsafe(export_name = #extern_fn_name)]
+            pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name) -> *mut #field_type {
+                unsafe {
+                    &mut(&mut *_self).#field_name as *mut #field_type
+                }
+            }
+        });
+    }
+
+    if let Some(Setter {
+        name,
+        extern_fn_name,
+    }) = setter
+    {
+        let wrapper_fn_name = wrapper_fn_name(&class_name, name);
+        tokens.extend(quote! {
+            #[doc(hidden)]
+            #[unsafe(export_name = #extern_fn_name)]
+            pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name, value: *mut #field_type) {
+                unsafe {
+                    std::mem::swap(&mut (*value), &mut (&mut *_self).#field_name);
+                }
+            }
+        });
+    }
+
+    tokens
+}
+
 fn map_custom_field(
     FieldWrapper {
         field_name,
@@ -349,5 +399,6 @@ pub enum FieldWrapperType {
     Primitive,
     String,
     Vec(WrapperType),
+    Option(Box<WrapperType>),
     Custom(String),
 }

@@ -86,6 +86,7 @@ pub(crate) fn write_python_code(wrapper: &Wrapper) {
         let file_name = match reusable_wrapper {
             ReusableWrapper::Vec(inner) => format!("vec_{}.py", inner.name()),
             ReusableWrapper::Result(inner) => format!("result_{}.py", inner.name()),
+            ReusableWrapper::Option(inner) => format!("option_{}.py", inner.name()),
         };
         let file_path = python_path.join(file_name);
         if WRAPPER_GENERATED

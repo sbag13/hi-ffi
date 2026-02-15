@@ -23,7 +23,8 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
                     WrapperType::Struct(_)
                     | WrapperType::String
                     | WrapperType::Vec(_)
-                    | WrapperType::Result(_),
+                    | WrapperType::Result(_)
+                    | WrapperType::Option(_),
                 ..
             } => {
                 format!("void* {arg_name}")
@@ -120,6 +121,7 @@ pub fn map_args<'a>(
                     WrapperType::Struct(name) => format!("[{}]", name),
                     WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
                     WrapperType::Result(_) => panic!("Vec of results not supported"),
+                    WrapperType::Option(_) => panic!("Vec of options not supported"),
                     WrapperType::Enum(name) => format!("[{}]", name),
                     WrapperType::UnitExpr => panic!("Empty expression is not supported as vec inner type")
                 };
@@ -140,6 +142,30 @@ pub fn map_args<'a>(
                 args_names.push(format!("CFfiModule.{arg_type}(rawValue: UInt32({arg_name}.rawValue))", arg_type = arg_type.to_token_stream())); // Convert to C enum type with UInt32
                 args_casts.push(String::new()); // No casting needed for enums
             },
+
+            FunctionArgWrapper {
+                arg_name,
+                wrapper_type: WrapperType::Option(inner_type),
+                ..
+            } => {
+                let swift_inner_type = match &**inner_type {
+                    WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
+                    WrapperType::Bool => "Bool".to_string(),
+                    WrapperType::String => "String".to_string(),
+                    WrapperType::Struct(name) => name.to_string(),
+                    WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
+                    WrapperType::Enum(name) => name.to_string(),
+                    WrapperType::Result(_) => panic!("Result in option not supported"),
+                    WrapperType::Option(_) => panic!("Option of options not supported"),
+                    WrapperType::UnitExpr => "Void".to_string(),
+                };
+                let wrapper_name = format!("Rust{}Option", inner_type.name());
+                args_signatures.push(format!("_ {arg_name}: {swift_inner_type}?"));
+                args_names.push(format!("casted_{arg_name}.rawPtr()"));
+                args_casts.push(format!(
+                    r#"let casted_{arg_name} = {wrapper_name}.fromSwift({arg_name})"#
+                ));
+            }
 
             FunctionArgWrapper {
                 wrapper_type: WrapperType::Result(_),
@@ -277,6 +303,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 WrapperType::Struct(name) => format!("[{}]", name),
                 WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
                 WrapperType::Result(_) => panic!("Vec of results not supported"),
+                WrapperType::Option(_) => panic!("Vec of options not supported"),
                 WrapperType::Enum(name) => format!("[{}]", name),
                 WrapperType::UnitExpr => {
                     panic!("Empty expression is not supported as vec inner type")
@@ -318,6 +345,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
                 WrapperType::Enum(name) => name.to_string(),
                 WrapperType::Result(_) => panic!("Nested Results not supported"),
+                WrapperType::Option(_) => panic!("Option in result not supported"),
                 WrapperType::UnitExpr => "Void".to_string(),
             };
             ReturnTypes {
@@ -336,6 +364,33 @@ if wrapped_rust_result.isErr() {{
     casted_result = wrapped_rust_result.unwrap()
 }}
 "
+                )),
+            }
+        }
+
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Option(inner),
+            ..
+        }) => {
+            let inner_name = inner.name();
+            let wrapper_name = format!("Rust{}Option", inner_name);
+            let swift_type = match &**inner {
+                WrapperType::IntegerNumber(_)
+                | WrapperType::FloatingPointNumber(_)
+                | WrapperType::Bool => inner.name().to_string(),
+                WrapperType::String => "String".to_string(),
+                WrapperType::Struct(name) => name.to_string(),
+                WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
+                WrapperType::Enum(name) => name.to_string(),
+                WrapperType::Result(_) => panic!("Result in option not supported"),
+                WrapperType::Option(_) => panic!("Option of options not supported"),
+                WrapperType::UnitExpr => "Void".to_string(),
+            };
+            ReturnTypes {
+                return_type_sig: Some(format!(" -> {swift_type}?")),
+                cpp_return_type: "void*".to_string(),
+                result_cast: Some(format!(
+                    "let casted_result = {wrapper_name}(result!).toSwift()"
                 )),
             }
         }

@@ -11,6 +11,7 @@ int main()
     assert_vectors();
     assert_enums();
     assert_results();
+    assert_options();
 
     std::cout << "All assertions passed!" << std::endl;
 

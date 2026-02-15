@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::ops::Deref;
 
 use crate::wrapper::base::{SLICE_DROP_FN_NAME, SLICE_GET_LEN_FN_NAME, SLICE_GET_PTR_FN_NAME};
 use crate::wrapper::swift::function_definition::{
@@ -188,6 +189,26 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
             });
             (getter_code, setter_code)
         }
+        FieldWrapper {
+            wrapper_type: FieldWrapperType::Option(_),
+            getter,
+            setter,
+            ..
+        } => {
+            let getter_code = getter.as_ref().map(|g| {
+                format!(
+                    "void* {extern_fn_name}(void*);",
+                    extern_fn_name = g.extern_fn_name
+                )
+            });
+            let setter_code = setter.as_ref().map(|s| {
+                format!(
+                    "void {extern_fn_name}(void*, void*);",
+                    extern_fn_name = s.extern_fn_name
+                )
+            });
+            (getter_code, setter_code)
+        }
     };
 
     match (getter, setter) {
@@ -319,6 +340,7 @@ fn gen_property(field: &FieldWrapper) -> String {
                 WrapperType::String => "String".to_string(),
                 WrapperType::Vec(_) => "Array".to_string(), // Nested vectors not supported yet
                 WrapperType::Result(_) => panic!("Vec of results not supported as property"),
+                WrapperType::Option(_) => panic!("Option in vec not supported as property"),
                 WrapperType::UnitExpr => panic!("Empty expression cannot be a swift property"),
             };
             (
@@ -329,6 +351,35 @@ fn gen_property(field: &FieldWrapper) -> String {
                     .as_ref()
                     .map(|s| map_vec_setter(s, swift_inner_type.clone(), inner)),
                 format!("[{}]", swift_inner_type),
+            )
+        }
+
+        FieldWrapper {
+            wrapper_type: FieldWrapperType::Option(inner),
+            setter,
+            getter,
+            ..
+        } => {
+            let swift_inner_type = match inner.deref() {
+                WrapperType::IntegerNumber(name)
+                | WrapperType::FloatingPointNumber(name)
+                | WrapperType::Struct(name)
+                | WrapperType::Enum(name) => name.clone(),
+                WrapperType::Bool => "Bool".to_string(),
+                WrapperType::String => "String".to_string(),
+                WrapperType::Vec(_) => panic!("Vec in option not supported as property"),
+                WrapperType::Result(_) => panic!("Result in option not supported as property"),
+                WrapperType::Option(_) => panic!("Nested options not supported as property"),
+                WrapperType::UnitExpr => panic!("Empty expression cannot be a swift property"),
+            };
+            (
+                getter
+                    .as_ref()
+                    .map(|g| map_option_getter(g, swift_inner_type.clone(), inner)),
+                setter
+                    .as_ref()
+                    .map(|s| map_option_setter(s, swift_inner_type.clone(), inner)),
+                format!("{}?", swift_inner_type),
             )
         }
     };
@@ -469,6 +520,40 @@ fn map_vec_setter(
         set {{
             let rust_vec = {vec_class_name}.fromSwift(newValue)
             {extern_fn_name}(self.rawPtr(), rust_vec.rawPtr())
+        }}"#,
+    )
+}
+fn map_option_getter(
+    Getter { extern_fn_name, .. }: &Getter,
+    _field_type: impl Display,
+    inner: &WrapperType,
+) -> String {
+    let inner_name = inner.name();
+    let option_class_name = format!("Rust{inner_name}Option");
+
+    format!(
+        r#"
+        get {{
+            let ptr = {extern_fn_name}(self.rawPtr())
+            let rust_option = {option_class_name}(ptr!)
+            return rust_option.toSwift()
+        }}"#,
+    )
+}
+
+fn map_option_setter(
+    Setter { extern_fn_name, .. }: &Setter,
+    _field_type: impl Display,
+    inner: &WrapperType,
+) -> String {
+    let inner_name = inner.name();
+    let option_class_name = format!("Rust{inner_name}Option");
+
+    format!(
+        r#"
+        set {{
+            let rust_option = {option_class_name}.fromSwift(newValue)
+            {extern_fn_name}(self.rawPtr(), rust_option.rawPtr())
         }}"#,
     )
 }

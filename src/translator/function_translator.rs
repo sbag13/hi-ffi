@@ -1,6 +1,6 @@
 use quote::{ToTokens, quote};
 use std::ops::Deref;
-use syn::{FnArg, GenericArgument, ItemFn, Type};
+use syn::{FnArg, GenericArgument, ItemFn, PathSegment, Type};
 
 use crate::EXPORTED_SYMBOLS_PREFIX;
 use crate::translator::{NoWrapperErr, map_wrapper_to_reusable};
@@ -67,6 +67,11 @@ pub fn return_wrapper(
                                     wrapper_type: result_wrapper_type,
                                     return_type: ty.deref().clone(),
                                 }))
+                            } else if let Some(option_wrapper_type) = segment_as_opt(segment)? {
+                                Ok(Some(FunctionReturnWrapper {
+                                    wrapper_type: option_wrapper_type,
+                                    return_type: ty.deref().clone(),
+                                }))
                             } else {
                                 panic!("Unsupported return type: {:?}", segment.ident);
                             }
@@ -81,27 +86,15 @@ pub fn return_wrapper(
     }
 }
 
-fn segment_as_vec(vec_segment: &syn::PathSegment) -> Result<Option<WrapperType>, NoWrapperErr> {
+fn segment_as_vec(vec_segment: &PathSegment) -> Result<Option<WrapperType>, NoWrapperErr> {
     match vec_segment.ident.to_string().as_str() {
         "Vec" => {
-            let inner_wrapper_type: WrapperType = match &vec_segment.arguments {
-                syn::PathArguments::AngleBracketed(args) => {
-                    let Some(inner_arg) = args.args.first() else {
-                        panic!("No argument found in Vec arguments");
-                    };
-                    match inner_arg {
-                        GenericArgument::Type(Type::Path(inner_path)) => {
-                            inner_path.to_token_stream().to_string().as_str().parse()?
-                        }
-                        _ => panic!("Vector inner arg type must be a path"),
-                    }
-                }
-                _ => panic!("Vec arguments not supported"),
-            };
+            let inner_wrapper_type: WrapperType =
+                parse_generic_single_inner_type_from_segment(vec_segment)?;
 
             match inner_wrapper_type {
                 WrapperType::Vec(_) => {
-                    panic!("Nested vectors are not supported")
+                    panic!("Nested vectors are not supported as return types")
                 }
                 inner => Ok(Some(WrapperType::Vec(Box::new(inner)))),
             }
@@ -110,9 +103,23 @@ fn segment_as_vec(vec_segment: &syn::PathSegment) -> Result<Option<WrapperType>,
     }
 }
 
-fn segment_as_result(
-    result_segment: &syn::PathSegment,
-) -> Result<Option<WrapperType>, NoWrapperErr> {
+fn segment_as_opt(opt_segment: &PathSegment) -> Result<Option<WrapperType>, NoWrapperErr> {
+    match opt_segment.ident.to_string().as_str() {
+        "Option" => {
+            let inner_wrapper_type: WrapperType =
+                parse_generic_single_inner_type_from_segment(opt_segment)?;
+            match inner_wrapper_type {
+                WrapperType::Option(_) => {
+                    panic!("Nested options are not supported as return types")
+                }
+                inner => Ok(Some(WrapperType::Option(Box::new(inner)))),
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
+fn segment_as_result(result_segment: &PathSegment) -> Result<Option<WrapperType>, NoWrapperErr> {
     match result_segment.ident.to_string().as_str() {
         "Result" => {
             let ok_wrapper_type: WrapperType = match &result_segment.arguments {
@@ -165,30 +172,33 @@ pub fn map_arg(arg: &FnArg) -> Result<FunctionArgWrapper, NoWrapperErr> {
                     match path.path.segments.first() {
                         Some(segment) => match segment.ident.to_string().as_str() {
                             "Vec" => {
-                                let inner_wrapper_type: WrapperType = match &segment.arguments {
-                                    syn::PathArguments::AngleBracketed(args) => {
-                                        let Some(inner_arg) = args.args.first() else {
-                                            panic!("No argument found in Vec arguments");
-                                        };
-                                        match inner_arg {
-                                            GenericArgument::Type(Type::Path(inner_path)) => {
-                                                inner_path
-                                                    .to_token_stream()
-                                                    .to_string()
-                                                    .as_str()
-                                                    .parse()?
-                                            }
-                                            _ => panic!("Vector inner arg type must be a path"),
-                                        }
-                                    }
-                                    _ => panic!("Vec arguments not supported"),
-                                };
-
+                                let inner_wrapper_type: WrapperType =
+                                    parse_generic_single_inner_type_from_segment(segment)?;
                                 match inner_wrapper_type {
                                     WrapperType::Vec(_) => {
                                         panic!("Nested vectors are not supported")
                                     }
+                                    WrapperType::Option(_) => {
+                                        panic!("Vec of options not supported yet")
+                                    }
+                                    WrapperType::Result(_) => {
+                                        panic!("Vec of results not supported yet")
+                                    }
                                     inner => WrapperType::Vec(Box::new(inner)),
+                                }
+                            }
+                            "Option" => {
+                                let inner_wrapper_type: WrapperType =
+                                    parse_generic_single_inner_type_from_segment(segment)?;
+
+                                match inner_wrapper_type {
+                                    WrapperType::Option(_) => {
+                                        panic!("Nested options not supported yet")
+                                    }
+                                    WrapperType::Result(_) => {
+                                        panic!("Optional Results not supported yet")
+                                    }
+                                    inner => WrapperType::Option(Box::new(inner)),
                                 }
                             }
                             _ => {
@@ -210,5 +220,24 @@ pub fn map_arg(arg: &FnArg) -> Result<FunctionArgWrapper, NoWrapperErr> {
                 arg_type: ty.deref().clone(),
             })
         }
+    }
+}
+
+fn parse_generic_single_inner_type_from_segment(
+    segment: &PathSegment,
+) -> Result<WrapperType, NoWrapperErr> {
+    match &segment.arguments {
+        syn::PathArguments::AngleBracketed(args) => {
+            let Some(inner_arg) = args.args.first() else {
+                panic!("No argument found in generic's arguments");
+            };
+            match inner_arg {
+                GenericArgument::Type(Type::Path(inner_path)) => {
+                    Ok(inner_path.to_token_stream().to_string().as_str().parse()?)
+                }
+                _ => panic!("Genreic's inner arg type must be a path"),
+            }
+        }
+        _ => panic!("Generic arguments not supported"),
     }
 }

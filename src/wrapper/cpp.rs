@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{fmt::Display, ops::Deref};
 
 use super::*;
 use crate::wrapper::base::*;
@@ -15,7 +15,136 @@ impl ReusableWrapper {
         match self {
             ReusableWrapper::Vec(inner) => gen_vec_wrapper_cpp(inner),
             ReusableWrapper::Result(inner) => gen_result_wrapper_cpp(inner),
+            ReusableWrapper::Option(inner) => gen_option_wrapper_cpp(inner),
         }
+    }
+}
+
+// Common helper functions
+fn gen_common_destructor(wrapper_name: &str, drop_ext_name: &str) -> String {
+    format!(
+        "{wrapper_name}::~{wrapper_name}() {{\n    if (this->self != nullptr)\n        {drop_ext_name}(this->self);\n}}"
+    )
+}
+
+fn gen_common_constructor(wrapper_name: &str) -> String {
+    format!("{wrapper_name}::{wrapper_name}(void* self) : self(self) {{}}")
+}
+
+fn gen_common_raw_ptr(wrapper_name: &str) -> String {
+    format!("void* {wrapper_name}::raw_ptr() {{\n    return this->self;\n}}")
+}
+
+fn gen_option_wrapper_cpp(inner: &WrapperType) -> CppFiles {
+    let wrapper_name = format!("Rust{}Option", inner.name());
+    let inner_name = inner.name();
+
+    let includes = inner_include(inner).unwrap_or_default();
+    let forward_class_declaration = forward_class_declaration(inner);
+
+    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_option", inner_name);
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_option", inner_name);
+    let is_some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_some_{}_option", inner_name);
+
+    let inner_ext_ret_type = ext_type(inner);
+    let inner_cpp_type = cpp_type(inner);
+
+    let ext_call = format!("{unwrap_ext_name}(this->self)");
+    let unwrap_val_cast = inner_value_cast(inner, ext_call);
+
+    let unwrap_return_expr = match inner {
+        WrapperType::UnitExpr => "return;",
+        _ => "return result;",
+    };
+
+    let none_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__none_{}_option", inner_name);
+    let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__some_{}_option", inner_name);
+    let inner_ext_arg_type = match inner {
+        WrapperType::String => "const char*",
+        _ => &ext_type(inner),
+    };
+
+    let has_value_cast = match inner {
+        WrapperType::String => "other.value().data()",
+        WrapperType::Struct(_) => "other.value().self_ptr()",
+        _ => "other.value()",
+    };
+
+    let header = format!(
+        r#"
+#ifndef {wrapper_name}__def
+#define {wrapper_name}__def
+#include "base.h"
+{includes}{forward_class_declaration}
+
+extern "C" {{
+    void {drop_ext_name}(void* self);
+    {inner_ext_ret_type} {unwrap_ext_name}(void * self);
+    bool {is_some_ext_name}(void* self);
+    void* {some_ext_name}({inner_ext_arg_type} val);
+    void* {none_ext_name}();
+}}
+
+class {wrapper_name} {{
+    void* self = nullptr;
+public:
+    {wrapper_name}(void* self);
+    void* raw_ptr();
+    virtual ~{wrapper_name}();
+    bool is_some();
+    {inner_cpp_type} unwrap();
+    static {wrapper_name} from_std(const std::optional<{inner_cpp_type}>& other);
+    std::optional<{inner_cpp_type}> to_std();
+}};
+#endif
+"#
+    );
+
+    let constructor = gen_common_constructor(&wrapper_name);
+    let raw_ptr = gen_common_raw_ptr(&wrapper_name);
+    let destructor = gen_common_destructor(&wrapper_name, &drop_ext_name);
+
+    let source = format!(
+        r#"
+#include "option_{inner_name}.h"
+
+{constructor}
+
+{raw_ptr}
+
+{destructor}
+
+bool {wrapper_name}::is_some() {{
+    return {is_some_ext_name}(this->self);
+}}
+
+{inner_cpp_type} {wrapper_name}::unwrap() {{
+    {unwrap_val_cast}
+    {unwrap_return_expr}
+}}
+
+{wrapper_name} {wrapper_name}::from_std(const std::optional<{inner_cpp_type}>& other) {{
+    if (other.has_value()) {{
+        auto other_value = {has_value_cast};
+        return {wrapper_name}({some_ext_name}(other_value));
+    }} else {{
+        return {none_ext_name}();
+    }}
+}}
+
+std::optional<{inner_cpp_type}> {wrapper_name}::to_std() {{
+    if (this->is_some()) {{
+        return std::optional<{inner_cpp_type}>(this->unwrap());
+    }} else {{
+        return std::optional<{inner_cpp_type}>();
+    }}
+}}
+"#
+    );
+
+    CppFiles {
+        header: CppHeader::Reusable(header),
+        source: Some(CppSource::Reusable(source)),
     }
 }
 
@@ -30,62 +159,15 @@ fn gen_result_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         inner_name
     );
     let is_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_err_{}_result", inner_name);
-
-    let unwrap_return_type = match inner {
-        WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
-        WrapperType::Bool => "bool".to_string(),
-        WrapperType::String => "std::string".to_string(),
-        WrapperType::Struct(name) => name.to_string(),
-        WrapperType::Enum(name) => name.to_string(),
-        WrapperType::Vec(vec_inner_name) => match vec_inner_name.deref() {
-            WrapperType::String => "std::vector<std::string>".to_string(),
-            _ => format!("std::vector<{}>", vec_inner_name.name()),
-        },
-        WrapperType::Result(_) => {
-            panic!("Nested Result types are not supported")
-        }
-        WrapperType::UnitExpr => "void".to_string(),
-    };
-
-    let unwrap_ext_ret_type = match inner {
-        WrapperType::String | WrapperType::Struct(_) | WrapperType::Vec(_) => "void*".to_string(),
-        WrapperType::Bool
-        | WrapperType::Enum(_)
-        | WrapperType::FloatingPointNumber(_)
-        | WrapperType::IntegerNumber(_) => inner_name.clone(),
-        WrapperType::Result(_) => {
-            panic!("Nested Result types are not supported")
-        }
-        WrapperType::UnitExpr => "void".to_string(),
-    };
+    let unwrap_return_type = cpp_type(inner);
+    let unwrap_ext_ret_type = ext_type(inner);
 
     let ext_call = format!("{unwrap_ext_name}(this->self)");
-    let unwrap_val_cast = match inner {
-        WrapperType::String => format!("auto result = RustString({ext_call}).to_string();"),
-        WrapperType::Struct(struct_name) => {
-            format!("auto result = {struct_name}({ext_call});")
-        }
-        WrapperType::Vec(vec_inner) => {
-            let vec_inner_name = vec_inner.name();
-            format!("auto result = Rust{vec_inner_name}Vec::from_raw({ext_call}).to_std();")
-        }
-        WrapperType::UnitExpr => "".to_string(),
-        _ => format!("auto result = {ext_call};"),
-    };
+    let unwrap_val_cast = inner_value_cast(inner, ext_call);
 
-    let includes = match inner {
-        WrapperType::Struct(struct_name) => format!(r#"#include "{struct_name}.h""#),
-        WrapperType::Enum(enum_name) => format!(r#"#include "{enum_name}.h""#),
-        WrapperType::Vec(vec_inner) => format!(r#"#include "vec_{}.h""#, vec_inner.name()),
-        WrapperType::String => "#include <string>".to_string(),
-        _ => String::new(),
-    };
+    let includes = inner_include(inner).unwrap_or_default();
 
-    let forward_class_declaration = match inner {
-        WrapperType::Enum(enum_name) => format!("\nenum class {enum_name};"),
-        WrapperType::Struct(struct_name) => format!("\nclass {struct_name};"),
-        _ => String::new(),
-    };
+    let forward_class_declaration = forward_class_declaration(inner);
 
     let unwrap_return_expr = match inner {
         WrapperType::UnitExpr => "return;",
@@ -120,20 +202,19 @@ public:
 "#
     );
 
+    let constructor = gen_common_constructor(&wrapper_name);
+    let raw_ptr = gen_common_raw_ptr(&wrapper_name);
+    let destructor = gen_common_destructor(&wrapper_name, &drop_ext_name);
+
     let source = format!(
         r#"
 #include "result_{inner_name}.h"
 
-{wrapper_name}::{wrapper_name}(void* self) : self(self) {{}}
+{constructor}
 
-void* {wrapper_name}::raw_ptr() {{
-    return this->self;
-}}
+{raw_ptr}
 
-{wrapper_name}::~{wrapper_name}() {{
-    if (this->self != nullptr)
-        {drop_ext_name}(this->self);
-}}
+{destructor}
 
 bool {wrapper_name}::is_err() {{
     return {is_err_ext_name}(this->self);
@@ -174,6 +255,7 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         WrapperType::Result(_) => {
             unimplemented!("CPP: vec of Result type unimplemented!")
         }
+        WrapperType::Option(_) => todo!("option in vec push cpp"),
         WrapperType::UnitExpr => {
             panic!("Pushing () to vec not supported")
         }
@@ -203,11 +285,7 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         _ => panic!("Pushing to vec not supported"),
     };
 
-    let includes = match inner {
-        WrapperType::Struct(struct_name) => format!(r#"#include "{struct_name}.h""#),
-        WrapperType::Enum(enum_name) => format!(r#"#include "{enum_name}.h""#),
-        _ => String::new(),
-    };
+    let includes = inner_include(inner).unwrap_or_default();
 
     // Element fetch expression per type
     let elem_fetch = match inner {
@@ -231,26 +309,13 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         WrapperType::Enum(_) => {
             format!("auto elem = {get_ext_fn_name}(this->self, i);")
         }
+        WrapperType::Option(_) => todo!("option in vec cpp"),
         WrapperType::Result(_) | WrapperType::Vec(_) => unreachable!(),
         WrapperType::UnitExpr => unreachable!(),
     };
 
-    let get_ext_return_type = match inner {
-        WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
-        WrapperType::Bool => "u8".to_string(),
-        WrapperType::String => "void*".to_string(),
-        WrapperType::Struct(_) => "void*".to_string(),
-        WrapperType::Enum(name) => name.to_string(),
-        WrapperType::Vec(_) => unimplemented!("Vec of vecs not supported yet!"),
-        WrapperType::Result(_) => unimplemented!("Vec of Result type not supported yet!"),
-        WrapperType::UnitExpr => unreachable!(),
-    };
-
-    let forward_class_declaration = match inner {
-        WrapperType::Enum(enum_name) => format!("\n enum class {enum_name};"),
-        WrapperType::Struct(struct_name) => format!("\nclass {struct_name};"),
-        _ => "".to_string(),
-    };
+    let get_ext_return_type = ext_type(inner);
+    let forward_class_declaration = forward_class_declaration(inner);
 
     let header = format!(
         r#"
@@ -280,8 +345,6 @@ public:
 
     static {wrapper_name} from_std(const std::vector<{inner_cpp_name}>& other);
 
-    static {wrapper_name} from_raw(void* raw);
-
     void leak();
 
     std::vector<{inner_cpp_name}> to_std();
@@ -291,20 +354,19 @@ public:
 "#
     );
 
+    let constructor = gen_common_constructor(&wrapper_name);
+    let raw_ptr = gen_common_raw_ptr(&wrapper_name);
+    let destructor = gen_common_destructor(&wrapper_name, &drop_ext_name);
+
     let source = format!(
         r#"
 #include "vec_{inner_name}.h"
 
-{wrapper_name}::{wrapper_name}(void* self) : self(self) {{}}
+{constructor}
 
-void* {wrapper_name}::raw_ptr() {{
-    return this->self;
-}}
+{raw_ptr}
 
-{wrapper_name}::~{wrapper_name}() {{
-    if (this->self != nullptr)
-        {drop_ext_name}(this->self);
-}}
+{destructor}
 
 {wrapper_name} {wrapper_name}::from_std(const std::vector<{inner_cpp_name}>& other) {{
     void* rust_vec_ptr = {with_capacity_ext_name}(other.size());
@@ -313,8 +375,6 @@ void* {wrapper_name}::raw_ptr() {{
     }}
     return {wrapper_name}(rust_vec_ptr);
 }}
-
-{wrapper_name} {wrapper_name}::from_raw(void* raw) {{ return {wrapper_name}(raw); }}
 
 void {wrapper_name}::leak() {{
     this->self = nullptr;
@@ -336,6 +396,69 @@ std::vector<{inner_cpp_name}> {wrapper_name}::to_std() {{
     CppFiles {
         header: CppHeader::Reusable(header),
         source: Some(CppSource::Reusable(source)),
+    }
+}
+
+fn inner_include(inner: &WrapperType) -> Option<String> {
+    match inner {
+        WrapperType::Struct(name) | WrapperType::Enum(name) => {
+            Some(format!(r#"#include "{name}.h""#))
+        }
+        WrapperType::Vec(vec_inner) => Some(format!(r#"#include "vec_{}.h""#, vec_inner.name())),
+        WrapperType::Option(opt_inner) => {
+            Some(format!(r#"#include "option_{}.h""#, opt_inner.name()))
+        }
+        WrapperType::Result(result_inner) => {
+            Some(format!(r#"#include "result_{}.h""#, result_inner.name()))
+        }
+        WrapperType::String => Some("#include <string>".to_string()),
+        _ => None,
+    }
+}
+
+fn forward_class_declaration(inner: &WrapperType) -> String {
+    match inner {
+        WrapperType::Enum(enum_name) => format!("\nenum class {enum_name};"),
+        WrapperType::Struct(struct_name) => format!("\nclass {struct_name};"),
+        _ => String::new(),
+    }
+}
+
+fn ext_type(inner: &WrapperType) -> String {
+    match inner {
+        WrapperType::String
+        | WrapperType::Struct(_)
+        | WrapperType::Vec(_)
+        | WrapperType::Option(_)
+        | WrapperType::Result(_) => "void*".to_string(),
+        WrapperType::Bool
+        | WrapperType::Enum(_)
+        | WrapperType::FloatingPointNumber(_)
+        | WrapperType::IntegerNumber(_) => inner.name().to_string(),
+        WrapperType::UnitExpr => "void".to_string(),
+    }
+}
+
+fn inner_value_cast(inner: &WrapperType, ext_call: impl Display) -> String {
+    match inner {
+        WrapperType::String => format!("auto result = RustString({ext_call}).to_string();"),
+        WrapperType::Struct(struct_name) => {
+            format!("auto result = {struct_name}({ext_call});")
+        }
+        WrapperType::Vec(vec_inner) => {
+            let vec_inner_name = vec_inner.name();
+            format!("auto result = Rust{vec_inner_name}Vec({ext_call}).to_std();")
+        }
+        WrapperType::Option(opt_inner) => {
+            let opt_inner_name = opt_inner.name();
+            format!("auto result = Rust{opt_inner_name}Option({ext_call}).to_std();")
+        }
+        WrapperType::Result(result_inner) => {
+            let result_inner_name = result_inner.name();
+            format!("auto result = Rust{result_inner_name}Result({ext_call}).to_std();")
+        }
+        WrapperType::UnitExpr => "".to_string(),
+        _ => format!("auto result = {ext_call};"),
     }
 }
 
@@ -418,6 +541,7 @@ fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnType
             return_cast: "return result;".to_string(),
             return_type_includes: HashSet::new(),
         },
+
         Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::String,
             ..
@@ -447,26 +571,13 @@ return {}(result);",
             }
         }
         Some(FunctionReturnWrapper {
-            wrapper_type: WrapperType::Vec(inner),
+            wrapper_type: wt @ WrapperType::Vec(inner),
             ..
         }) => {
-            // Determine C++ inner type
-            let inner_cpp = match inner.as_ref() {
-                WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.clone(),
-                WrapperType::Bool => "bool".to_string(),
-                WrapperType::String => "std::string".to_string(),
-                WrapperType::Struct(name) => name.clone(),
-                WrapperType::Enum(name) => name.clone(),
-                WrapperType::Vec(_) => unimplemented!("Nested vectors not supported"),
-                WrapperType::Result(_) => {
-                    unimplemented!("Vec of Result type not supported yet!")
-                }
-                WrapperType::UnitExpr => unreachable!(),
-            };
             let rust_vec_name = format!("Rust{}Vec", inner.name());
             let return_cast = format!(
                 r#"
-auto rust_vec = {rust_vec_name}::from_raw(result);
+auto rust_vec = {rust_vec_name}(result);
 return rust_vec.to_std();
 "#
             );
@@ -474,24 +585,17 @@ return rust_vec.to_std();
                 String::from("#include <vector>\n"),
                 format!("#include \"vec_{}.h\"", inner.name()),
             ]);
-            match inner.as_ref() {
-                WrapperType::Struct(inner_struct) => {
-                    // For struct vector, ensure struct header is included
-                    includes.insert(format!("\n#include \"{inner_struct}.h\""));
-                }
-                WrapperType::Enum(inner_enum) => {
-                    // For enum vector, ensure enum header is included
-                    includes.insert(format!("\n#include \"{inner_enum}.h\""));
-                }
-                _ => {}
+            if let Some(inner_include) = inner_include(inner) {
+                includes.insert(inner_include);
             }
             ReturnTypes {
                 ext_return_type: "void*".to_string(),
-                return_type: format!("std::vector<{inner_cpp}>").to_string(),
+                return_type: cpp_type(wt),
                 return_cast,
                 return_type_includes: includes,
             }
         }
+
         Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::Enum(_),
             return_type,
@@ -504,6 +608,30 @@ return rust_vec.to_std();
                 return_type_includes: HashSet::from([format!("#include \"{}.h\"", enum_type)]),
             }
         }
+
+        Some(FunctionReturnWrapper {
+            wrapper_type: wt @ WrapperType::Option(inner),
+            ..
+        }) => {
+            let inner_name = inner.name();
+            let mut includes = HashSet::from([
+                String::from("#include <optional>\n"),
+                format!("#include \"option_{inner_name}.h\""),
+            ]);
+            if let Some(inner_include) = inner_include(inner) {
+                includes.insert(inner_include);
+            }
+            ReturnTypes {
+                ext_return_type: "void*".to_string(),
+                return_type: cpp_type(wt),
+                return_cast: format!(
+                    r#"auto rust_opt = Rust{inner_name}Option(result);
+return rust_opt.to_std();"#
+                ),
+                return_type_includes: includes,
+            }
+        }
+
         Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::Result(inner_ok_type),
             ..
@@ -516,23 +644,7 @@ return rust_vec.to_std();
             };
             ReturnTypes {
                 ext_return_type: "void*".to_string(),
-                return_type: match inner_ok_type.as_ref() {
-                    WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => {
-                        t.clone()
-                    }
-                    WrapperType::Bool => "bool".to_string(),
-                    WrapperType::String => "std::string".to_string(),
-                    WrapperType::Struct(name) => name.clone(),
-                    WrapperType::Enum(name) => name.clone(),
-                    WrapperType::Vec(vec_inner_name) => match vec_inner_name.deref() {
-                        WrapperType::String => "std::vector<std::string>".to_string(),
-                        _ => format!("std::vector<{}>", vec_inner_name.name()),
-                    },
-                    WrapperType::Result(_) => {
-                        panic!("Nested Result types are not supported")
-                    }
-                    WrapperType::UnitExpr => "void".to_string(),
-                },
+                return_type: cpp_type(inner_ok_type.deref()),
                 return_cast: format!(
                     r#"auto rust_result = Rust{inner_name}Result(result);
 return rust_result.is_err() ? throw RustException(rust_result.unwrap_err()) : rust_result.unwrap();"#
@@ -590,4 +702,20 @@ enum class {enum_name} {{
 "#,
         variants.join(",\n")
     )
+}
+
+pub(crate) fn cpp_type(wrapper: &WrapperType) -> String {
+    match wrapper {
+        WrapperType::String => "std::string".to_string(),
+        WrapperType::Vec(inner) => format!("std::vector<{}>", cpp_type(inner)),
+        WrapperType::Option(inner) => format!("std::optional<{}>", cpp_type(inner)),
+        WrapperType::Bool => "bool".to_string(),
+        WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
+        WrapperType::Struct(struct_name) => struct_name.to_string(),
+        WrapperType::Enum(enum_name) => enum_name.to_string(),
+        WrapperType::Result(_inner) => {
+            panic!("'cpp_type' shouldn't be called for a Result type - this is a bug; {wrapper:?}")
+        }
+        WrapperType::UnitExpr => "void".to_string(),
+    }
 }

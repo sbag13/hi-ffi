@@ -1,9 +1,8 @@
 use crate::wrapper::swift::class_definition::gen_empty_class_definition;
-use crate::wrapper::swift::{SwiftCode, gen_swift_result_declarations, gen_swift_vec_declarations};
+use crate::wrapper::swift::{SwiftCode, gen_swift_result_declarations, gen_swift_vec_declarations, gen_swift_option_declarations};
 use crate::wrapper::{ParsedWrapper, base::*};
 use crate::{
     GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, insert_after,
-    prepend_to_file,
 };
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -53,7 +52,7 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
     let swift_code = wrapper.swift();
 
     match wrapper.parsed {
-        ParsedWrapper::Enum(_) => prepend_to_file(swift_code.header(), &swift_header_path),
+        ParsedWrapper::Enum(_) => insert_after(ENUM_DEFINITIONS_MARKER, swift_code.header(), &swift_header_path),
         _ => append_to_file(swift_code.header(), &swift_header_path),
     };
 
@@ -62,6 +61,7 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
         let declarations = match reusable_wrapper {
             ReusableWrapper::Vec(inner) => gen_swift_vec_declarations(inner),
             ReusableWrapper::Result(inner) => gen_swift_result_declarations(inner),
+            ReusableWrapper::Option(inner) => gen_swift_option_declarations(inner),
         };
         append_to_file(declarations, &swift_header_path);
     }
@@ -92,6 +92,7 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
         let file_name = match reusable_wrapper {
             ReusableWrapper::Vec(inner) => format!("vec_{}.swift", inner.name()),
             ReusableWrapper::Result(inner) => format!("result_{}.swift", inner.name()),
+            ReusableWrapper::Option(inner) => format!("option_{}.swift", inner.name()),
         };
         let source_full_path = ffi_module_path.join(file_name);
         if SWIFT_CLASS_GENERATED
@@ -188,6 +189,9 @@ public class RustError: Error {{
     )
 }
 
+// Marker to insert enum definitions
+pub(crate) const ENUM_DEFINITIONS_MARKER: &str = "// ENUM_DEFINITIONS_MARKER";
+
 pub(crate) fn swift_c_header_code_base() -> String {
     format!(
         r#"
@@ -209,6 +213,8 @@ typedef float f32;
 typedef double f64;
 
 typedef size_t usize;
+
+// ENUM_DEFINITIONS_MARKER
 
 void* {RUST_STRING_DATA_FN_NAME}(void* self);
 unsigned int {RUST_STRING_LEN_FN_NAME}(void* self);

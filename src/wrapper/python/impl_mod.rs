@@ -52,6 +52,7 @@ class {class_name}:"#
             }
 
             insert_imports_for_vec_inner(&arg.wrapper_type, &mut imports);
+            insert_imports_for_option_inner(&arg.wrapper_type, &mut imports);
 
             py_args_sig.push(format!(
                 "{}: {}",
@@ -61,6 +62,16 @@ class {class_name}:"#
 
             // For vector arguments, we need to store the wrapper object to prevent garbage collection
             if let WrapperType::Vec(_) = &arg.wrapper_type {
+                pre_casts.push(format!(
+                    "casted_{name}_wrapper = {cast}",
+                    name = arg_name,
+                    cast = arg_cast(&arg.arg_type, &arg_name)
+                ));
+                pre_casts.push(format!(
+                    "casted_{name} = casted_{name}_wrapper.raw_ptr()",
+                    name = arg_name
+                ));
+            } else if let WrapperType::Option(_) = &arg.wrapper_type {
                 pre_casts.push(format!(
                     "casted_{name}_wrapper = {cast}",
                     name = arg_name,
@@ -135,11 +146,46 @@ class {class_name}:"#
                         _ => (),
                     }
                 }
+                WrapperType::Option(inner) => {
+                    let inner_name = inner.name();
+                    let option_type = format!("{inner_name}Option");
+                    match inner.deref() {
+                        // Avoid cyclic imports
+                        WrapperType::Enum(n) | WrapperType::Struct(n) if n == &class_name => {
+                            local_imports =
+                                format!("from .option_{inner_name} import {option_type}");
+                        }
+                        _ => {
+                            imports.insert(
+                                option_type.clone(),
+                                format!("from .option_{inner_name} import {option_type}"),
+                            );
+                        }
+                    }
+
+                    imports.insert(
+                        "Optional".to_string(),
+                        "from typing import Optional".to_string(),
+                    );
+
+                    match inner.deref() {
+                        WrapperType::Enum(inner) | WrapperType::Struct(inner)
+                            if inner != &class_name =>
+                        {
+                            imports
+                                .insert(inner.to_string(), format!("from .{inner} import {inner}"));
+                        }
+                        WrapperType::Vec(inner) => {
+                            insert_imports_for_vec_inner(inner.deref(), &mut imports);
+                        }
+                        _ => (),
+                    }
+                }
                 _ => (),
             }
 
             let self_ret = match &ret.wrapper_type {
-                WrapperType::Result(inner) | WrapperType::Vec(inner) => inner.name() == class_name,
+                WrapperType::Result(inner) | WrapperType::Vec(inner) | WrapperType::Option(inner) => inner.name() == class_name,
                 WrapperType::Struct(s_name) => s_name == &class_name,
                 _ => false,
             };
@@ -202,6 +248,17 @@ fn insert_imports_for_vec_inner(inner: &WrapperType, imports: &mut HashMap<Strin
         imports.insert(
             vec_name.clone(),
             format!("from .vec_{} import {}", inner.name(), vec_name),
+        );
+    }
+}
+
+fn insert_imports_for_option_inner(inner: &WrapperType, imports: &mut HashMap<String, String>) {
+    if let WrapperType::Option(inner) = inner {
+        imports.insert("Optional".to_string(), "from typing import Optional".to_string());
+        let option_name = format!("{}Option", inner.name());
+        imports.insert(
+            option_name.clone(),
+            format!("from .option_{} import {}", inner.name(), option_name),
         );
     }
 }

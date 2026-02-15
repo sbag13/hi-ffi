@@ -7,3 +7,4 @@ void assert_functions();
 void assert_vectors();
 void assert_enums();
 void assert_results();
+void assert_options();

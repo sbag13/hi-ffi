@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::ops::Deref;
 use std::sync::{LazyLock, Mutex};
 
 use impl_block_wrapper::ImplBlockWrapper;
@@ -48,6 +49,79 @@ pub mod python;
 pub enum ReusableWrapper {
     Vec(WrapperType),
     Result(WrapperType),
+    Option(WrapperType),
+}
+
+pub(crate) fn rust_type(wrapper: &WrapperType) -> TokenStream2 {
+    match wrapper {
+        WrapperType::Vec(vec_inner) => {
+            let vec_inner_name: TokenStream2 = rust_type(vec_inner.deref());
+            quote! {Vec<#vec_inner_name>}
+        }
+        WrapperType::Result(result_inner) => {
+            let result_inner_name = rust_type(result_inner.deref());
+            quote! {std::result::Result<#result_inner_name, std::sync::Arc<dyn std::error::Error>>}
+        }
+        WrapperType::Option(option_inner) => {
+            let option_inner_name: TokenStream2 = rust_type(option_inner.deref());
+            quote! {std::option::Option<#option_inner_name>}
+        }
+        WrapperType::UnitExpr => quote! {()},
+        _ => wrapper.name().parse().unwrap(),
+    }
+}
+
+fn value_receiver(inner: &WrapperType) -> TokenStream2 {
+    match inner {
+        WrapperType::IntegerNumber(inner) | WrapperType::FloatingPointNumber(inner) => {
+            format!("value: {inner}").parse().unwrap()
+        }
+        WrapperType::Bool => "value: bool".parse().unwrap(),
+        WrapperType::String => "ptr: *const i8, _len: usize".parse().unwrap(),
+        WrapperType::Struct(name) => format!("value: *mut {name}").parse().unwrap(),
+        WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Result(_) => {
+            panic!("Vec of Result type not supported yet!")
+        }
+        WrapperType::Enum(name) => format!("value: {name}").parse().unwrap(),
+        WrapperType::UnitExpr => panic!("UnitExpr as vec inner type is not supported"),
+        WrapperType::Option(_) => panic!("Option as vec inner type is not supported yet!"),
+    }
+}
+
+fn unwrap_clone_expr(inner: &WrapperType) -> TokenStream2 {
+    match &inner {
+        WrapperType::String
+        | WrapperType::Struct(_)
+        | WrapperType::Vec(_)
+        | WrapperType::Option(_) => quote! {
+            Box::into_raw(Box::new(value.clone()))
+        },
+        WrapperType::Bool
+        | WrapperType::Enum(_)
+        | WrapperType::FloatingPointNumber(_)
+        | WrapperType::IntegerNumber(_) => quote! {
+            value.clone()
+        },
+        WrapperType::Result(_) => {
+            panic!("Nested Result types are not supported")
+        }
+        WrapperType::UnitExpr => quote! {()},
+    }
+}
+
+fn received_value_cast(inner: &WrapperType) -> TokenStream2 {
+    match inner {
+        WrapperType::String => quote! {
+            let value = std::ffi::CStr::from_ptr(ptr).to_str().unwrap().to_owned();
+        },
+        WrapperType::Struct(_) => {
+            quote! {
+                let value = unsafe { (*value).clone() };
+            }
+        }
+        _ => quote! {},
+    }
 }
 
 impl From<&ReusableWrapper> for TokenStream2 {
@@ -55,6 +129,96 @@ impl From<&ReusableWrapper> for TokenStream2 {
         match wrapper {
             ReusableWrapper::Vec(inner) => generate_vec_wrapper(inner),
             ReusableWrapper::Result(inner) => generate_result_wrapper(inner),
+            ReusableWrapper::Option(inner) => generate_option_wrapper(inner),
+        }
+    }
+}
+
+fn generate_option_wrapper(inner: &WrapperType) -> TokenStream2 {
+    let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_option", inner.name());
+    let wrapper_fn_name_drop = match inner {
+        WrapperType::Option(_) | WrapperType::Vec(_) | WrapperType::Result(_) => {
+            panic!("nested Option types are not supported")
+        }
+        _ => format_ident!("drop_{}_option", inner.name()),
+    };
+
+    let unwrap_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_option", inner.name());
+    let wrapper_fn_name_unwrap = format_ident!("unwrap_{}_option", inner.name());
+
+    let is_some_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_some_{}_option", inner.name());
+    let wrapper_fn_name_is_some = format_ident!("is_some_{}_option", inner.name());
+
+    let some_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__some_{}_option", inner.name());
+    let wrapper_fn_name_some = format_ident!("some_{}_option", inner.name());
+
+    let none_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__none_{}_option", inner.name());
+    let wrapper_fn_name_none = format_ident!("none_{}_option", inner.name());
+
+    let inner_type = rust_type(inner);
+
+    let cloned_unwrap_ret_type: TokenStream2 = match &inner {
+        WrapperType::String | WrapperType::Struct(_) | WrapperType::Vec(_) => {
+            quote! {*mut #inner_type}
+        }
+        WrapperType::UnitExpr => quote! {()},
+        _ => quote! {#inner_type},
+    };
+
+    let unwrap_clone_expr = unwrap_clone_expr(inner);
+
+    let some_value_receiver = value_receiver(inner);
+    let some_value_cast = received_value_cast(inner);
+
+    quote! {
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #some_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_some(#some_value_receiver) -> *mut std::option::Option<#inner_type> {
+            #some_value_cast
+            Box::into_raw(Box::new(Some(value)))
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #none_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_none() -> *mut std::option::Option<#inner_type> {
+            Box::into_raw(Box::new(None))
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #drop_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_drop(_self: *mut std::option::Option<#inner_type>) {
+            unsafe {
+                if !_self.is_null() {
+                    let _ = Box::from_raw(_self);
+                }
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #unwrap_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_unwrap(_self: *mut std::option::Option<#inner_type>) -> #cloned_unwrap_ret_type {
+            unsafe {
+                match &* _self {
+                    Some(value) => {
+                        #unwrap_clone_expr
+                    },
+                    None => panic!("Called unwrap on an None value"),
+                }
+            }
+        }
+
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #is_some_ext_fn_name)]
+        pub unsafe extern "C" fn #wrapper_fn_name_is_some(_self: *mut std::option::Option<#inner_type>) -> bool {
+            unsafe {
+                (* _self).is_some()
+            }
         }
     }
 }
@@ -63,6 +227,7 @@ fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
     let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_result", inner.name());
     let wrapper_fn_name_drop = match inner {
         WrapperType::Vec(vec_inner) => format_ident!("drop_{}_vec_result", vec_inner.name()),
+        WrapperType::Option(_) => panic!("Nested Result types are not supported"),
         _ => format_ident!("drop_{}_result", inner.name()),
     };
 
@@ -78,40 +243,16 @@ fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
     let is_err_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_err_{}_result", inner.name());
     let wrapper_fn_name_is_err = format_ident!("is_err_{}_result", inner.name());
 
-    let inner_type: TokenStream2 = match inner {
-        WrapperType::Vec(vec_inner) => {
-            let vec_inner_name: TokenStream2 = vec_inner.name().parse().unwrap();
-            quote! {Vec<#vec_inner_name>}
-        }
-        WrapperType::UnitExpr => quote! {()},
-        _ => inner.name().parse().unwrap(),
-    };
+    let inner_type: TokenStream2 = rust_type(inner);
 
-    let unwrap_clone_expr = match &inner {
-        WrapperType::String | WrapperType::Struct(_) | WrapperType::Vec(_) => quote! {
-            Box::into_raw(Box::new(value.clone()))
-        },
-        WrapperType::Bool
-        | WrapperType::Enum(_)
-        | WrapperType::FloatingPointNumber(_)
-        | WrapperType::IntegerNumber(_) => quote! {
-            value.clone()
-        },
-        WrapperType::Result(_) => {
-            panic!("Nested Result types are not supported")
-        }
-        WrapperType::UnitExpr => quote! {()},
-    };
+    let unwrap_clone_expr = unwrap_clone_expr(inner);
 
-    let clone_ret_type: TokenStream2 = match &inner {
-        WrapperType::String => "*mut std::string::String".parse().unwrap(),
-        WrapperType::Struct(name) => format!("*mut {name}").parse().unwrap(),
-        WrapperType::Vec(vec_inner) => {
-            let vec_inner_name = vec_inner.name();
-            format!("*mut Vec<{}>", vec_inner_name).parse().unwrap()
+    let cloned_unwrap_ret_type: TokenStream2 = match &inner {
+        WrapperType::String | WrapperType::Struct(_) | WrapperType::Vec(_) => {
+            quote! {*mut #inner_type}
         }
         WrapperType::UnitExpr => quote! {()},
-        _ => inner.name().parse().unwrap(),
+        _ => quote! {#inner_type},
     };
 
     quote! {
@@ -129,7 +270,7 @@ fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
         #[doc(hidden)]
         #[unsafe(no_mangle)]
         #[unsafe(export_name = #unwrap_ext_fn_name)]
-        pub unsafe extern "C" fn #wrapper_fn_name_unwrap(_self: *mut std::result::Result<#inner_type, std::sync::Arc<dyn std::error::Error>>) -> #clone_ret_type {
+        pub unsafe extern "C" fn #wrapper_fn_name_unwrap(_self: *mut std::result::Result<#inner_type, std::sync::Arc<dyn std::error::Error>>) -> #cloned_unwrap_ret_type {
             unsafe {
                 match &* _self {
                     Ok(value) => {
@@ -188,31 +329,8 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
     let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__get_{}_vec", inner.name());
     let wrapper_fn_name_get = format_ident!("get_{}_vec", inner.name());
 
-    let value_receiver: TokenStream2 = match inner {
-        WrapperType::IntegerNumber(inner) | WrapperType::FloatingPointNumber(inner) => {
-            format!("value: {inner}").parse().unwrap()
-        }
-        WrapperType::Bool => "value: bool".parse().unwrap(),
-        WrapperType::String => "ptr: *const i8, _len: usize".parse().unwrap(),
-        WrapperType::Struct(name) => format!("value: *mut {name}").parse().unwrap(),
-        WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
-        WrapperType::Result(_) => {
-            panic!("Vec of Result type not supported yet!")
-        }
-        WrapperType::Enum(name) => format!("value: {name}").parse().unwrap(),
-        WrapperType::UnitExpr => panic!("UnitExpr as vec inner type is not supported"),
-    };
-    let value_cast = match inner {
-        WrapperType::String => quote! {
-            let value = std::ffi::CStr::from_ptr(ptr).to_str().unwrap().to_owned();
-        },
-        WrapperType::Struct(_) => {
-            quote! {
-                let value = unsafe { (*value).clone() };
-            }
-        }
-        _ => quote! {},
-    };
+    let value_receiver = value_receiver(inner);
+    let value_cast = received_value_cast(inner);
 
     let vec_type: TokenStream2 = format!("Vec<{}>", inner.name()).parse().unwrap();
 
@@ -230,6 +348,7 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
             panic!("Vec of Result type not supported yet!")
         }
         WrapperType::UnitExpr => panic!("UnitExpr not supported yet as get return type!"),
+        WrapperType::Option(_) => panic!("Option not supported yet as get return type!"),
     };
 
     let get_body: TokenStream2 = match inner {
@@ -251,6 +370,9 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         }
         WrapperType::UnitExpr => {
             panic!("UnitExpr not supported yet as get return type!")
+        }
+        WrapperType::Option(_) => {
+            panic!("Option not supported yet as get return type!")
         }
     };
 

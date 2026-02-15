@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::ops::Deref;
 
 use crate::prepend_each_line_with_n_tabs;
 use crate::wrapper::cpp::*;
@@ -67,28 +66,20 @@ pub fn map_args<'a>(
         }
 
         FunctionArgWrapper {
-            wrapper_type: WrapperType::Vec(inner_wrapper),
+            wrapper_type: wt@ WrapperType::Vec( inner_wrapper) ,
             arg_name,
             ..
         } => {
-            let inner_type = match inner_wrapper.deref() {
-                WrapperType::String => "std::string",
-                WrapperType::Vec(_) => unimplemented!("Nested vector type not implemented yet"),
-                WrapperType::Bool => "bool",
-                WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.as_str(),
-                WrapperType::Struct(struct_name) => struct_name.as_str(),
-                WrapperType::Enum(enum_name) => enum_name.as_str(),
-                WrapperType::Result(_) => unimplemented!("Vector of Result type not implemented yet as inner Vec type"),
-                WrapperType::UnitExpr => panic!("UnitExpr not supported yet inside vector as function argument!"),
-            };
-            cpp_args.push(format!("const std::vector<{inner_type}>& {arg_name}"));
+            let arg_type = cpp_type(wt);
+            cpp_args.push(format!("const {arg_type}& {arg_name}"));
             includes.insert("#include <vector>".to_string());
             let inner_wrapper_name = inner_wrapper.name();
             includes.insert(format!(r#"#include "vec_{inner_wrapper_name}.h""#));
             arg_casts.push(format!("auto casted_{arg_name} = Rust{inner_wrapper_name}Vec::from_std({arg_name});"));
             call_args.push(format!("casted_{arg_name}.raw_ptr()"));
             wrapper_args.push(format!("void* {arg_name}"));
-        },
+        }
+
         FunctionArgWrapper {
             arg_name,
             arg_type,
@@ -99,13 +90,29 @@ pub fn map_args<'a>(
             wrapper_args.push(format!("{} {}", enum_type, arg_name));
             call_args.push(arg_name.to_string());
             includes.insert(format!("#include \"{enum_type}.h\""));
-        },
+        }
+
+        FunctionArgWrapper {
+            arg_name,
+            wrapper_type: wt@ WrapperType::Option(inner),..
+        } => {
+            let arg_type =  cpp_type(wt);
+            cpp_args.push(format!("{arg_type}& {arg_name}"));
+            includes.insert("#include <optional>".to_string());
+            let inner_wrapper_name = inner.name();
+            includes.insert(format!(r#"#include "option_{inner_wrapper_name}.h""#));
+            arg_casts.push(format!("auto casted_{arg_name} = Rust{inner_wrapper_name}Option::from_std({arg_name});"));
+            call_args.push(format!("casted_{arg_name}.raw_ptr()"));
+            wrapper_args.push(format!("void* {arg_name}"));
+        }
+
         FunctionArgWrapper {
             wrapper_type: WrapperType::Result(_),
             ..
         } => {
             panic!("Result function arguments are not supported");
         }
+
         FunctionArgWrapper {
             wrapper_type: WrapperType::UnitExpr,
             ..

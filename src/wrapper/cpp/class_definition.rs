@@ -465,6 +465,22 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
 
             Methods { getter, setter }
         }
+
+        FieldWrapper {
+            wrapper_type: FieldWrapperType::Option(inner),
+            getter,
+            setter,
+            ..
+        } => {
+            let getter = getter
+                .as_ref()
+                .map(|g| map_option_getter(g, inner, &class_name));
+            let setter = setter
+                .as_ref()
+                .map(|s| map_option_setter(s, inner, &class_name));
+
+            Methods { getter, setter }
+        }
     }
 }
 
@@ -490,7 +506,7 @@ fn map_vec_getter(
             r#"
 std::vector<{cpp_inner_name}> {class_name}::{name}() {{
     void* result = {extern_fn_name}(this->self);
-    auto rust_vec = {cpp_vec_class_name}::from_raw(result);
+    auto rust_vec = {cpp_vec_class_name}(result);
     auto std_vec = rust_vec.to_std();
     // this vec is still owned by a Rust struct - avoid calling drop by cpp
     rust_vec.leak();
@@ -531,6 +547,58 @@ void {class_name}::{name}(std::vector<{cpp_inner_name}>& value) {{
         ),
         extern_fn: format!("    void {extern_fn_name}(void*, void*);\n"),
         include: custom_type_include(cpp_vec_file_name),
+    }
+}
+
+fn map_option_getter(
+    Getter {
+        name,
+        extern_fn_name,
+    }: &Getter,
+    inner: &WrapperType,
+    class_name: impl Display,
+) -> Method {
+    let inner_name = inner.name();
+    let cpp_option_class_name = format!("Rust{inner_name}Option");
+    let cpp_option_file_name = format!("option_{inner_name}");
+
+    Method {
+        declaration: format!("    Rust{inner_name}Option {name}();\n"),
+        definition: format!(
+            r#"
+Rust{inner_name}Option {class_name}::{name}() {{
+    void* result = {extern_fn_name}(this->self);
+    auto rust_option = {cpp_option_class_name}(result);
+    return rust_option;
+}}
+"#
+        ),
+        extern_fn: format!("    void* {extern_fn_name}(void*);\n"),
+        include: custom_type_include(cpp_option_file_name),
+    }
+}
+
+fn map_option_setter(
+    Setter {
+        name,
+        extern_fn_name,
+    }: &Setter,
+    inner: &WrapperType,
+    class_name: impl Display,
+) -> Method {
+    let inner_name = inner.name();
+    let cpp_option_file_name = format!("option_{inner_name}");
+
+    Method {
+        declaration: format!("    void {name}(Rust{inner_name}Option& value);\n"),
+        definition: format!(
+            r#"
+void {class_name}::{name}(Rust{inner_name}Option& value) {{
+    {extern_fn_name}(this->self, value.raw_ptr());
+}}"#
+        ),
+        extern_fn: format!("    void {extern_fn_name}(void*, void*);\n"),
+        include: custom_type_include(cpp_option_file_name),
     }
 }
 

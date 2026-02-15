@@ -44,6 +44,10 @@ pub(crate) fn write_cpp_code(wrapper: &Wrapper) {
                 format!("result_{}.h", inner.name()),
                 format!("result_{}.cpp", inner.name()),
             ),
+            ReusableWrapper::Option(inner) => (
+                format!("option_{}.h", inner.name()),
+                format!("option_{}.cpp", inner.name()),
+            ),
         };
         let header_full_path = cpp_path.join(header_file_name);
         let source_full_path = cpp_path.join(source_file_name);

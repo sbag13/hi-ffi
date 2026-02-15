@@ -1,12 +1,11 @@
 use core::panic;
-use std::fmt::Debug;
-use std::ops::Deref;
 use std::str::FromStr;
+use std::{fmt::Debug, ops::Deref};
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 
-use crate::wrapper::{is_enum_type, is_struct_type};
+use crate::wrapper::{is_enum_type, is_struct_type, rust_type};
 
 #[derive(Debug)]
 pub struct FunctionWrapper {
@@ -31,6 +30,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
             return_type_sig: quote! {-> #return_type},
             result_cast: quote! {result},
         },
+
         Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::String,
             ..
@@ -40,6 +40,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
                 Box::into_raw(Box::new(result))
             },
         },
+
         Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::Struct(_),
             return_type,
@@ -49,6 +50,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
                 Box::into_raw(Box::new(result))
             },
         },
+
         Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::Vec(_),
             return_type,
@@ -58,6 +60,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
                 Box::into_raw(Box::new(result))
             },
         },
+
         Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::Enum(_),
             return_type,
@@ -65,20 +68,12 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
             return_type_sig: quote! {-> #return_type},
             result_cast: quote! {result},
         },
+
         Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::Result(inner_wrapper_type),
             ..
         }) => {
-            let ok_type: TokenStream2 = match inner_wrapper_type.deref() {
-                WrapperType::Vec(vec_inner) => {
-                    let vec_inner_name: TokenStream2 = vec_inner.name().parse().unwrap();
-                    quote! {Vec<#vec_inner_name>}
-                }
-                WrapperType::UnitExpr => {
-                    quote! {()}
-                }
-                _ => inner_wrapper_type.name().parse().unwrap(),
-            };
+            let ok_type = rust_type(inner_wrapper_type);
             MappedReturnType {
                 return_type_sig: quote! {-> *mut std::result::Result<#ok_type, std::sync::Arc<dyn std::error::Error>>},
                 result_cast: quote! {
@@ -86,6 +81,18 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
                 },
             }
         }
+
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Option(inner_wrapper),
+            ..
+        }) => {
+            let inner_type = rust_type(inner_wrapper.deref());
+            MappedReturnType {
+                return_type_sig: quote! {-> *mut std::option::Option<#inner_type>},
+                result_cast: quote! {Box::into_raw(Box::new(result))},
+            }
+        }
+
         None
         | Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::UnitExpr,
@@ -198,6 +205,19 @@ pub fn map_function_arg_wrappers<'a>(
         }
 
         FunctionArgWrapper {
+            arg_name,
+            arg_type,
+            wrapper_type: WrapperType::Option(_),
+        } => {
+            arg_signatures.push(quote! {#arg_name: *mut #arg_type});
+            arg_names.push(quote! {new_opt});
+            arg_casts.push(quote! {
+                let mut new_opt = None;
+                std::mem::swap(&mut new_opt, unsafe { &mut(*#arg_name)} );
+            });
+        }
+
+        FunctionArgWrapper {
             wrapper_type: WrapperType::UnitExpr,..}
             => {
                 panic!("UnitExpr function arguments are not supported");
@@ -234,6 +254,7 @@ pub enum WrapperType {
     Vec(Box<WrapperType>),
     Enum(String),
     Result(Box<WrapperType>),
+    Option(Box<WrapperType>),
     UnitExpr,
 }
 
@@ -249,6 +270,7 @@ impl WrapperType {
             WrapperType::String => "String".to_string(),
             WrapperType::Result(inner) => format!("{}_result", inner.name()),
             WrapperType::UnitExpr => "unit".to_string(),
+            WrapperType::Option(inner) => format!("{}_option", inner.name()),
         }
     }
 }

@@ -41,9 +41,129 @@
 #include "function_with_unit_expression_result.h"
 #include "take_status_before_it_is_defined.h"
 #include "take_struct_and_return_status_before_they_are_defined.h"
+#include "function_taking_some_int.h"
+#include "function_taking_some_bool.h"
+#include "function_taking_some_string.h"
+#include "function_taking_some_enum.h"
+#include "function_taking_some_struct.h"
+#include "function_returning_opt_int.h"
+#include "function_returning_opt_bool.h"
+#include "function_returning_opt_string.h"
+#include "function_returning_opt_enum.h"
+#include "function_returning_opt_struct.h"
 #include <iostream>
 #include <cassert>
 #include <cstring>
+#include <optional>
+
+void assert_options()
+{
+    std::cout << "assert_options" << std::endl;
+
+    auto some_i32 = std::optional<i32>(10);
+    function_taking_some_int(some_i32, true);
+    auto none_i32 = std::optional<i32>();
+    function_taking_some_int(none_i32, false);
+
+    auto some_bool = std::optional<bool>(true);
+    function_taking_some_bool(some_bool, true);
+    auto none_bool = std::optional<bool>();
+    function_taking_some_bool(none_bool, false);
+
+    auto some_string = std::optional<std::string>("Some string");
+    function_taking_some_string(some_string, true);
+    auto none_string = std::optional<std::string>();
+    function_taking_some_string(none_string, false);
+
+    auto some_enum = std::optional<TestStatus>(TestStatus::Pending);
+    function_taking_some_enum(some_enum, true);
+    auto none_enum = std::optional<TestStatus>();
+    function_taking_some_enum(none_enum, false);
+
+    auto ts1 = TestStruct();
+    ts1.set_i32_field(567);
+    auto some_struct = std::optional<TestStruct>(ts1);
+    function_taking_some_struct(some_struct, true);
+
+    auto ret_some_int = function_returning_opt_int(true);
+    assert(ret_some_int == std::optional<i32>(100));
+    auto ret_none_int = function_returning_opt_int(false);
+    assert(ret_none_int == std::optional<i32>());
+
+    auto ret_some_bool = function_returning_opt_bool(true);
+    assert(ret_some_bool == std::optional<bool>(true));
+    auto ret_none_bool = function_returning_opt_bool(false);
+    assert(ret_none_bool == std::optional<bool>());
+
+    auto ret_some_str = function_returning_opt_string(true);
+    assert(ret_some_str == std::optional<std::string>("Some Rust String"));
+    auto ret_none_str = function_returning_opt_string(false);
+    assert(ret_none_str == std::optional<std::string>());
+
+    auto ret_some_enum = function_returning_opt_enum(true);
+    assert(ret_some_enum == std::optional<TestStatus>(TestStatus::Pending));
+    auto ret_none_enum = function_returning_opt_enum(false);
+    assert(ret_none_enum == std::optional<TestStatus>());
+
+    auto ret_some_struct = function_returning_opt_struct(true);
+    assert(ret_some_struct.value().get_i32_field() == 234);
+    auto ret_none_struct = function_returning_opt_struct(false);
+    assert(!ret_none_struct.has_value());
+
+    // Methods
+    auto test_struct = TestStruct();
+    auto some_opt_int = std::optional<i32>(20);
+    test_struct.method_taking_opt_int(some_opt_int, true);
+    auto none_opt_int = std::optional<i32>();
+    test_struct.method_taking_opt_int(none_opt_int, false);
+
+    auto some_opt_string = std::optional<std::string>("Optional string");
+    TestStruct::static_method_taking_opt_string(some_opt_string, true);
+    auto none_opt_string = std::optional<std::string>();
+    TestStruct::static_method_taking_opt_string(none_opt_string, false);
+
+    auto some_opt_bool = std::optional<bool>(false);
+    test_struct.method_taking_opt_bool(some_opt_bool, true);
+    auto none_opt_bool = std::optional<bool>();
+    test_struct.method_taking_opt_bool(none_opt_bool, false);
+
+    auto some_opt_enum = std::optional<TestStatus>(TestStatus::Active);
+    TestStruct::static_method_taking_opt_enum(some_opt_enum, true);
+    auto none_opt_enum = std::optional<TestStatus>();
+    TestStruct::static_method_taking_opt_enum(none_opt_enum, false);
+
+    auto ts2 = TestStruct2();
+    ts2.set_i32_field(789);
+    auto some_opt_struct = std::optional<TestStruct2>(ts2);
+    test_struct.method_taking_opt_struct(some_opt_struct, true);
+    auto none_opt_struct = std::optional<TestStruct2>();
+    test_struct.method_taking_opt_struct(none_opt_struct, false);
+
+    auto some_opt_int_2 = test_struct.method_returning_opt_int(true);
+    assert(some_opt_int_2 == std::optional<i32>(30));
+    auto none_opt_int_2 = test_struct.method_returning_opt_int(false);
+    assert(none_opt_int_2 == std::optional<i32>());
+
+    auto some_opt_bool_2 = TestStruct::static_method_returning_opt_bool(true);
+    assert(some_opt_bool_2 == std::optional<bool>(false));
+    auto none_opt_bool_2 = TestStruct::static_method_returning_opt_bool(false);
+    assert(none_opt_bool_2 == std::optional<bool>());
+
+    auto some_opt_string_2 = test_struct.method_returning_opt_string(true);
+    assert(some_opt_string_2 == std::optional<std::string>("Optional string from Rust"));
+    auto none_opt_string_2 = test_struct.method_returning_opt_string(false);
+    assert(none_opt_string_2 == std::optional<std::string>());
+
+    auto some_opt_enum_2 = TestStruct::static_method_returning_opt_enum(true);
+    assert(some_opt_enum_2 == std::optional<TestStatus>(TestStatus::Inactive));
+    auto none_opt_enum_2 = TestStruct::static_method_returning_opt_enum(false);
+    assert(none_opt_enum_2 == std::optional<TestStatus>());
+
+    auto some_opt_struct_2 = test_struct.method_returning_opt_struct(true);
+    assert(some_opt_struct_2.value().get_i32_field() == 654);
+    auto none_opt_struct_2 = test_struct.method_returning_opt_struct(false);
+    assert(!none_opt_struct_2.has_value());
+}
 
 void assert_vectors()
 {

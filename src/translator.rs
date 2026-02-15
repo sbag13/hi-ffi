@@ -38,16 +38,25 @@ pub(crate) fn map_wrapper_to_reusable(wrapper_type: &WrapperType) -> Vec<Reusabl
             vec![ReusableWrapper::Vec(*inner_wrapper_type.clone())]
         }
         WrapperType::Result(inner_wrapper_type) => {
-            let result_wrapper = ReusableWrapper::Result(*inner_wrapper_type.clone());
+            let mut wrappers = vec![ReusableWrapper::Result(*inner_wrapper_type.clone())];
+
             match inner_wrapper_type.deref() {
-                WrapperType::Vec(vec_inner) => {
-                    vec![
-                        result_wrapper,
-                        ReusableWrapper::Vec(vec_inner.deref().clone()),
-                    ]
+                WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::Result(_) => {
+                    wrappers.extend(map_wrapper_to_reusable(inner_wrapper_type.deref()));
                 }
-                _ => vec![result_wrapper],
+                _ => (),
             }
+            wrappers
+        }
+        WrapperType::Option(inner_wrapper_type) => {
+            let mut wrappers = vec![ReusableWrapper::Option(*inner_wrapper_type.clone())];
+            match inner_wrapper_type.deref() {
+                WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::Result(_) => {
+                    wrappers.extend(map_wrapper_to_reusable(inner_wrapper_type.deref()));
+                }
+                _ => (),
+            }
+            wrappers
         }
         _ => vec![],
     }

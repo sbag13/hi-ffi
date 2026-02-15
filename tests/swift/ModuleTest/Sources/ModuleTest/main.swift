@@ -392,6 +392,120 @@ func assert_results() {
     }
 }
 
+func assert_options() {
+    print("assert_options")
+    
+    // Test function arguments with Option types
+    let some_i32: i32? = 10
+    function_taking_some_int(some_i32, true)
+    let none_i32: i32? = nil
+    function_taking_some_int(none_i32, false)
+    
+    let some_bool: Bool? = true
+    function_taking_some_bool(some_bool, true)
+    let none_bool: Bool? = nil
+    function_taking_some_bool(none_bool, false)
+    
+    let some_string: String? = "Some string"
+    function_taking_some_string(some_string, true)
+    let none_string: String? = nil
+    function_taking_some_string(none_string, false)
+    
+    let some_enum: TestStatus? = TestStatus.Pending
+    function_taking_some_enum(some_enum, true)
+    let none_enum: TestStatus? = nil
+    function_taking_some_enum(none_enum, false)
+    
+    let ts1 = TestStruct()
+    ts1.i32_field = 567
+    let some_struct: TestStruct? = ts1
+    function_taking_some_struct(some_struct, true)
+    let none_struct: TestStruct? = nil
+    function_taking_some_struct(none_struct, false)
+    
+    // Test function return values with Option types
+    let ret_some_int = function_returning_opt_int(true)
+    assert(ret_some_int == 100, "function_returning_opt_int(true) should return 100")
+    let ret_none_int = function_returning_opt_int(false)
+    assert(ret_none_int == nil, "function_returning_opt_int(false) should return nil")
+    
+    let ret_some_bool = function_returning_opt_bool(true)
+    assert(ret_some_bool == true, "function_returning_opt_bool(true) should return true")
+    let ret_none_bool = function_returning_opt_bool(false)
+    assert(ret_none_bool == nil, "function_returning_opt_bool(false) should return nil")
+    
+    let ret_some_str = function_returning_opt_string(true)
+    assert(ret_some_str == "Some Rust String", "function_returning_opt_string(true) should return correct string")
+    let ret_none_str = function_returning_opt_string(false)
+    assert(ret_none_str == nil, "function_returning_opt_string(false) should return nil")
+    
+    let ret_some_enum = function_returning_opt_enum(true)
+    assert(ret_some_enum == TestStatus.Pending, "function_returning_opt_enum(true) should return Pending")
+    let ret_none_enum = function_returning_opt_enum(false)
+    assert(ret_none_enum == nil, "function_returning_opt_enum(false) should return nil")
+    
+    let ret_some_struct = function_returning_opt_struct(true)
+    assert(ret_some_struct?.i32_field == 234, "function_returning_opt_struct(true) should return struct with i32_field 234")
+    let ret_none_struct = function_returning_opt_struct(false)
+    assert(ret_none_struct == nil, "function_returning_opt_struct(false) should return nil")
+    
+    // Test struct methods with Option types
+    let test_struct = TestStruct()
+    
+    let some_opt_int: i32? = 20
+    test_struct.method_taking_opt_int(some_opt_int, true)
+    let none_opt_int: i32? = nil
+    test_struct.method_taking_opt_int(none_opt_int, false)
+    
+    let some_opt_string: String? = "Optional string"
+    TestStruct.static_method_taking_opt_string(some_opt_string, true)
+    let none_opt_string: String? = nil
+    TestStruct.static_method_taking_opt_string(none_opt_string, false)
+    
+    let some_opt_bool: Bool? = false
+    test_struct.method_taking_opt_bool(some_opt_bool, true)
+    let none_opt_bool: Bool? = nil
+    test_struct.method_taking_opt_bool(none_opt_bool, false)
+    
+    let some_opt_enum: TestStatus? = TestStatus.Active
+    TestStruct.static_method_taking_opt_enum(some_opt_enum, true)
+    let none_opt_enum: TestStatus? = nil
+    TestStruct.static_method_taking_opt_enum(none_opt_enum, false)
+    
+    let ts2 = TestStruct2()
+    ts2.i32_field = 789
+    let some_opt_struct: TestStruct2? = ts2
+    test_struct.method_taking_opt_struct(some_opt_struct, true)
+    let none_opt_struct: TestStruct2? = nil
+    test_struct.method_taking_opt_struct(none_opt_struct, false)
+    
+    // Test struct methods returning Option types
+    let some_opt_int_2 = test_struct.method_returning_opt_int(true)
+    assert(some_opt_int_2 == 30, "method_returning_opt_int(true) should return 30")
+    let none_opt_int_2 = test_struct.method_returning_opt_int(false)
+    assert(none_opt_int_2 == nil, "method_returning_opt_int(false) should return nil")
+    
+    let some_opt_bool_2 = TestStruct.static_method_returning_opt_bool(true)
+    assert(some_opt_bool_2 == false, "static_method_returning_opt_bool(true) should return false")
+    let none_opt_bool_2 = TestStruct.static_method_returning_opt_bool(false)
+    assert(none_opt_bool_2 == nil, "static_method_returning_opt_bool(false) should return nil")
+    
+    let some_opt_str = test_struct.method_returning_opt_string(true)
+    assert(some_opt_str == "Optional string from Rust", "method_returning_opt_string(true) should return correct string")
+    let none_opt_str = test_struct.method_returning_opt_string(false)
+    assert(none_opt_str == nil, "method_returning_opt_string(false) should return nil")
+    
+    let some_opt_enum_2 = TestStruct.static_method_returning_opt_enum(true)
+    assert(some_opt_enum_2 == TestStatus.Inactive, "static_method_returning_opt_enum(true) should return Active")
+    let none_opt_enum_2 = TestStruct.static_method_returning_opt_enum(false)
+    assert(none_opt_enum_2 == nil, "static_method_returning_opt_enum(false) should return nil")
+    
+    let some_opt_struct_2 = test_struct.method_returning_opt_struct(true)
+    assert(some_opt_struct_2?.i32_field == 654, "method_returning_opt_struct(true) should return struct with i32_field 345")
+    let none_opt_struct_2 = test_struct.method_returning_opt_struct(false)
+    assert(none_opt_struct_2 == nil, "method_returning_opt_struct(false) should return nil")
+}
+
 func run() {
     assert_struct_basics()
     assert_functions()
@@ -402,6 +516,7 @@ func run() {
     assert_struct_vector_fields()
     assert_enums()
     assert_results()
+    assert_options()
     print("All assertions passed.")
 }
 

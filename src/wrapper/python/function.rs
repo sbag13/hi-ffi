@@ -99,6 +99,16 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
                     call_list.push(format!("{arg_name}_ffi"));
                 }
 
+                WrapperType::Option(inner) => {
+                    let arg_name = &arg_wrapper.arg_name;
+                    let inner_type_name = inner.name();
+                    let cast_lines = vec![
+                        format!("casted_{arg_name} = {inner_type_name}Option.from_python({arg_name})"),
+                    ];
+                    casts.extend(cast_lines);
+                    call_list.push(format!("casted_{arg_name}.raw_ptr()"));
+                }
+
                 WrapperType::Result(_) => {
                     panic!("Result types are not supported as function arguments in python");
                 }
@@ -140,6 +150,14 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                         format!("from .vec_{inner_type_name} import {inner_type_name}Vec"),
                     );
                 }
+                WrapperType::Option(inner_type) => {
+                    let inner_type_name = inner_type.name();
+                    acc.insert("Optional".to_string(), "from typing import Optional".to_string());
+                    acc.insert(
+                        format!("{inner_type_name}Option"),
+                        format!("from .option_{inner_type_name} import {inner_type_name}Option"),
+                    );
+                }
                 _ => {}
             }
             acc
@@ -164,6 +182,14 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                     "RustException".to_string(),
                     "from .global_state import RustException".to_string(),
                 );
+            }
+            WrapperType::Option(inner) => {
+                let inner_type_name = inner.name();
+                imports.insert(
+                    format!("{inner_type_name}Option"),
+                    format!("from .option_{inner_type_name} import {inner_type_name}Option"),
+                );
+                imports.insert("Optional".to_string(), "from typing import Optional".to_string());
             }
             _ => {}
         }
@@ -204,6 +230,13 @@ fn arg_receiver(arg_wrapper: &crate::wrapper::FunctionArgWrapper) -> String {
                 "{}: {}",
                 arg_wrapper.arg_name,
                 arg_wrapper.arg_type.to_token_stream()
+            )
+        }
+        WrapperType::Option(inner) => {
+            format!(
+                "{}: Optional[{}]",
+                arg_wrapper.arg_name,
+                type_hint_from_wrapper_type(inner)
             )
         }
         WrapperType::Result(_) => {

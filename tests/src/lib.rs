@@ -248,6 +248,78 @@ impl TestStruct {
             TestStatus::Active,
         ])
     }
+
+    pub fn method_taking_opt_int(&self, i: Option<i32>, assert_some: bool) {
+        if assert_some {
+            assert_eq!(Some(20), i);
+        } else {
+            assert!(i.is_none());
+        }
+    }
+
+    pub fn static_method_taking_opt_string(s: Option<String>, assert_some: bool) {
+        if assert_some {
+            assert_eq!(Some("Optional string".to_string()), s);
+        } else {
+            assert!(s.is_none());
+        }
+    }
+
+    pub fn method_taking_opt_bool(&self, b: Option<bool>, assert_some: bool) {
+        if assert_some {
+            assert_eq!(Some(false), b);
+        } else {
+            assert!(b.is_none());
+        }
+    }
+
+    pub fn static_method_taking_opt_enum(e: Option<TestStatus>, assert_some: bool) {
+        if assert_some {
+            assert_eq!(Some(TestStatus::Active), e);
+        } else {
+            assert!(e.is_none());
+        }
+    }
+
+    pub fn method_taking_opt_struct(&self, s: Option<TestStruct2>, assert_some: bool) {
+        if assert_some {
+            assert_eq!(Some(TestStruct2 { i32_field: 789 }), s);
+        } else {
+            assert!(s.is_none());
+        }
+    }
+
+    pub fn method_returning_opt_int(&self, some: bool) -> Option<i32> {
+        if some { Some(30) } else { None }
+    }
+
+    pub fn static_method_returning_opt_bool(some: bool) -> Option<bool> {
+        if some { Some(false) } else { None }
+    }
+
+    pub fn method_returning_opt_string(&self, some: bool) -> Option<String> {
+        if some {
+            Some("Optional string from Rust".to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn static_method_returning_opt_enum(some: bool) -> Option<TestStatus> {
+        if some {
+            Some(TestStatus::Inactive)
+        } else {
+            None
+        }
+    }
+
+    pub fn method_returning_opt_struct(&self, some: bool) -> Option<TestStruct2> {
+        if some {
+            Some(TestStruct2 { i32_field: 654 })
+        } else {
+            None
+        }
+    }
 }
 
 #[ffi]
@@ -579,5 +651,91 @@ pub fn function_with_vec_enum_result(error: bool) -> Result<Vec<TestStatus>, Enu
             TestStatus::Active,
             TestStatus::Inactive,
         ])
+    }
+}
+
+// Optionals
+
+#[ffi]
+pub fn function_taking_some_int(i: Option<i32>, assert_some: bool) {
+    if assert_some {
+        assert_eq!(Some(10), i);
+    } else {
+        assert!(i.is_none());
+    }
+}
+
+#[ffi]
+pub fn function_taking_some_bool(b: Option<bool>, assert_some: bool) {
+    if assert_some {
+        assert_eq!(Some(true), b);
+    } else {
+        assert!(b.is_none());
+    }
+}
+
+#[ffi]
+pub fn function_taking_some_string(s: Option<String>, assert_some: bool) {
+    if assert_some {
+        assert_eq!(Some("Some string".to_string()), s);
+    } else {
+        assert!(s.is_none());
+    }
+}
+
+#[ffi]
+pub fn function_taking_some_enum(e: Option<TestStatus>, assert_some: bool) {
+    if assert_some {
+        assert_eq!(Some(TestStatus::Pending), e);
+    } else {
+        assert!(e.is_none());
+    }
+}
+
+#[ffi]
+pub(crate) fn function_taking_some_struct(e: Option<TestStruct>, assert_some: bool) {
+    if assert_some {
+        assert_eq!(
+            Some(TestStruct {
+                i32_field: 567,
+                ..Default::default()
+            }),
+            e
+        );
+    } else {
+        assert!(e.is_none());
+    }
+}
+
+#[ffi]
+pub(crate) fn function_returning_opt_int(some: bool) -> Option<i32> {
+    if some { Some(100) } else { None }
+}
+#[ffi]
+pub(crate) fn function_returning_opt_bool(some: bool) -> Option<bool> {
+    if some { Some(true) } else { None }
+}
+#[ffi]
+pub(crate) fn function_returning_opt_string(some: bool) -> Option<String> {
+    if some {
+        Some("Some Rust String".to_string())
+    } else {
+        None
+    }
+}
+#[ffi]
+pub(crate) fn function_returning_opt_enum(some: bool) -> Option<TestStatus> {
+    if some {
+        Some(TestStatus::Pending)
+    } else {
+        None
+    }
+}
+#[ffi]
+pub(crate) fn function_returning_opt_struct(some: bool) -> Option<TestStruct2> {
+    if some {
+        Some(TestStruct2 { i32_field: 234 })
+    } else {
+        None
     }
 }

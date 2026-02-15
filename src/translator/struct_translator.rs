@@ -58,7 +58,7 @@ fn fields_wrappers(item_struct: &ItemStruct) -> Vec<FieldWrapper> {
                         setter,
                     }
                 } else {
-                    // Handle non-trivial paths, e.g., Vec<T>
+                    // Handle non-trivial paths, e.g., Vec<T>, Option<T>
                     match path.path.segments.first() {
                         Some(segment) => match segment.ident.to_string().as_str() {
                             "Vec" => {
@@ -86,6 +86,35 @@ fn fields_wrappers(item_struct: &ItemStruct) -> Vec<FieldWrapper> {
                                     field_name,
                                     field_type: field.ty.clone(),
                                     wrapper_type: FieldWrapperType::Vec(inner_wrapper_type),
+                                    setter,
+                                    getter,
+                                }
+                            }
+                            "Option" => {
+                                let inner_wrapper_type: WrapperType = match &segment.arguments {
+                                    syn::PathArguments::AngleBracketed(args) => {
+                                        let Some(inner_arg) = args.args.first() else {
+                                            panic!("No argument found in Option field type");
+                                        };
+                                        match inner_arg {
+                                            GenericArgument::Type(Type::Path(inner_path)) => {
+                                                inner_path
+                                                    .to_token_stream()
+                                                    .to_string()
+                                                    .as_str()
+                                                    .parse()
+                                                    .unwrap()
+                                            }
+                                            _ => panic!("Option inner field type must be a path"),
+                                        }
+                                    }
+                                    _ => panic!("Option field type arguments not supported"),
+                                };
+
+                                FieldWrapper {
+                                    field_name,
+                                    field_type: field.ty.clone(),
+                                    wrapper_type: FieldWrapperType::Option(Box::new(inner_wrapper_type)),
                                     setter,
                                     getter,
                                 }

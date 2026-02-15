@@ -42,6 +42,12 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
                     reusable_wrappers.extend(map_wrapper_to_reusable(&arg.wrapper_type));
                 }
 
+                let return_wrapper = return_wrapper(&method.sig.output)?;
+
+                if let Some(return_wrapper) = &return_wrapper {
+                    reusable_wrappers.extend(map_wrapper_to_reusable(&return_wrapper.wrapper_type));
+                }
+
                 Ok(MethodWrapper {
                     name: method.sig.ident.clone(),
                     extern_function_name: format!(
@@ -51,7 +57,7 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
                     public: matches!(method.vis, syn::Visibility::Public(_)),
                     is_static: method.sig.receiver().is_none(),
                     args,
-                    return_wrapper: return_wrapper(&method.sig.output)?,
+                    return_wrapper,
                 })
             } else {
                 panic!("Unsupported impl item")

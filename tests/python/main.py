@@ -17,6 +17,11 @@ from python_ffi.vec_String import StringVec
 from python_ffi.vec_TestStruct2 import TestStruct2Vec
 from python_ffi.vec_TestStatus import TestStatusVec
 from python_ffi.StructWithVecs import StructWithVecs
+from python_ffi.option_i32 import i32Option
+from python_ffi.option_bool import boolOption
+from python_ffi.option_String import StringOption
+from python_ffi.option_TestStatus import TestStatusOption
+from python_ffi.option_TestStruct2 import TestStruct2Option
 
 
 ext = "so"  # Change to 'dylib' for MacOS, 'dll' for Windows
@@ -361,6 +366,115 @@ def result_tests():
     ]
 
 
+def option_tests():
+    print("option_tests")
+
+    # Test function taking Option arguments with Some values
+    function_taking_some_int(10, True)
+    function_taking_some_int(None, False)
+    function_taking_some_bool(True, True)
+    function_taking_some_bool(None, False)
+    function_taking_some_string("Some string", True)
+    function_taking_some_string(None, False)
+    function_taking_some_enum(TestStatus.Pending, True)
+    function_taking_some_enum(None, False)
+    struct_arg = TestStruct()
+    struct_arg.i32_field = 567
+    function_taking_some_struct(struct_arg, True)
+    function_taking_some_struct(None, False)
+
+    # Test function returning Option values (Some)
+    opt_int = function_returning_opt_int(True)
+    assert opt_int is not None
+    assert opt_int == 100
+
+    opt_bool = function_returning_opt_bool(True)
+    assert opt_bool is not None
+    assert opt_bool == True
+
+    opt_string = function_returning_opt_string(True)
+    assert opt_string is not None
+    assert opt_string == "Some Rust String"
+
+    opt_enum = function_returning_opt_enum(True)
+    assert opt_enum is not None
+    assert opt_enum == TestStatus.Pending
+
+    opt_struct = function_returning_opt_struct(True)
+    assert opt_struct is not None
+    assert opt_struct.i32_field == 234
+
+    # Test function returning None (None case)
+    opt_int_none = function_returning_opt_int(False)
+    assert opt_int_none is None
+
+    opt_bool_none = function_returning_opt_bool(False)
+    assert opt_bool_none is None
+
+    opt_string_none = function_returning_opt_string(False)
+    assert opt_string_none is None
+
+    opt_enum_none = function_returning_opt_enum(False)
+    assert opt_enum_none is None
+
+    opt_struct_none = function_returning_opt_struct(False)
+    assert opt_struct_none is None
+
+    # Test instance methods with Option arguments
+    test_struct = TestStruct()
+    test_struct.method_taking_opt_int(20, True)
+    test_struct.method_taking_opt_int(None, False)
+    test_struct.method_taking_opt_bool(False, True)
+    test_struct.method_taking_opt_bool(None, False)
+    struct_arg2 = TestStruct2()
+    struct_arg2.i32_field = 789
+    test_struct.method_taking_opt_struct(struct_arg2, True)
+    test_struct.method_taking_opt_struct(None, False)
+
+    # Test instance methods returning Option
+    result_int = test_struct.method_returning_opt_int(True)
+    assert result_int is not None
+    assert result_int == 30
+
+    result_string = test_struct.method_returning_opt_string(True)
+    assert result_string is not None
+    assert result_string == "Optional string from Rust"
+
+    result_struct = test_struct.method_returning_opt_struct(True)
+    assert result_struct is not None
+    assert result_struct.i32_field == 654
+
+    # Test instance methods returning None
+    result_int_none = test_struct.method_returning_opt_int(False)
+    assert result_int_none is None
+
+    result_string_none = test_struct.method_returning_opt_string(False)
+    assert result_string_none is None
+
+    result_struct_none = test_struct.method_returning_opt_struct(False)
+    assert result_struct_none is None
+
+    # Test static methods with Option
+    TestStruct.static_method_taking_opt_string("Optional string", True)
+    TestStruct.static_method_taking_opt_string(None, False)
+    TestStruct.static_method_taking_opt_enum(TestStatus.Active, True)
+    TestStruct.static_method_taking_opt_enum(None, False)
+
+    static_result_bool = TestStruct.static_method_returning_opt_bool(True)
+    assert static_result_bool is not None
+    assert static_result_bool == False
+
+    static_result_bool_none = TestStruct.static_method_returning_opt_bool(False)
+    assert static_result_bool_none is None
+
+    static_result_enum = TestStruct.static_method_returning_opt_enum(True)
+    assert static_result_enum is not None
+    assert static_result_enum == TestStatus.Inactive
+
+    static_result_enum_none = TestStruct.static_method_returning_opt_enum(False)
+    assert static_result_enum_none is None
+
+
 if __name__ == "__main__":
     struct_tests()
     functions_tests()
@@ -370,4 +484,5 @@ if __name__ == "__main__":
     vector_methods_tests()
     enum_tests()
     result_tests()
+    option_tests()
     print("All tests passed!")
