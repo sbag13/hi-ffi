@@ -1,18 +1,14 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 
-use crate::ReusableWrapper;
-use crate::prepend_each_line_with_n_tabs;
 use crate::python::PYTHON_LIB_GETTER_NAME;
-use crate::wrapper::FieldWrapperType;
-use crate::wrapper::WrapperType;
-use crate::wrapper::is_enum_type;
+use crate::wrapper::{FieldWrapperType, WrapperType, is_enum_type};
+use crate::{ReusableWrapper, prepend_each_line_with_n_tabs};
 use quote::ToTokens;
 use syn::Type;
 
-use crate::EXPORTED_SYMBOLS_PREFIX;
-use crate::Wrapper;
 use crate::wrapper::ParsedWrapper;
+use crate::{EXPORTED_SYMBOLS_PREFIX, Wrapper};
 
 mod enum_mod;
 mod function;
@@ -152,8 +148,12 @@ class {inner_name}Option:
         else:
             return {inner_name}Option({PYTHON_LIB_GETTER_NAME}().{none_ext_name}())
     
+    def leak(self):
+        self._ptr = None
+    
     def __del__(self):
-        {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_option(self._ptr)
+        if self._ptr is not None:
+            {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_option(self._ptr)
 "#
     )
 }

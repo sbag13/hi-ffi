@@ -114,7 +114,9 @@ fn fields_wrappers(item_struct: &ItemStruct) -> Vec<FieldWrapper> {
                                 FieldWrapper {
                                     field_name,
                                     field_type: field.ty.clone(),
-                                    wrapper_type: FieldWrapperType::Option(Box::new(inner_wrapper_type)),
+                                    wrapper_type: FieldWrapperType::Option(Box::new(
+                                        inner_wrapper_type,
+                                    )),
                                     setter,
                                     getter,
                                 }

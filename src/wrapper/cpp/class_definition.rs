@@ -561,20 +561,25 @@ fn map_option_getter(
     let inner_name = inner.name();
     let cpp_option_class_name = format!("Rust{inner_name}Option");
     let cpp_option_file_name = format!("option_{inner_name}");
+    let cpp_inner_type = cpp_type(inner);
+    let mut includes = custom_type_include(&cpp_option_file_name);
+    includes.push_str("#include <optional>\n");
 
     Method {
-        declaration: format!("    Rust{inner_name}Option {name}();\n"),
+        declaration: format!("    std::optional<{cpp_inner_type}> {name}();\n"),
         definition: format!(
             r#"
-Rust{inner_name}Option {class_name}::{name}() {{
+std::optional<{cpp_inner_type}> {class_name}::{name}() {{
     void* result = {extern_fn_name}(this->self);
     auto rust_option = {cpp_option_class_name}(result);
-    return rust_option;
+    auto value = rust_option.to_std();
+    rust_option.leak();
+    return value;
 }}
 "#
         ),
         extern_fn: format!("    void* {extern_fn_name}(void*);\n"),
-        include: custom_type_include(cpp_option_file_name),
+        include: includes,
     }
 }
 
@@ -588,17 +593,21 @@ fn map_option_setter(
 ) -> Method {
     let inner_name = inner.name();
     let cpp_option_file_name = format!("option_{inner_name}");
+    let cpp_inner_type = cpp_type(inner);
+    let mut includes = custom_type_include(&cpp_option_file_name);
+    includes.push_str("#include <optional>\n");
 
     Method {
-        declaration: format!("    void {name}(Rust{inner_name}Option& value);\n"),
+        declaration: format!("    void {name}(const std::optional<{cpp_inner_type}>& value);\n"),
         definition: format!(
             r#"
-void {class_name}::{name}(Rust{inner_name}Option& value) {{
-    {extern_fn_name}(this->self, value.raw_ptr());
+void {class_name}::{name}(const std::optional<{cpp_inner_type}>& value) {{
+    auto rust_option = Rust{inner_name}Option::from_std(value);
+    {extern_fn_name}(this->self, rust_option.raw_ptr());
 }}"#
         ),
         extern_fn: format!("    void {extern_fn_name}(void*, void*);\n"),
-        include: custom_type_include(cpp_option_file_name),
+        include: includes,
     }
 }
 

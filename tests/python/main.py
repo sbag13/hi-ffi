@@ -22,6 +22,7 @@ from python_ffi.option_bool import boolOption
 from python_ffi.option_String import StringOption
 from python_ffi.option_TestStatus import TestStatusOption
 from python_ffi.option_TestStruct2 import TestStruct2Option
+from python_ffi.StructWithOptions import StructWithOptions
 
 
 ext = "so"  # Change to 'dylib' for MacOS, 'dll' for Windows
@@ -130,6 +131,10 @@ def struct_tests():
     assert len(struct_with_vecs.vec_of_structs) == 2
     assert struct_with_vecs.vec_of_structs[0].i32_field == 0
     assert struct_with_vecs.vec_of_structs[1].i32_field == 567
+
+    assert len(struct_with_vecs.vec_of_enums) == 0
+    struct_with_vecs.vec_of_enums = [TestStatus.Active, TestStatus.Pending]
+    assert struct_with_vecs.vec_of_enums == [TestStatus.Active, TestStatus.Pending]
 
 
 def functions_tests():
@@ -473,6 +478,32 @@ def option_tests():
 
     static_result_enum_none = TestStruct.static_method_returning_opt_enum(False)
     assert static_result_enum_none is None
+
+    # Test struct with Option fields
+    struct_with_options = StructWithOptions()
+
+    assert struct_with_options.opt_int is None
+    struct_with_options.opt_int = 555
+    assert struct_with_options.opt_int == 555
+
+    assert struct_with_options.opt_bool is None
+    struct_with_options.opt_bool = True
+    assert struct_with_options.opt_bool == True
+
+    assert struct_with_options.opt_string is None
+    struct_with_options.opt_string = "Struct with options"
+    assert struct_with_options.opt_string == "Struct with options"
+
+    assert struct_with_options.opt_enum is None
+    struct_with_options.opt_enum = TestStatus.Active
+    assert struct_with_options.opt_enum == TestStatus.Active
+
+    assert struct_with_options.opt_struct is None
+    some_ts2 = TestStruct2()
+    some_ts2.i32_field = 321
+    struct_with_options.opt_struct = some_ts2
+    assert struct_with_options.opt_struct is not None
+    assert struct_with_options.opt_struct.i32_field == 321
 
 
 if __name__ == "__main__":

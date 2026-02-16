@@ -1,5 +1,7 @@
 use core::panic;
-use std::{any::Any, fmt::Display, ops::Deref};
+use std::any::Any;
+use std::fmt::Display;
+use std::ops::Deref;
 
 use syn::Item;
 

@@ -102,9 +102,9 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
                 WrapperType::Option(inner) => {
                     let arg_name = &arg_wrapper.arg_name;
                     let inner_type_name = inner.name();
-                    let cast_lines = vec![
-                        format!("casted_{arg_name} = {inner_type_name}Option.from_python({arg_name})"),
-                    ];
+                    let cast_lines = vec![format!(
+                        "casted_{arg_name} = {inner_type_name}Option.from_python({arg_name})"
+                    )];
                     casts.extend(cast_lines);
                     call_list.push(format!("casted_{arg_name}.raw_ptr()"));
                 }
@@ -152,7 +152,10 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                 }
                 WrapperType::Option(inner_type) => {
                     let inner_type_name = inner_type.name();
-                    acc.insert("Optional".to_string(), "from typing import Optional".to_string());
+                    acc.insert(
+                        "Optional".to_string(),
+                        "from typing import Optional".to_string(),
+                    );
                     acc.insert(
                         format!("{inner_type_name}Option"),
                         format!("from .option_{inner_type_name} import {inner_type_name}Option"),
@@ -189,7 +192,10 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                     format!("{inner_type_name}Option"),
                     format!("from .option_{inner_type_name} import {inner_type_name}Option"),
                 );
-                imports.insert("Optional".to_string(), "from typing import Optional".to_string());
+                imports.insert(
+                    "Optional".to_string(),
+                    "from typing import Optional".to_string(),
+                );
             }
             _ => {}
         }

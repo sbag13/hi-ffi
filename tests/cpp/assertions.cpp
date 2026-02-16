@@ -51,6 +51,7 @@
 #include "function_returning_opt_string.h"
 #include "function_returning_opt_enum.h"
 #include "function_returning_opt_struct.h"
+#include "StructWithOptions.h"
 #include <iostream>
 #include <cassert>
 #include <cstring>
@@ -163,6 +164,31 @@ void assert_options()
     assert(some_opt_struct_2.value().get_i32_field() == 654);
     auto none_opt_struct_2 = test_struct.method_returning_opt_struct(false);
     assert(!none_opt_struct_2.has_value());
+
+    // Getters and setters
+    auto options_struct = StructWithOptions();
+
+    assert(!options_struct.get_opt_int().has_value());
+    options_struct.set_opt_int(std::optional<i32>(555));
+    assert(options_struct.get_opt_int().value() == 555);
+
+    assert(!options_struct.get_opt_bool().has_value());
+    options_struct.set_opt_bool(std::optional<bool>(true));
+    assert(options_struct.get_opt_bool().value() == true);
+
+    assert(!options_struct.get_opt_string().has_value());
+    options_struct.set_opt_string(std::optional<std::string>("Opt string in struct"));
+    assert(options_struct.get_opt_string().value() == "Opt string in struct");
+
+    assert(!options_struct.get_opt_enum().has_value());
+    options_struct.set_opt_enum(std::optional<TestStatus>(TestStatus::Pending));
+    assert(options_struct.get_opt_enum().value() == TestStatus::Pending);
+
+    auto ts3 = TestStruct2();
+    ts3.set_i32_field(321);
+    assert(!options_struct.get_opt_struct().has_value());
+    options_struct.set_opt_struct(std::optional<TestStruct2>(ts3));
+    assert(options_struct.get_opt_struct().value().get_i32_field() == 321);
 }
 
 void assert_vectors()
@@ -292,6 +318,16 @@ void assert_structs()
     assert(vec_of_structs_2.size() == 2);
     assert(vec_of_structs_2[0].get_i32_field() == 0);
     assert(vec_of_structs_2[1].get_i32_field() == 567);
+
+    auto vec_of_enums = struct_with_vectors.get_vec_of_enums();
+    assert(vec_of_enums.size() == 0);
+    std::vector<TestStatus> new_vec_of_enums = {TestStatus::Pending, TestStatus::Active, TestStatus::Inactive};
+    struct_with_vectors.set_vec_of_enums(new_vec_of_enums);
+    auto vec_of_enums_2 = struct_with_vectors.get_vec_of_enums();
+    assert(vec_of_enums_2.size() == 3);
+    assert(vec_of_enums_2[0] == TestStatus::Pending);
+    assert(vec_of_enums_2[1] == TestStatus::Active);
+    assert(vec_of_enums_2[2] == TestStatus::Inactive);
 }
 
 void assert_struct_impl_block()

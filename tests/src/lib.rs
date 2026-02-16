@@ -506,6 +506,7 @@ pub struct StructWithVecs {
     pub vec_of_bools: Vec<bool>,
     pub vec_of_strings: Vec<String>,
     pub vec_of_structs: Vec<TestStruct2>,
+    pub vec_of_enums: Vec<TestStatus>,
 }
 
 #[derive(Debug)]
@@ -738,4 +739,14 @@ pub(crate) fn function_returning_opt_struct(some: bool) -> Option<TestStruct2> {
     } else {
         None
     }
+}
+
+#[ffi]
+#[derive(Clone, Default)]
+pub(crate) struct StructWithOptions {
+    pub opt_int: Option<i32>,
+    pub opt_bool: Option<bool>,
+    pub opt_string: Option<String>,
+    pub opt_enum: Option<TestStatus>,
+    pub opt_struct: Option<TestStruct2>,
 }

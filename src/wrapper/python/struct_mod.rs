@@ -73,11 +73,19 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
                             struct_name.to_owned(),
                             format!("from .{struct_name} import {struct_name}"),
                         );
+                    } else if let WrapperType::Enum(enum_name) = inner {
+                        acc.insert(
+                            enum_name.to_owned(),
+                            format!("from .{enum_name} import {enum_name}"),
+                        );
                     }
                 }
                 FieldWrapperType::Option(inner) => {
                     let inner_type_name = inner.name();
-                    acc.insert("Optional".to_string(), "from typing import Optional".to_string());
+                    acc.insert(
+                        "Optional".to_string(),
+                        "from typing import Optional".to_string(),
+                    );
                     acc.insert(
                         format!("{}Option", inner_type_name),
                         format!(
@@ -91,6 +99,11 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
                         acc.insert(
                             struct_name.to_owned(),
                             format!("from .{struct_name} import {struct_name}"),
+                        );
+                    } else if let WrapperType::Enum(enum_name) = &**inner {
+                        acc.insert(
+                            enum_name.to_owned(),
+                            format!("from .{enum_name} import {enum_name}"),
                         );
                     }
                 }
@@ -278,7 +291,10 @@ fn gen_vec_property(field_wrapper: &FieldWrapper, inner: &crate::wrapper::Wrappe
 {setter}"#
     )
 }
-fn gen_option_property(field_wrapper: &FieldWrapper, inner: &crate::wrapper::WrapperType) -> String {
+fn gen_option_property(
+    field_wrapper: &FieldWrapper,
+    inner: &crate::wrapper::WrapperType,
+) -> String {
     use crate::wrapper::python::type_hint_from_wrapper_type;
 
     let field_name = &field_wrapper.field_name;
@@ -296,7 +312,10 @@ fn gen_option_property(field_wrapper: &FieldWrapper, inner: &crate::wrapper::Wra
         {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p
         result_ptr = {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}(self._self_ptr)
         rust_option = {option_class_name}(result_ptr)
-        return rust_option.to_python()"#
+        python_result = rust_option.to_python()
+        # Prevent the option from being dropped, as it's still owned by the struct
+        rust_option.leak()
+        return python_result"#
         )
     } else {
         String::new()

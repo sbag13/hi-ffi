@@ -1,9 +1,11 @@
+use crate::wrapper::ParsedWrapper;
+use crate::wrapper::base::*;
 use crate::wrapper::swift::class_definition::gen_empty_class_definition;
-use crate::wrapper::swift::{SwiftCode, gen_swift_result_declarations, gen_swift_vec_declarations, gen_swift_option_declarations};
-use crate::wrapper::{ParsedWrapper, base::*};
-use crate::{
-    GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, insert_after,
+use crate::wrapper::swift::{
+    SwiftCode, gen_swift_option_declarations, gen_swift_result_declarations,
+    gen_swift_vec_declarations,
 };
+use crate::{GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, insert_after};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -52,7 +54,11 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
     let swift_code = wrapper.swift();
 
     match wrapper.parsed {
-        ParsedWrapper::Enum(_) => insert_after(ENUM_DEFINITIONS_MARKER, swift_code.header(), &swift_header_path),
+        ParsedWrapper::Enum(_) => insert_after(
+            ENUM_DEFINITIONS_MARKER,
+            swift_code.header(),
+            &swift_header_path,
+        ),
         _ => append_to_file(swift_code.header(), &swift_header_path),
     };
 
@@ -113,14 +119,18 @@ import Foundation
 public typealias bool = Bool
 
 open class Opaque {{
-    private var _self: UnsafeMutableRawPointer
+    var _self: UnsafeMutableRawPointer?
 
     public required init(_ _self: UnsafeMutableRawPointer) {{
         self._self = _self
     }}
 
+    func leak() {{
+        self._self = nil
+    }}
+
     open func rawPtr() -> UnsafeMutableRawPointer {{
-        return self._self
+        return self._self!
     }}
 }}
 

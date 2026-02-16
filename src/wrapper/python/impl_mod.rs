@@ -185,7 +185,9 @@ class {class_name}:"#
             }
 
             let self_ret = match &ret.wrapper_type {
-                WrapperType::Result(inner) | WrapperType::Vec(inner) | WrapperType::Option(inner) => inner.name() == class_name,
+                WrapperType::Result(inner)
+                | WrapperType::Vec(inner)
+                | WrapperType::Option(inner) => inner.name() == class_name,
                 WrapperType::Struct(s_name) => s_name == &class_name,
                 _ => false,
             };
@@ -254,7 +256,10 @@ fn insert_imports_for_vec_inner(inner: &WrapperType, imports: &mut HashMap<Strin
 
 fn insert_imports_for_option_inner(inner: &WrapperType, imports: &mut HashMap<String, String>) {
     if let WrapperType::Option(inner) = inner {
-        imports.insert("Optional".to_string(), "from typing import Optional".to_string());
+        imports.insert(
+            "Optional".to_string(),
+            "from typing import Optional".to_string(),
+        );
         let option_name = format!("{}Option", inner.name());
         imports.insert(
             option_name.clone(),

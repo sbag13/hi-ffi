@@ -1,6 +1,7 @@
 use core::panic;
+use std::fmt::Debug;
+use std::ops::Deref;
 use std::str::FromStr;
-use std::{fmt::Debug, ops::Deref};
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};

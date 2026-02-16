@@ -42,11 +42,13 @@ struct Person {
     age: i32,
 
     // Generate getter only (read-only)
+    // i.a. Options are supported
     #[ffi(getter)]
-    name: String,
+    name: Option<String>,
 
     // Public fields automatically get getters and setters
-    pub email: String,
+    // i.a. Vectors are supported
+    pub emails: Vec<String>,
 
     // Skip FFI generation for internal fields
     #[ffi(skip)]
@@ -164,11 +166,15 @@ These examples demonstrate how to use the generated bindings in real application
 | Methods vec results      | ✅  | ✅    | ✅     |
 | Methods enum Result      | ✅  | ✅    | ✅     |
 
-### Option
+### Options
 
-| Feature | C++ | Swift | Python |
-| ------- | --- | ----- | ------ |
-| -       | ❌  | ❌    | ❌     |
+| Feature         | C++ | Swift | Python |
+| --------------- | --- | ----- | ------ |
+| function args   | ✅  | ✅    | ✅     |
+| function return | ✅  | ✅    | ✅     |
+| method args     | ✅  | ✅    | ✅     |
+| method return   | ✅  | ✅    | ✅     |
+| struct fields   | ✅  | ✅    | ✅     |
 
 ## Architecture
 

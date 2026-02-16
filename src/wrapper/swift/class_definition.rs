@@ -536,6 +536,7 @@ fn map_option_getter(
         get {{
             let ptr = {extern_fn_name}(self.rawPtr())
             let rust_option = {option_class_name}(ptr!)
+            defer {{ rust_option.leak() }}
             return rust_option.toSwift()
         }}"#,
     )

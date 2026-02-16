@@ -74,6 +74,16 @@ func assert_struct_basics() {
     assert(vec_of_structs_2.count == 2)
     assert(vec_of_structs_2[0].i32_field == 0)
     assert(vec_of_structs_2[1].i32_field == 567)
+
+    let vec_of_enums = struct_with_vectors.vec_of_enums
+    assert(vec_of_enums.count == 0)
+    let new_vec_of_enums: [TestStatus] = [TestStatus.Pending, TestStatus.Active, TestStatus.Inactive]
+    struct_with_vectors.vec_of_enums = new_vec_of_enums
+    let vec_of_enums_2 = struct_with_vectors.vec_of_enums
+    assert(vec_of_enums_2.count == 3)
+    assert(vec_of_enums_2[0] == TestStatus.Pending)
+    assert(vec_of_enums_2[1] == TestStatus.Active)
+    assert(vec_of_enums_2[2] == TestStatus.Inactive)
 }
 
 func assert_functions() {
@@ -504,6 +514,31 @@ func assert_options() {
     assert(some_opt_struct_2?.i32_field == 654, "method_returning_opt_struct(true) should return struct with i32_field 345")
     let none_opt_struct_2 = test_struct.method_returning_opt_struct(false)
     assert(none_opt_struct_2 == nil, "method_returning_opt_struct(false) should return nil")
+
+    // Test struct fields with Option types
+    let structWithOptions = StructWithOptions()
+
+    assert(structWithOptions.opt_int == nil, "opt_i32_field should be nil initially")
+    structWithOptions.opt_int = 123
+    assert(structWithOptions.opt_int == 123, "opt_i32_field should be 123 after set")
+
+    assert(structWithOptions.opt_bool == nil, "opt_bool_field should be nil initially")
+    structWithOptions.opt_bool = true
+    assert(structWithOptions.opt_bool == true, "opt_bool_field should be true after set")
+
+    assert(structWithOptions.opt_string == nil, "opt_string_field should be nil initially")
+    structWithOptions.opt_string = "Optional string field"
+    assert(structWithOptions.opt_string == "Optional string field", "opt_string_field should be correct after set")
+
+    assert(structWithOptions.opt_enum == nil, "opt_enum_field should be nil initially")
+    structWithOptions.opt_enum = TestStatus.Active
+    assert(structWithOptions.opt_enum == TestStatus.Active, "opt_enum_field should be Active after set")
+
+    assert(structWithOptions.opt_struct == nil, "opt_struct_field should be nil initially")
+    let ts3 = TestStruct2()
+    ts3.i32_field = 321
+    structWithOptions.opt_struct = ts3
+    assert(structWithOptions.opt_struct?.i32_field == 321, "opt_struct_field should have i32_field 321 after set")
 }
 
 func run() {

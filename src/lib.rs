@@ -194,7 +194,6 @@ fn prepend_to_file(content: impl Display, path: impl AsRef<Path>) {
     create_file(new_content, path);
 }
 
-#[cfg(any(feature = "swift", feature = "cpp"))]
 fn prepend_each_line_with_n_tabs(s: &str, n: usize) -> String {
     let tabs = "    ".repeat(n);
     s.lines()

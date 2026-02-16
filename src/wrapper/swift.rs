@@ -4,7 +4,8 @@ use class_definition::{
 };
 use function_definition::{gen_function_definition, gen_function_header};
 
-use crate::{prepend_each_line_with_n_tabs, wrapper::swift::enum_definition::gen_enum_code};
+use crate::prepend_each_line_with_n_tabs;
+use crate::wrapper::swift::enum_definition::gen_enum_code;
 
 use super::*;
 
@@ -284,8 +285,6 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
 import Foundation
 
 open class {wrapper_name}: Opaque {{
-    private var leaked = false
-
     public required init(_ _self: UnsafeMutableRawPointer) {{
         super.init(_self)
     }}
@@ -309,12 +308,8 @@ open class {wrapper_name}: Opaque {{
         return result
     }}
 
-    public func leak() {{
-        leaked = true
-    }}
-
     deinit {{
-        if !leaked {{
+        if self._self != nil {{
             {drop_ext_name}(self.rawPtr())
         }}
     }}
@@ -400,7 +395,9 @@ open class {wrapper_name}: Opaque {{
     }}
 
     deinit {{
-        {drop_ext_name}(self.rawPtr())
+        if self._self != nil {{
+            {drop_ext_name}(self.rawPtr())
+        }}
     }}
 }}
 "#

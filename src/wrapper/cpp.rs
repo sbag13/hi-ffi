@@ -1,4 +1,5 @@
-use std::{fmt::Display, ops::Deref};
+use std::fmt::Display;
+use std::ops::Deref;
 
 use super::*;
 use crate::wrapper::base::*;
@@ -94,6 +95,7 @@ public:
     bool is_some();
     {inner_cpp_type} unwrap();
     static {wrapper_name} from_std(const std::optional<{inner_cpp_type}>& other);
+    void leak();
     std::optional<{inner_cpp_type}> to_std();
 }};
 #endif
@@ -130,6 +132,10 @@ bool {wrapper_name}::is_some() {{
     }} else {{
         return {none_ext_name}();
     }}
+}}
+
+void {wrapper_name}::leak() {{
+    this->self = nullptr;
 }}
 
 std::optional<{inner_cpp_type}> {wrapper_name}::to_std() {{
