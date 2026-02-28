@@ -9,12 +9,14 @@ mod enum_translator;
 mod function_translator;
 mod impl_translator;
 mod struct_translator;
+mod trait_translator;
 
 use crate::wrapper::*;
 use enum_translator::*;
 use function_translator::*;
 use impl_translator::*;
 use struct_translator::*;
+use trait_translator::*;
 
 pub struct NoWrapperErr(pub String);
 
@@ -30,6 +32,7 @@ pub(crate) fn translate(input: Item) -> Result<Wrapper, NoWrapperErr> {
         Item::Fn(item_fn) => translate_function(item_fn)?,
         Item::Impl(item_impl) => translate_impl(item_impl)?,
         Item::Enum(item_enum) => translate_enum(item_enum),
+        Item::Trait(item_trait) => translate_trait(item_trait)?,
         _ => panic!("Unsupported type: {:?}", input.type_id()),
     })
 }

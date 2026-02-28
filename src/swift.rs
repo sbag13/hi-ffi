@@ -88,9 +88,9 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
                 &source_path,
             );
         }
-        SwiftCode::Function { source, .. } | SwiftCode::Enum { source, .. } => {
-            create_file(source, &source_path)
-        }
+        SwiftCode::Function { source, .. }
+        | SwiftCode::Enum { source, .. }
+        | SwiftCode::Protocol { source, .. } => create_file(source, &source_path),
     }
 
     // Generate reusable wrappers, like Vectors with different types inside
@@ -125,8 +125,10 @@ open class Opaque {{
         self._self = _self
     }}
 
-    func leak() {{
+    func leak() -> UnsafeMutableRawPointer {{
+        let ptr = self._self
         self._self = nil
+        return ptr!
     }}
 
     open func rawPtr() -> UnsafeMutableRawPointer {{
@@ -233,6 +235,7 @@ void {RUST_STRING_DROP_FN_NAME}(void* self);
 void* {SLICE_GET_PTR_FN_NAME}(void* self);
 unsigned int {SLICE_GET_LEN_FN_NAME}(void* self);
 void {SLICE_DROP_FN_NAME}(void* self);
+void* {RUST_STRING_FROM_C_PTR_FN_NAME}(const char*);
 
 void {RUST_ARC_DYN_ERR_DROP_FN_NAME}(void* self);
 void* {RUST_ARC_DYN_ERR_DESC_FN_NAME}(void* self);

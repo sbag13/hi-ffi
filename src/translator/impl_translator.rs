@@ -34,8 +34,7 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
                     .sig
                     .inputs
                     .iter()
-                    .filter(|arg| !matches!(arg, syn::FnArg::Receiver(_))) // ignore receiver
-                    .map(map_arg)
+                    .filter_map(|arg| map_arg(arg).transpose())
                     .collect::<Result<Vec<_>, _>>()?;
 
                 for arg in &args {

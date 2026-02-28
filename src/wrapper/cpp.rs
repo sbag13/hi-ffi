@@ -95,7 +95,7 @@ public:
     bool is_some();
     {inner_cpp_type} unwrap();
     static {wrapper_name} from_std(const std::optional<{inner_cpp_type}>& other);
-    void leak();
+    void* leak();
     std::optional<{inner_cpp_type}> to_std();
 }};
 #endif
@@ -134,8 +134,10 @@ bool {wrapper_name}::is_some() {{
     }}
 }}
 
-void {wrapper_name}::leak() {{
+void* {wrapper_name}::leak() {{
+    void* result = this->self;
     this->self = nullptr;
+    return result;
 }}
 
 std::optional<{inner_cpp_type}> {wrapper_name}::to_std() {{
@@ -265,6 +267,7 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         WrapperType::UnitExpr => {
             panic!("Pushing () to vec not supported")
         }
+        WrapperType::Trait(_) => panic!("Trait objects in cpp vec not supported"),
     };
     let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_vec");
     let with_capacity_ext_name =
@@ -318,6 +321,7 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         WrapperType::Option(_) => todo!("option in vec cpp"),
         WrapperType::Result(_) | WrapperType::Vec(_) => unreachable!(),
         WrapperType::UnitExpr => unreachable!(),
+        WrapperType::Trait(_) => panic!("Trait objects in cpp vec not supported"),
     };
 
     let get_ext_return_type = ext_type(inner);
@@ -351,7 +355,7 @@ public:
 
     static {wrapper_name} from_std(const std::vector<{inner_cpp_name}>& other);
 
-    void leak();
+    void* leak();
 
     std::vector<{inner_cpp_name}> to_std();
 }};
@@ -382,8 +386,10 @@ public:
     return {wrapper_name}(rust_vec_ptr);
 }}
 
-void {wrapper_name}::leak() {{
+void* {wrapper_name}::leak() {{
+    void* result = this->self;
     this->self = nullptr;
+    return result;
 }}
 
 std::vector<{inner_cpp_name}> {wrapper_name}::to_std() {{
@@ -442,6 +448,7 @@ fn ext_type(inner: &WrapperType) -> String {
         | WrapperType::FloatingPointNumber(_)
         | WrapperType::IntegerNumber(_) => inner.name().to_string(),
         WrapperType::UnitExpr => "void".to_string(),
+        WrapperType::Trait(_) => panic!("[ext_type]: Trait objects in cpp not supported"),
     }
 }
 
@@ -512,6 +519,12 @@ impl Wrapper {
                 header: CppHeader::Function(gen_enum_declaration(enum_wrapper)),
                 source: None,
             },
+            ParsedWrapper::Trait(trait_wrapper) => CppFiles {
+                header: CppHeader::Class(gen_interface_class(trait_wrapper)),
+                source: Some(CppSource::Class(gen_trait_methods_definitions(
+                    trait_wrapper,
+                ))),
+            },
         }
     }
 }
@@ -560,6 +573,7 @@ return rust_str.to_string();"
                 .to_string(),
             return_type_includes: HashSet::new(),
         },
+
         Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::Struct(_),
             return_type,
@@ -576,6 +590,7 @@ return {}(result);",
                 return_type_includes: HashSet::from([format!("#include \"{struct_type}.h\"")]),
             }
         }
+
         Some(FunctionReturnWrapper {
             wrapper_type: wt @ WrapperType::Vec(inner),
             ..
@@ -661,6 +676,7 @@ return rust_result.is_err() ? throw RustException(rust_result.unwrap_err()) : ru
                 )]),
             }
         }
+
         None
         | Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::UnitExpr,
@@ -671,6 +687,11 @@ return rust_result.is_err() ? throw RustException(rust_result.unwrap_err()) : ru
             return_cast: "".to_string(),
             return_type_includes: HashSet::new(),
         },
+
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Trait(_),
+            ..
+        }) => panic!("Trait objects in cpp function return type not supported"),
     }
 }
 
@@ -723,5 +744,6 @@ pub(crate) fn cpp_type(wrapper: &WrapperType) -> String {
             panic!("'cpp_type' shouldn't be called for a Result type - this is a bug; {wrapper:?}")
         }
         WrapperType::UnitExpr => "void".to_string(),
+        WrapperType::Trait(_) => panic!("[cpp_type]: Trait objects in cpp type not supported"),
     }
 }

@@ -6,6 +6,7 @@ license = "MIT"
 description = "Procedural macro that automatically generates FFI for C++, Python and Swift"
 repository = "https://github.com/sbag13/hi-ffi"
 homepage = "https://github.com/sbag13/hi-ffi"
+keywords = ["ffi", "c++", "python", "swift", "bindings"]
 
 [lib]
 proc-macro = true
@@ -18,5 +19,5 @@ python = []
 
 [dependencies]
 syn = { version = "2.0", features = ["full"] }
-quote = "1.0"
+quote = "1.0.44"
 proc-macro2 = "1.0.86"

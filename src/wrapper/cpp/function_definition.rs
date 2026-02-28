@@ -9,18 +9,21 @@ pub struct MappedCppFunctionArgsTokens {
     pub wrapper_args: String,
     pub call_args: String,
     pub arg_casts: String,
+    pub from_rust_casts: String, // opposite of arg_casts, used for casting return values from Rust to C++
     pub includes: HashSet<String>,
 }
 pub fn map_args<'a>(
     args: impl Iterator<Item = &'a FunctionArgWrapper>,
 ) -> MappedCppFunctionArgsTokens {
-    let (mut cpp_args, mut wrapper_args, mut call_args, mut arg_casts, mut includes): (
-        Vec<_>,
-        Vec<_>,
-        Vec<_>,
-        Vec<_>,
-        HashSet<String>,
-    ) = (
+    let (
+        mut cpp_args,
+        mut wrapper_args,
+        mut call_args,
+        mut arg_casts,
+        mut from_rust_casts,
+        mut includes,
+    ): (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, HashSet<String>) = (
+        Vec::new(),
         Vec::new(),
         Vec::new(),
         Vec::new(),
@@ -44,10 +47,11 @@ pub fn map_args<'a>(
             wrapper_type: WrapperType::String,
             ..
         } => {
-            cpp_args.push(format!("std::string&& {arg_name}"));
-            wrapper_args.push(format!("const char* {arg_name}"));
+            cpp_args.push(format!("std::string {arg_name}"));
+            wrapper_args.push(format!("char* {arg_name}"));
             call_args.push(format!("casted_{arg_name}"));
             arg_casts.push(format!(r#"auto casted_{arg_name} = {arg_name}.data();"#));
+            from_rust_casts.push(format!(r#"std::string casted_{arg_name} = RustString({arg_name}).to_string();"#));
         }
 
         FunctionArgWrapper {
@@ -56,13 +60,16 @@ pub fn map_args<'a>(
             wrapper_type: WrapperType::Struct(_),
         } => {
             let struct_type = arg_type.to_token_stream();
-            cpp_args.push(format!("const {struct_type}& {arg_name}"));
+            cpp_args.push(format!("{struct_type}& {arg_name}"));
             wrapper_args.push(format!("void* {arg_name}"));
             call_args.push(format!("casted_{arg_name}"));
             arg_casts.push(format!(
                 r#"auto casted_{arg_name} = {arg_name}.self_ptr();"#
             ));
             includes.insert(format!("#include \"{struct_type}.h\""));
+            from_rust_casts.push(format!(
+                r#"auto casted_{arg_name} = {struct_type}({arg_name});"#,
+            ));
         }
 
         FunctionArgWrapper {
@@ -71,13 +78,15 @@ pub fn map_args<'a>(
             ..
         } => {
             let arg_type = cpp_type(wt);
-            cpp_args.push(format!("const {arg_type}& {arg_name}"));
+            cpp_args.push(format!("{arg_type}& {arg_name}"));
             includes.insert("#include <vector>".to_string());
             let inner_wrapper_name = inner_wrapper.name();
             includes.insert(format!(r#"#include "vec_{inner_wrapper_name}.h""#));
-            arg_casts.push(format!("auto casted_{arg_name} = Rust{inner_wrapper_name}Vec::from_std({arg_name});"));
-            call_args.push(format!("casted_{arg_name}.raw_ptr()"));
+            arg_casts.push(format!("auto tmp_casted_{arg_name} = Rust{inner_wrapper_name}Vec::from_std({arg_name});
+auto casted_{arg_name} = tmp_casted_{arg_name}.raw_ptr();"));
+            call_args.push(format!("casted_{arg_name}"));
             wrapper_args.push(format!("void* {arg_name}"));
+            from_rust_casts.push(format!("auto casted_{arg_name} = Rust{inner_wrapper_name}Vec({arg_name}).to_std();"));
         }
 
         FunctionArgWrapper {
@@ -101,9 +110,11 @@ pub fn map_args<'a>(
             includes.insert("#include <optional>".to_string());
             let inner_wrapper_name = inner.name();
             includes.insert(format!(r#"#include "option_{inner_wrapper_name}.h""#));
-            arg_casts.push(format!("auto casted_{arg_name} = Rust{inner_wrapper_name}Option::from_std({arg_name});"));
-            call_args.push(format!("casted_{arg_name}.raw_ptr()"));
+            arg_casts.push(format!("auto tmp_casted_{arg_name} = Rust{inner_wrapper_name}Option::from_std({arg_name});
+auto casted_{arg_name} = tmp_casted_{arg_name}.raw_ptr();"));
+            call_args.push(format!("casted_{arg_name}"));
             wrapper_args.push(format!("void* {arg_name}"));
+            from_rust_casts.push(format!("auto casted_{arg_name} = Rust{inner_wrapper_name}Option({arg_name}).to_std();"));
         }
 
         FunctionArgWrapper {
@@ -119,12 +130,35 @@ pub fn map_args<'a>(
         } => {
             panic!("UnitExpr function arguments are not supported");
         }
+
+        FunctionArgWrapper {
+            wrapper_type: WrapperType::Trait(trait_name),
+            arg_name,
+            ..
+        } => {
+            cpp_args.push(format!("std::unique_ptr<{trait_name}>&& {arg_name}"));
+            includes.insert(format!("#include \"{trait_name}.h\""));
+
+            let uppercase_trait_name = trait_name.to_string().to_uppercase();
+            let vtable_instance_name = format!("{}_VTABLE_INST", uppercase_trait_name);
+            arg_casts.push(format!("{trait_name}Bridge bridge;
+bridge.obj = {arg_name}.release();
+bridge.vtable = &{vtable_instance_name};
+bridge.deleter = [](void* obj) {{
+    delete static_cast<{trait_name}*>(obj);
+}};
+"));
+            call_args.push("bridge".to_string());
+            wrapper_args.push(format!("{}Bridge {}_bridge", trait_name, arg_name));
+            includes.insert("#include <memory>".to_string());
+        }
     });
 
     let cpp_args = cpp_args.join(", ");
     let wrapper_args = wrapper_args.join(", ");
     let call_args = call_args.join(", ");
     let arg_casts = arg_casts.join("\n");
+    let from_rust_casts = from_rust_casts.join("\n");
 
     MappedCppFunctionArgsTokens {
         cpp_args,
@@ -132,6 +166,7 @@ pub fn map_args<'a>(
         call_args,
         arg_casts,
         includes,
+        from_rust_casts,
     }
 }
 

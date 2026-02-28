@@ -1,4 +1,5 @@
 use quote::{ToTokens, quote};
+use std::collections::HashSet;
 use std::ops::Deref;
 use syn::{FnArg, GenericArgument, ItemFn, PathSegment, Type};
 
@@ -6,36 +7,48 @@ use crate::EXPORTED_SYMBOLS_PREFIX;
 use crate::translator::{NoWrapperErr, map_wrapper_to_reusable};
 use crate::wrapper::*;
 
-pub fn translate_function(item_struct: ItemFn) -> Result<Wrapper, NoWrapperErr> {
-    let fn_name = &item_struct.sig.ident;
-    let args_wrappers = item_struct
-        .sig
-        .inputs
-        .iter()
-        .map(map_arg)
-        .collect::<Result<Vec<_>, _>>()?;
+impl FunctionWrapper {
+    pub(crate) fn reusable_wrappers(&self) -> HashSet<ReusableWrapper> {
+        let mut reusable_wrappers = self
+            .args_wrappers
+            .iter()
+            .flat_map(|arg_wrapper| map_wrapper_to_reusable(&arg_wrapper.wrapper_type))
+            .collect::<std::collections::HashSet<_>>();
 
-    let mut reusable_wrappers = args_wrappers
-        .iter()
-        .flat_map(|arg_wrapper| map_wrapper_to_reusable(&arg_wrapper.wrapper_type))
-        .collect::<std::collections::HashSet<_>>();
-
-    let return_wrapper = return_wrapper(&item_struct.sig.output)?;
-
-    // Ensure vec reusable wrapper is generated for return vecs too
-    if let Some(return_wrapper) = &return_wrapper {
-        reusable_wrappers.extend(map_wrapper_to_reusable(&return_wrapper.wrapper_type));
+        // Ensure vec reusable wrapper is generated for return vecs too
+        if let Some(return_wrapper) = &self.return_wrapper {
+            reusable_wrappers.extend(map_wrapper_to_reusable(&return_wrapper.wrapper_type));
+        }
+        reusable_wrappers
     }
+}
+
+pub fn translate_function(item_fn: ItemFn) -> Result<Wrapper, NoWrapperErr> {
+    let fn_wrapper = fn_wrapper_from_sig(&item_fn.sig)?;
 
     Ok(Wrapper {
-        original_definition: quote! {#item_struct},
-        parsed: ParsedWrapper::Function(FunctionWrapper {
-            name: fn_name.clone(),
-            extern_function_name: format!("{EXPORTED_SYMBOLS_PREFIX}_{fn_name}"),
-            args_wrappers,
-            return_wrapper,
-        }),
-        reusable_wrappers,
+        original_definition: quote! {#item_fn},
+        reusable_wrappers: fn_wrapper.reusable_wrappers(),
+        parsed: ParsedWrapper::Function(fn_wrapper),
+    })
+}
+
+// It ignores the receiver argument
+pub(crate) fn fn_wrapper_from_sig(sig: &syn::Signature) -> Result<FunctionWrapper, NoWrapperErr> {
+    let fn_name = &sig.ident;
+    let args_wrappers = sig
+        .inputs
+        .iter()
+        .filter_map(|arg| map_arg(arg).transpose())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let return_wrapper = return_wrapper(&sig.output)?;
+
+    Ok(FunctionWrapper {
+        name: fn_name.clone(),
+        extern_function_name: format!("{EXPORTED_SYMBOLS_PREFIX}_{fn_name}"),
+        args_wrappers,
+        return_wrapper,
     })
 }
 
@@ -155,9 +168,9 @@ fn segment_as_result(result_segment: &PathSegment) -> Result<Option<WrapperType>
     }
 }
 
-pub fn map_arg(arg: &FnArg) -> Result<FunctionArgWrapper, NoWrapperErr> {
+pub fn map_arg(arg: &FnArg) -> Result<Option<FunctionArgWrapper>, NoWrapperErr> {
     match arg {
-        syn::FnArg::Receiver(_) => panic!("Receiver argument is not supported"),
+        syn::FnArg::Receiver(_) => Ok(None), // ignore receiver
         syn::FnArg::Typed(pat_type) => {
             let pat = &pat_type.pat;
             let ty = &pat_type.ty;
@@ -201,24 +214,25 @@ pub fn map_arg(arg: &FnArg) -> Result<FunctionArgWrapper, NoWrapperErr> {
                                     inner => WrapperType::Option(Box::new(inner)),
                                 }
                             }
+                            "Box" => parse_generic_single_inner_type_from_segment(segment)?,
                             _ => {
-                                panic!("Unsupported type: {:?}", segment.ident)
+                                panic!("Unsupported function type: {:?}", segment.ident)
                             }
                         },
                         None => {
-                            panic!("No segment found")
+                            panic!("No segment found in function argument type")
                         }
                     }
                 }
             } else {
-                panic!("No path found")
+                panic!("No path found in function argument type")
             };
 
-            Ok(FunctionArgWrapper {
+            Ok(Some(FunctionArgWrapper {
                 wrapper_type,
                 arg_name,
                 arg_type: ty.deref().clone(),
-            })
+            }))
         }
     }
 }
@@ -235,7 +249,26 @@ fn parse_generic_single_inner_type_from_segment(
                 GenericArgument::Type(Type::Path(inner_path)) => {
                     Ok(inner_path.to_token_stream().to_string().as_str().parse()?)
                 }
-                _ => panic!("Genreic's inner arg type must be a path"),
+                GenericArgument::Type(Type::TraitObject(type_trait_obj)) => {
+                    if type_trait_obj.bounds.len() != 1 {
+                        panic!(
+                            "Only one trait bound is supported in trait objects for function arguments"
+                        );
+                    }
+                    let first_bound = type_trait_obj.bounds.first().unwrap();
+
+                    match first_bound {
+                        syn::TypeParamBound::Trait(trait_bound) => {
+                            let trait_ident = &trait_bound.path.segments.last().unwrap().ident;
+                            // TODO try to find it in the registered traits
+                            Ok(WrapperType::Trait(trait_ident.to_string()))
+                        }
+                        _ => panic!(
+                            "Only trait bounds are supported in trait objects for function arguments"
+                        ),
+                    }
+                }
+                _ => panic!("Generic's inner arg type must be a path"),
             }
         }
         _ => panic!("Generic arguments not supported"),

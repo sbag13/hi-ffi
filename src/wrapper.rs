@@ -38,8 +38,10 @@ pub mod impl_block_wrapper;
 pub mod struct_wrapper;
 #[cfg(feature = "swift")]
 pub mod swift;
+pub mod trait_wrapper;
 use crate::EXPORTED_SYMBOLS_PREFIX;
 use crate::wrapper::enum_wrapper::EnumWrapper;
+use crate::wrapper::trait_wrapper::TraitWrapper;
 pub use function_wrapper::*;
 pub use struct_wrapper::*;
 #[cfg(feature = "python")]
@@ -86,6 +88,9 @@ fn value_receiver(inner: &WrapperType) -> TokenStream2 {
         WrapperType::Enum(name) => format!("value: {name}").parse().unwrap(),
         WrapperType::UnitExpr => panic!("UnitExpr as vec inner type is not supported"),
         WrapperType::Option(_) => panic!("Option as vec inner type is not supported yet!"),
+        WrapperType::Trait(_) => {
+            panic!("[value_receiver]: Trait objects as vec inner type not supported")
+        }
     }
 }
 
@@ -107,6 +112,7 @@ fn unwrap_clone_expr(inner: &WrapperType) -> TokenStream2 {
             panic!("Nested Result types are not supported")
         }
         WrapperType::UnitExpr => quote! {()},
+        WrapperType::Trait(_) => panic!("Trait objects in unwrap_clone_expr not supported"),
     }
 }
 
@@ -349,6 +355,7 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         }
         WrapperType::UnitExpr => panic!("UnitExpr not supported yet as get return type!"),
         WrapperType::Option(_) => panic!("Option not supported yet as get return type!"),
+        WrapperType::Trait(_) => panic!("Trait objects not supported yet as get return type!"),
     };
 
     let get_body: TokenStream2 = match inner {
@@ -373,6 +380,9 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         }
         WrapperType::Option(_) => {
             panic!("Option not supported yet as get return type!")
+        }
+        WrapperType::Trait(_) => {
+            panic!("Trait objects not supported yet as get return type!")
         }
     };
 
@@ -440,6 +450,7 @@ impl Wrapper {
                 impl_block_wrapper.struct_name.to_string()
             }
             ParsedWrapper::Enum(enum_wrapper) => enum_wrapper.name.to_string(),
+            ParsedWrapper::Trait(trait_wrapper) => trait_wrapper.name.to_string(),
         }
     }
 }
@@ -484,6 +495,17 @@ impl From<&Wrapper> for TokenStream2 {
                     #tokens
                 }
             }
+            Wrapper {
+                parsed: ParsedWrapper::Trait(trait_wrapper),
+                original_definition,
+                ..
+            } => {
+                let tokens: TokenStream2 = trait_wrapper.into();
+                quote! {
+                    #original_definition
+                    #tokens
+                }
+            }
         }
     }
 }
@@ -494,6 +516,7 @@ pub enum ParsedWrapper {
     Function(FunctionWrapper),
     ImplBlock(ImplBlockWrapper),
     Enum(EnumWrapper),
+    Trait(TraitWrapper),
 }
 
 impl From<Wrapper> for TokenStream {

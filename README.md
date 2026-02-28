@@ -20,7 +20,7 @@ Add `hi-ffi` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hi_ffi = { version = "0.4", features = ["cpp", "swift", "python"] }
+hi_ffi = { version = "0.5", features = ["cpp", "swift", "python"] }
 ```
 
 **Note**: `hi-ffi` is a procedural macro crate. Enable the `cpp` and/or `swift`, `python` features based on your target languages.
@@ -176,6 +176,19 @@ These examples demonstrate how to use the generated bindings in real application
 | method return   | ✅  | ✅    | ✅     |
 | struct fields   | ✅  | ✅    | ✅     |
 
+### Traits
+
+| Feature                    | C++ | Swift | Python |
+| -------------------------- | --- | ----- | ------ |
+| primitive types in methods | ✅  | ❌    | ❌     |
+| string types in methods    | ✅  | ❌    | ❌     |
+| enum types in methods      | ✅  | ❌    | ❌     |
+| struct types in methods    | ✅  | ❌    | ❌     |
+| vec types in methods       | ✅  | ❌    | ❌     |
+| option types in methods    | ✅  | ❌    | ❌     |
+| result types in methods    | ❌  | ❌    | ❌     |
+| trait objects in methods   | ❌  | ❌    | ❌     |
+
 ## Architecture
 
 `hi-ffi` is built with a modular architecture:
@@ -211,7 +224,6 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 ## Roadmap
 
 - [ ] Doc strings
-- [ ] Options
 - [ ] Traits
 - [ ] Async
 

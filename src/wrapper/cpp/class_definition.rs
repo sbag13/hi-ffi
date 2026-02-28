@@ -4,6 +4,7 @@ use std::fmt::Display;
 use quote::ToTokens;
 
 use crate::prepend_each_line_with_n_tabs;
+use crate::wrapper::cpp::map_return_type;
 
 use super::*;
 
@@ -16,6 +17,243 @@ pub struct ClassHeaderParts {
     pub includes: HashSet<String>,
     pub extern_fns: String,
     pub method_declarations: String,
+}
+
+pub fn gen_interface_class(trait_wrapper: &TraitWrapper) -> ClassHeaderParts {
+    let class_name = &trait_wrapper.name;
+
+    let (method_declarations, includes, extern_fns_decl) = trait_wrapper.functions.iter().fold(
+        (String::new(), HashSet::new(), String::new()),
+        |(mut methods, mut includes, mut extern_fns_decl), method| {
+            let MappedCppFunctionArgsTokens {
+                cpp_args,
+                wrapper_args,
+                includes: arg_includes,
+                ..
+            } = map_args(method.args_wrappers.iter());
+
+            let return_type = trait_bridge_fn_ret_type(&method.return_wrapper);
+            let cpp_return_type = map_return_type(&method.return_wrapper).return_type;
+
+            let ext_method_name = &method.extern_function_name;
+            let method_name = &method.name;
+
+            let method_declaration = format!(
+                r#"    virtual {cpp_return_type} {method_name}({cpp_args}) = 0;
+"#,
+            );
+
+            let wrapper_args = if wrapper_args.is_empty() {
+                wrapper_args
+            } else {
+                format!(", {wrapper_args}")
+            };
+            let extern_fn_decl = format!(
+                r#"    {return_type} {ext_method_name}(void* self{wrapper_args});
+"#,
+            );
+
+            methods.push_str(&method_declaration);
+            includes.extend(arg_includes);
+            extern_fns_decl.push_str(&extern_fn_decl);
+
+            (methods, includes, extern_fns_decl)
+        },
+    );
+
+    let mut vtable_functions = trait_wrapper
+        .functions
+        .iter()
+        .map(|method| {
+            let ext_method_name = &method.extern_function_name;
+
+            let MappedCppFunctionArgsTokens { wrapper_args, .. } =
+                map_args(method.args_wrappers.iter());
+            let wrapper_args = if wrapper_args.is_empty() {
+                wrapper_args
+            } else {
+                format!(", {wrapper_args}")
+            };
+
+            let return_type = trait_bridge_fn_ret_type(&method.return_wrapper);
+
+            format!("    {return_type} (*{ext_method_name})(void* self{wrapper_args});\n",)
+        })
+        .collect::<String>();
+    vtable_functions.pop(); // remove last comma and newline
+
+    let mut vtable_fields = trait_wrapper
+        .functions
+        .iter()
+        .map(|method| {
+            let ext_method_name = &method.extern_function_name;
+            format!("    {ext_method_name},\n",)
+        })
+        .collect::<String>();
+    vtable_fields.pop(); // remove last comma and newline
+
+    let class_name_uppercase = class_name.to_string().to_uppercase();
+
+    let vtable = prepend_each_line_with_n_tabs(
+        format!(
+            r#"struct {class_name}VTable {{
+{vtable_functions}
+}};
+
+static const {class_name}VTable {class_name_uppercase}_VTABLE_INST = {{
+{vtable_fields}
+}};
+"#
+        )
+        .as_str(),
+        1,
+    );
+
+    // TODO
+    ClassHeaderParts {
+        class_definition: format!(
+            r#"
+#ifndef {class_name}__def
+#define {class_name}__def
+
+#include "base.h"
+
+{INCLUDES_MARKER}
+
+// Class definition
+class {class_name} {{
+public:
+    virtual ~{class_name}() = default;
+
+    {METHOD_DEFINITIONS_MARKER}
+}};
+
+extern "C" {{
+{EXTERN_FNS_MARKER}
+{vtable}
+
+    struct {class_name}Bridge {{
+        void* obj;
+        const {class_name}VTable* vtable;
+        void (*deleter)(void*);
+    }};
+}}
+
+#endif
+"#
+        ),
+        includes,
+        extern_fns: extern_fns_decl,
+        method_declarations,
+    }
+}
+
+pub fn gen_trait_methods_definitions(trait_wrapper: &TraitWrapper) -> ClassSourceParts {
+    let class_name = &trait_wrapper.name;
+
+    let extern_fns_decl = trait_wrapper.functions.iter().fold(
+        String::new(),
+        |mut extern_fns_decl, method| {
+            let return_type = trait_bridge_fn_ret_type(&method.return_wrapper);
+
+            let method_name = &method.name;
+            let ext_method_name = &method.extern_function_name;
+
+            let MappedCppFunctionArgsTokens {
+                call_args,
+                wrapper_args,
+                from_rust_casts,
+                ..
+            } = map_args(method.args_wrappers.iter());
+
+            let wrapper_args = if wrapper_args.is_empty() {
+                wrapper_args
+            } else {
+                format!(", {wrapper_args}")
+            };
+
+            let from_rust_casts = prepend_each_line_with_n_tabs(&from_rust_casts, 1);
+
+            let get_and_return_result = match &method.return_wrapper {
+                Some(rt) => {
+                    match &rt.wrapper_type {
+                        WrapperType::Vec(inner) => {
+                            let inner_name = inner.name();
+                            format!("auto cpp_vec = static_cast<{class_name}*>(self)->{method_name}({call_args});
+auto rust_vec = Rust{inner_name}Vec::from_std(cpp_vec);
+return rust_vec.leak();")
+                        }
+
+                        WrapperType::String => {
+                            format!("std::string cpp_string = static_cast<{class_name}*>(self)->{method_name}({call_args});
+auto rust_string_ptr = {RUST_STRING_FROM_C_PTR_FN_NAME}(cpp_string.data());
+return rust_string_ptr;"
+                )
+                        }
+
+                        WrapperType::Option(inner) => {
+                            let inner_name = inner.name();
+                            format!("auto cpp_option = static_cast<{class_name}*>(self)->{method_name}({call_args});
+auto rust_option = Rust{inner_name}Option::from_std(cpp_option);
+return rust_option.leak();")
+                        }
+
+                        WrapperType::Struct(_) => {
+                            format!("return static_cast<{class_name}*>(self)->{method_name}({call_args}).leak();")
+                        },
+
+                        _ => {
+                            format!("return static_cast<{class_name}*>(self)->{method_name}({call_args});")
+                        }
+                    }
+                }
+
+
+                _ => {
+                    format!("return static_cast<{class_name}*>(self)->{method_name}({call_args});")
+                }
+            };
+            let get_and_return_result = prepend_each_line_with_n_tabs(&get_and_return_result, 1);
+
+            let extern_fn_decl = format!(
+                r#"{return_type} {ext_method_name}(void* self{wrapper_args}) {{
+{from_rust_casts}
+{get_and_return_result}
+}};
+"#,
+            );
+
+            extern_fns_decl.push_str(&extern_fn_decl);
+
+            extern_fns_decl
+        },
+    );
+
+    ClassSourceParts {
+        base: format!(r#"#include "{class_name}.h""#),
+        methods_definitions: extern_fns_decl,
+    }
+}
+
+fn trait_bridge_fn_ret_type(ret_wrapper: &Option<FunctionReturnWrapper>) -> String {
+    match &ret_wrapper {
+        Some(ret) => match &ret.wrapper_type {
+            WrapperType::IntegerNumber(ty)
+            | WrapperType::FloatingPointNumber(ty)
+            | WrapperType::Enum(ty) => ty.to_string(),
+            WrapperType::Bool => "bool".to_string(),
+            WrapperType::String
+            | WrapperType::Struct(_)
+            | WrapperType::Vec(_)
+            | WrapperType::Option(_)
+            | WrapperType::Result(_) => "void*".to_string(),
+            WrapperType::UnitExpr => "void".to_string(),
+            WrapperType::Trait(_) => {
+                panic!("Trait return type is not supported in traits")
+            }
+        },
+        None => "void".to_string(),
+    }
 }
 
 pub fn gen_class_source_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -> ClassSourceParts {
@@ -248,8 +486,10 @@ fn class_source_base(class_name: impl Display) -> String {
 void* {class_name}::self_ptr() const {{
     return self;
 }}
-void {class_name}::set_self_ptr(void* ptr) {{
-    self = ptr;
+void* {class_name}::leak() {{
+    void* leaked_self = self;
+    self = nullptr;
+    return leaked_self;
 }}
 "#
     )
@@ -347,7 +587,7 @@ class {class_name} {{
 public:
 
     void* self_ptr() const;
-    void set_self_ptr(void* ptr);
+    void* leak();
 
     {METHOD_DEFINITIONS_MARKER}
 }};

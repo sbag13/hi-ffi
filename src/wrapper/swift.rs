@@ -6,12 +6,14 @@ use function_definition::{gen_function_definition, gen_function_header};
 
 use crate::prepend_each_line_with_n_tabs;
 use crate::wrapper::swift::enum_definition::gen_enum_code;
+use crate::wrapper::swift::protocol_definition::gen_protocol_definition;
 
 use super::*;
 
 pub mod class_definition;
 pub mod enum_definition;
 pub mod function_definition;
+pub mod protocol_definition;
 
 // Helper functions for common type conversions and patterns
 fn get_c_return_type(wrapper_type: &WrapperType) -> String {
@@ -25,6 +27,7 @@ fn get_c_return_type(wrapper_type: &WrapperType) -> String {
         WrapperType::Option(_) => panic!("Option in result not supported"),
         WrapperType::Enum(name) => format!("enum {}", name),
         WrapperType::UnitExpr => "void".to_string(),
+        WrapperType::Trait(_) => panic!("Trait not supported as return type"),
     }
 }
 
@@ -39,6 +42,7 @@ fn get_swift_type_name(wrapper_type: &WrapperType) -> String {
         WrapperType::Option(_) => panic!("Option in result not supported"),
         WrapperType::Enum(name) => name.to_string(),
         WrapperType::UnitExpr => "Void".to_string(),
+        WrapperType::Trait(name) => name.to_string(),
     }
 }
 
@@ -196,6 +200,7 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::Option(_) => panic!("Vec of options not supported"),
         WrapperType::Enum(name) => format!("enum {} value", name),
         WrapperType::UnitExpr => unreachable!(),
+        WrapperType::Trait(_) => panic!("Trait not supported as vec element type"),
     };
 
     let get_return_type = match inner {
@@ -208,6 +213,7 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::Option(_) => panic!("Vec of options not supported"),
         WrapperType::Enum(name) => format!("enum {}", name),
         WrapperType::UnitExpr => unreachable!(),
+        WrapperType::Trait(_) => panic!("Trait not supported as vec element type"),
     };
 
     format!(
@@ -277,7 +283,8 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
         WrapperType::Vec(_) => unreachable!(),
         WrapperType::Result(_) => panic!("Vec of results not supported"),
         WrapperType::Option(_) => panic!("Vec of options not supported"),
-        WrapperType::UnitExpr => unreachable!(),
+        WrapperType::UnitExpr => panic!("Vec of unit expressions not supported"),
+        WrapperType::Trait(_) => panic!("Trait not supported as vec element type"),
     };
 
     format!(
@@ -408,6 +415,7 @@ pub enum SwiftCode {
     Class { header: String, source: String },
     Function { header: String, source: String },
     Enum { header: String, source: String },
+    Protocol { header: String, source: String },
 }
 
 impl SwiftCode {
@@ -416,6 +424,7 @@ impl SwiftCode {
             SwiftCode::Class { header, .. } => header.to_owned(),
             SwiftCode::Function { header, .. } => header.to_owned(),
             SwiftCode::Enum { header, .. } => header.to_owned(),
+            SwiftCode::Protocol { header, .. } => header.to_owned(),
         }
     }
 }
@@ -447,6 +456,10 @@ impl Wrapper {
                 source: gen_class_methods_definition_from_impl_block(impl_block_wrapper),
             },
             ParsedWrapper::Enum(enum_wrapper) => gen_enum_code(enum_wrapper),
+            ParsedWrapper::Trait(trait_wrapper) => SwiftCode::Protocol {
+                header: String::new(),
+                source: gen_protocol_definition(trait_wrapper),
+            },
         }
     }
 }

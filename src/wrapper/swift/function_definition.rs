@@ -29,6 +29,7 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
             } => {
                 format!("void* {arg_name}")
             }
+
             FunctionArgWrapper {
                 wrapper_type: WrapperType::Enum(_),
                 arg_name,
@@ -39,6 +40,15 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
                     arg_type = arg_type.to_token_stream()
                 )
             }
+
+            FunctionArgWrapper {
+                wrapper_type: WrapperType::Trait(_),
+                arg_name,
+                ..
+            } => {
+                format!("RustTraitBridge {arg_name}")
+            }
+
             FunctionArgWrapper {
                 wrapper_type: WrapperType::UnitExpr,
                 ..
@@ -75,6 +85,11 @@ pub fn map_args<'a>(
         (Vec::new(), Vec::new(), Vec::new());
     args
         .for_each(|arg| match arg {
+            FunctionArgWrapper {
+                wrapper_type: WrapperType::Trait(_),
+                ..
+            } => panic!("Trait types are not supported as function arguments"),
+
             FunctionArgWrapper {
                 arg_name,
                 arg_type,
@@ -123,7 +138,8 @@ pub fn map_args<'a>(
                     WrapperType::Result(_) => panic!("Vec of results not supported"),
                     WrapperType::Option(_) => panic!("Vec of options not supported"),
                     WrapperType::Enum(name) => format!("[{}]", name),
-                    WrapperType::UnitExpr => panic!("Empty expression is not supported as vec inner type")
+                    WrapperType::UnitExpr => panic!("Empty expression is not supported as vec inner type"),
+                    WrapperType::Trait(_) => panic!("Trait not supported as vec inner type"),
                 };
                 args_signatures.push(format!("_ {arg_name}: {swift_type}"));
                 args_names.push(format!("casted_{arg_name}.rawPtr()"));
@@ -139,8 +155,8 @@ pub fn map_args<'a>(
                 arg_type,
             } => {
                 args_signatures.push(format!("_ {arg_name}: {}", arg_type.to_token_stream()));
-                args_names.push(format!("CFfiModule.{arg_type}(rawValue: UInt32({arg_name}.rawValue))", arg_type = arg_type.to_token_stream())); // Convert to C enum type with UInt32
-                args_casts.push(String::new()); // No casting needed for enums
+                args_casts.push(format!("let casted_{arg_name} = CFfiModule.{arg_type}(rawValue: UInt32({arg_name}.rawValue))", arg_type = arg_type.to_token_stream())); // Convert to C enum type with UInt32
+                args_names.push(format!("casted_{arg_name}"));
             },
 
             FunctionArgWrapper {
@@ -158,6 +174,7 @@ pub fn map_args<'a>(
                     WrapperType::Result(_) => panic!("Result in option not supported"),
                     WrapperType::Option(_) => panic!("Option of options not supported"),
                     WrapperType::UnitExpr => "Void".to_string(),
+                    WrapperType::Trait(_) => panic!("Trait not supported in option"),
                 };
                 let wrapper_name = format!("Rust{}Option", inner_type.name());
                 args_signatures.push(format!("_ {arg_name}: {swift_inner_type}?"));
@@ -259,6 +276,13 @@ pub struct ReturnTypes {
 pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnTypes {
     match return_wrapper {
         Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Trait(_),
+            ..
+        }) => {
+            panic!("Trait types are not supported as function return types")
+        }
+
+        Some(FunctionReturnWrapper {
             wrapper_type:
                 WrapperType::IntegerNumber(_) | WrapperType::Bool | WrapperType::FloatingPointNumber(_),
             return_type,
@@ -308,6 +332,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 WrapperType::UnitExpr => {
                     panic!("Empty expression is not supported as vec inner type")
                 }
+                WrapperType::Trait(_) => panic!("Trait not supported as vec inner type"),
             };
             ReturnTypes {
                 return_type_sig: Some(format!(" -> {}", swift_type)),
@@ -347,6 +372,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
                 WrapperType::Result(_) => panic!("Nested Results not supported"),
                 WrapperType::Option(_) => panic!("Option in result not supported"),
                 WrapperType::UnitExpr => "Void".to_string(),
+                WrapperType::Trait(_) => panic!("Trait not supported in result"),
             };
             ReturnTypes {
                 return_type_sig: Some(format!(" throws -> {swift_type}")),
@@ -385,6 +411,7 @@ if wrapped_rust_result.isErr() {{
                 WrapperType::Result(_) => panic!("Result in option not supported"),
                 WrapperType::Option(_) => panic!("Option of options not supported"),
                 WrapperType::UnitExpr => "Void".to_string(),
+                WrapperType::Trait(_) => panic!("Trait not supported in option"),
             };
             ReturnTypes {
                 return_type_sig: Some(format!(" -> {swift_type}?")),

@@ -156,6 +156,7 @@ extern "C" {{
     void {RUST_STRING_DROP_FN_NAME}(void*);
     char* {RUST_STRING_DATA_FN_NAME}(void*);
     usize {RUST_STRING_LEN_FN_NAME}(void*);
+    void* {RUST_STRING_FROM_C_PTR_FN_NAME}(const char*);
 
     void {RUST_ARC_DYN_ERR_DROP_FN_NAME}(void*);
     void* {RUST_ARC_DYN_ERR_DESC_FN_NAME}(void*);
