@@ -259,7 +259,9 @@ pub fn gen_class_methods_definition_from_struct(struct_wrapper: &StructWrapper) 
     format!(
         r#"
     deinit {{
-        {destructor_extern_fn}(self.rawPtr());
+        if self._self != nil {{
+            {destructor_extern_fn}(self.rawPtr())
+        }}
     }}
 {default_constructor}
 {props}

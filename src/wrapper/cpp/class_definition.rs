@@ -19,6 +19,37 @@ pub struct ClassHeaderParts {
     pub method_declarations: String,
 }
 
+pub fn gen_trait_vtable(trait_wrapper: &TraitWrapper) -> String {
+    let mut vtable_functions = trait_wrapper
+        .functions
+        .iter()
+        .map(|method| {
+            let ext_method_name = &method.extern_function_name;
+
+            let MappedCppFunctionArgsTokens { wrapper_args, .. } =
+                map_args(method.args_wrappers.iter());
+            let wrapper_args = if wrapper_args.is_empty() {
+                wrapper_args
+            } else {
+                format!(", {wrapper_args}")
+            };
+
+            let return_type = trait_bridge_fn_ret_type(&method.return_wrapper);
+
+            format!("    {return_type} (*{ext_method_name})(void* self{wrapper_args});\n",)
+        })
+        .collect::<String>();
+    vtable_functions.pop(); // remove last comma and newline
+
+    let class_name = &trait_wrapper.name;
+
+    format!(
+        r#"struct {class_name}VTable {{
+{vtable_functions}
+}};"#
+    )
+}
+
 pub fn gen_interface_class(trait_wrapper: &TraitWrapper) -> ClassHeaderParts {
     let class_name = &trait_wrapper.name;
 
@@ -61,27 +92,8 @@ pub fn gen_interface_class(trait_wrapper: &TraitWrapper) -> ClassHeaderParts {
         },
     );
 
-    let mut vtable_functions = trait_wrapper
-        .functions
-        .iter()
-        .map(|method| {
-            let ext_method_name = &method.extern_function_name;
-
-            let MappedCppFunctionArgsTokens { wrapper_args, .. } =
-                map_args(method.args_wrappers.iter());
-            let wrapper_args = if wrapper_args.is_empty() {
-                wrapper_args
-            } else {
-                format!(", {wrapper_args}")
-            };
-
-            let return_type = trait_bridge_fn_ret_type(&method.return_wrapper);
-
-            format!("    {return_type} (*{ext_method_name})(void* self{wrapper_args});\n",)
-        })
-        .collect::<String>();
-    vtable_functions.pop(); // remove last comma and newline
-
+    let vtable = prepend_each_line_with_n_tabs(gen_trait_vtable(trait_wrapper).as_str(), 1);
+    let class_name_uppercase = class_name.to_string().to_uppercase();
     let mut vtable_fields = trait_wrapper
         .functions
         .iter()
@@ -91,23 +103,6 @@ pub fn gen_interface_class(trait_wrapper: &TraitWrapper) -> ClassHeaderParts {
         })
         .collect::<String>();
     vtable_fields.pop(); // remove last comma and newline
-
-    let class_name_uppercase = class_name.to_string().to_uppercase();
-
-    let vtable = prepend_each_line_with_n_tabs(
-        format!(
-            r#"struct {class_name}VTable {{
-{vtable_functions}
-}};
-
-static const {class_name}VTable {class_name_uppercase}_VTABLE_INST = {{
-{vtable_fields}
-}};
-"#
-        )
-        .as_str(),
-        1,
-    );
 
     // TODO
     ClassHeaderParts {
@@ -131,6 +126,10 @@ public:
 extern "C" {{
 {EXTERN_FNS_MARKER}
 {vtable}
+
+    static const {class_name}VTable {class_name_uppercase}_VTABLE_INST = {{
+{vtable_fields}
+    }};
 
     struct {class_name}Bridge {{
         void* obj;

@@ -146,7 +146,9 @@ public class RustString: Opaque {{
     }}
 
     deinit {{
-        {RUST_STRING_DROP_FN_NAME}(self.rawPtr());
+        if self._self != nil {{
+            {RUST_STRING_DROP_FN_NAME}(self.rawPtr());
+        }}
     }}
 }}
 

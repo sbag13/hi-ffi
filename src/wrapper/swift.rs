@@ -6,7 +6,9 @@ use function_definition::{gen_function_definition, gen_function_header};
 
 use crate::prepend_each_line_with_n_tabs;
 use crate::wrapper::swift::enum_definition::gen_enum_code;
-use crate::wrapper::swift::protocol_definition::gen_protocol_definition;
+use crate::wrapper::swift::protocol_definition::{
+    gen_protocol_definition, gen_trait_bridge_header,
+};
 
 use super::*;
 
@@ -172,7 +174,9 @@ open class Rust{inner_name}Result: Opaque {{
     }}
 
     deinit {{
-        {drop_ext_name}(self.rawPtr())
+        if self._self != nil {{
+            {drop_ext_name}(self.rawPtr())
+        }}
     }}
 }}
 "#
@@ -457,7 +461,7 @@ impl Wrapper {
             },
             ParsedWrapper::Enum(enum_wrapper) => gen_enum_code(enum_wrapper),
             ParsedWrapper::Trait(trait_wrapper) => SwiftCode::Protocol {
-                header: String::new(),
+                header: gen_trait_bridge_header(trait_wrapper),
                 source: gen_protocol_definition(trait_wrapper),
             },
         }

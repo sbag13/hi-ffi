@@ -791,93 +791,93 @@ pub trait RustTrait {
     fn trait_fn_returning_option_struct(&self, some: bool) -> Option<TestStruct2>;
 }
 
-// #[ffi]
-// pub fn function_taking_trait_object(obj: Box<dyn RustTrait>) {
-//     obj.trait_simple_fn();
-//     obj.trait_fn_with_simple_args(42, 4.20, TestStatus::Pending, true);
-//     obj.trait_fn_with_string_arg("Hello from trait object".to_string());
-//     obj.trait_fn_with_struct_arg(TestStruct {
-//         i32_field: 123,
-//         ..Default::default()
-//     });
+#[ffi]
+pub fn function_taking_trait_object(obj: Box<dyn RustTrait>) {
+    obj.trait_simple_fn();
+    obj.trait_fn_with_simple_args(42, 4.20, TestStatus::Pending, true);
+    obj.trait_fn_with_string_arg("Hello from trait object".to_string());
+    obj.trait_fn_with_struct_arg(TestStruct {
+        i32_field: 123,
+        ..Default::default()
+    });
 
-//     obj.trait_fn_with_vec_of_primitives(vec![1, 2, 3, 4, 5]);
-//     obj.trait_fn_with_vec_of_bools(vec![true, false, true]);
-//     obj.trait_fn_with_vec_of_enums(vec![TestStatus::Active, TestStatus::Inactive]);
-//     obj.trait_fn_with_vec_of_strings(vec![
-//         "Hello".to_string(),
-//         "Trait".to_string(),
-//         "Object".to_string(),
-//     ]);
-//     obj.trait_fn_with_vec_of_structs(vec![
-//         TestStruct2 { i32_field: 321 },
-//         TestStruct2 { i32_field: 654 },
-//     ]);
+    obj.trait_fn_with_vec_of_primitives(vec![1, 2, 3, 4, 5]);
+    obj.trait_fn_with_vec_of_bools(vec![true, false, true]);
+    obj.trait_fn_with_vec_of_enums(vec![TestStatus::Active, TestStatus::Inactive]);
+    obj.trait_fn_with_vec_of_strings(vec![
+        "Hello".to_string(),
+        "Trait".to_string(),
+        "Object".to_string(),
+    ]);
+    obj.trait_fn_with_vec_of_structs(vec![
+        TestStruct2 { i32_field: 321 },
+        TestStruct2 { i32_field: 654 },
+    ]);
 
-//     obj.trait_fn_with_options(
-//         Some(42i64),
-//         Some("Hello from trait object".to_string()),
-//         Some(false),
-//         Some(TestStatus::Pending),
-//         Some(TestStruct2 { i32_field: 789 }),
-//     );
+    obj.trait_fn_with_options(
+        Some(42i64),
+        Some("Hello from trait object".to_string()),
+        Some(false),
+        Some(TestStatus::Pending),
+        Some(TestStruct2 { i32_field: 789 }),
+    );
 
-//     assert_eq!(obj.trait_fn_return_int(), 12345);
-//     assert!(obj.trait_fn_return_bool());
-//     assert_eq!(
-//         obj.trait_fn_return_string(),
-//         "String from trait object".to_string()
-//     );
-//     assert_eq!(obj.trait_fn_return_struct(), TestStruct2 { i32_field: 987 });
-//     assert_eq!(obj.trait_fn_return_enum(), TestStatus::Inactive);
+    assert_eq!(obj.trait_fn_return_int(), 12345);
+    assert!(obj.trait_fn_return_bool());
+    assert_eq!(
+        obj.trait_fn_return_string(),
+        "String from trait object".to_string()
+    );
+    assert_eq!(obj.trait_fn_return_struct(), TestStruct2 { i32_field: 987 });
+    assert_eq!(obj.trait_fn_return_enum(), TestStatus::Inactive);
 
-//     assert_eq!(obj.trait_fn_return_vec_of_primitives(), vec![10, 20, 30]);
-//     assert_eq!(
-//         obj.trait_fn_return_vec_of_bools(),
-//         vec![true, false, true, true]
-//     );
-//     assert_eq!(
-//         obj.trait_fn_return_vec_of_enums(),
-//         vec![
-//             TestStatus::Active,
-//             TestStatus::Inactive,
-//             TestStatus::Pending
-//         ]
-//     );
-//     assert_eq!(
-//         obj.trait_fn_return_vec_of_strings(),
-//         vec![
-//             "Hello".to_string(),
-//             "from".to_string(),
-//             "trait".to_string(),
-//             "object".to_string()
-//         ]
-//     );
-//     assert_eq!(
-//         obj.trait_fn_return_vec_of_structs(),
-//         vec![
-//             TestStruct2 { i32_field: 111 },
-//             TestStruct2 { i32_field: 222 }
-//         ]
-//     );
+    assert_eq!(obj.trait_fn_return_vec_of_primitives(), vec![10, 20, 30]);
+    assert_eq!(
+        obj.trait_fn_return_vec_of_bools(),
+        vec![true, false, true, true]
+    );
+    assert_eq!(
+        obj.trait_fn_return_vec_of_enums(),
+        vec![
+            TestStatus::Active,
+            TestStatus::Inactive,
+            TestStatus::Pending
+        ]
+    );
+    assert_eq!(
+        obj.trait_fn_return_vec_of_strings(),
+        vec![
+            "Hello".to_string(),
+            "from".to_string(),
+            "trait".to_string(),
+            "object".to_string()
+        ]
+    );
+    assert_eq!(
+        obj.trait_fn_return_vec_of_structs(),
+        vec![
+            TestStruct2 { i32_field: 111 },
+            TestStruct2 { i32_field: 222 }
+        ]
+    );
 
-//     assert_eq!(obj.trait_fn_returning_option_int(true), Some(555));
-//     assert_eq!(obj.trait_fn_returning_option_int(false), None);
-//     assert_eq!(obj.trait_fn_returning_option_bool(true), Some(false));
-//     assert_eq!(obj.trait_fn_returning_option_bool(false), None);
-//     assert_eq!(
-//         obj.trait_fn_returning_option_string(true),
-//         Some("Some string".to_string())
-//     );
-//     assert_eq!(obj.trait_fn_returning_option_string(false), None);
-//     assert_eq!(
-//         obj.trait_fn_returning_option_enum(true),
-//         Some(TestStatus::Pending)
-//     );
-//     assert_eq!(obj.trait_fn_returning_option_enum(false), None);
-//     assert_eq!(
-//         obj.trait_fn_returning_option_struct(true),
-//         Some(TestStruct2 { i32_field: 789 })
-//     );
-//     assert_eq!(obj.trait_fn_returning_option_struct(false), None);
-// }
+    assert_eq!(obj.trait_fn_returning_option_int(true), Some(555));
+    assert_eq!(obj.trait_fn_returning_option_int(false), None);
+    assert_eq!(obj.trait_fn_returning_option_bool(true), Some(false));
+    assert_eq!(obj.trait_fn_returning_option_bool(false), None);
+    assert_eq!(
+        obj.trait_fn_returning_option_string(true),
+        Some("Some string".to_string())
+    );
+    assert_eq!(obj.trait_fn_returning_option_string(false), None);
+    assert_eq!(
+        obj.trait_fn_returning_option_enum(true),
+        Some(TestStatus::Pending)
+    );
+    assert_eq!(obj.trait_fn_returning_option_enum(false), None);
+    assert_eq!(
+        obj.trait_fn_returning_option_struct(true),
+        Some(TestStruct2 { i32_field: 789 })
+    );
+    assert_eq!(obj.trait_fn_returning_option_struct(false), None);
+}

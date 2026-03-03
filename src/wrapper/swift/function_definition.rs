@@ -46,7 +46,7 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
                 arg_name,
                 ..
             } => {
-                format!("RustTraitBridge {arg_name}")
+                format!("struct RustTraitBridge {arg_name}")
             }
 
             FunctionArgWrapper {
@@ -86,9 +86,22 @@ pub fn map_args<'a>(
     args
         .for_each(|arg| match arg {
             FunctionArgWrapper {
-                wrapper_type: WrapperType::Trait(_),
+                wrapper_type: WrapperType::Trait(trait_name),
+                arg_name,
                 ..
-            } => panic!("Trait types are not supported as function arguments"),
+            } => {
+                args_signatures.push(format!("_ {arg_name}: {trait_name}"));
+                args_casts.push(format!(r#"
+let obj = Unmanaged.passRetained({arg_name} as AnyObject).toOpaque()
+
+let bridge = {trait_name}Bridge(
+    obj: obj,
+    vtable: &global{trait_name}VTable,
+    deleter: swift_{trait_name}_deleter
+)
+"#));
+                args_names.push(format!("bridge"));
+            },
 
             FunctionArgWrapper {
                 arg_name,

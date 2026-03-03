@@ -180,12 +180,12 @@ These examples demonstrate how to use the generated bindings in real application
 
 | Feature                    | C++ | Swift | Python |
 | -------------------------- | --- | ----- | ------ |
-| primitive types in methods | ✅  | ❌    | ❌     |
-| string types in methods    | ✅  | ❌    | ❌     |
-| enum types in methods      | ✅  | ❌    | ❌     |
-| struct types in methods    | ✅  | ❌    | ❌     |
-| vec types in methods       | ✅  | ❌    | ❌     |
-| option types in methods    | ✅  | ❌    | ❌     |
+| primitive types in methods | ✅  | ✅    | ❌     |
+| string types in methods    | ✅  | ✅    | ❌     |
+| enum types in methods      | ✅  | ✅    | ❌     |
+| struct types in methods    | ✅  | ✅    | ❌     |
+| vec types in methods       | ✅  | ✅    | ❌     |
+| option types in methods    | ✅  | ✅    | ❌     |
 | result types in methods    | ❌  | ❌    | ❌     |
 | trait objects in methods   | ❌  | ❌    | ❌     |
 

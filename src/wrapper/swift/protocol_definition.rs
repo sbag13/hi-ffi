@@ -1,4 +1,4 @@
-use crate::wrapper::base::RUST_STRING_FROM_C_PTR_FN_NAME;
+use crate::wrapper::{FunctionReturnWrapper, base::RUST_STRING_FROM_C_PTR_FN_NAME};
 use std::fmt::Display;
 
 use crate::{
@@ -11,6 +11,70 @@ use crate::{
         trait_wrapper::TraitWrapper,
     },
 };
+
+pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
+    let mut vtable_functions = trait_wrapper
+        .functions
+        .iter()
+        .map(|method| {
+            let ext_method_name = &method.extern_function_name;
+
+            let wrapper_args = method
+                .args_wrappers
+                .iter()
+                .map(|arg| {
+                    let ty = match &arg.wrapper_type {
+                        WrapperType::IntegerNumber(_)
+                        | WrapperType::FloatingPointNumber(_)
+                        | WrapperType::Bool => arg.wrapper_type.name(),
+                        WrapperType::Enum(_) => format!("i32"),
+                        _ => "void*".to_string(),
+                    };
+                    let arg_name = &arg.arg_name;
+                    format!(", {ty} {arg_name}")
+                })
+                .collect::<String>();
+
+            let return_type = match &method.return_wrapper {
+                Some(ret) => match &ret.wrapper_type {
+                    WrapperType::IntegerNumber(ty) | WrapperType::FloatingPointNumber(ty) => {
+                        ty.to_string()
+                    }
+                    WrapperType::Enum(_) => format!("i32"),
+                    WrapperType::Bool => "bool".to_string(),
+                    WrapperType::String
+                    | WrapperType::Struct(_)
+                    | WrapperType::Vec(_)
+                    | WrapperType::Option(_)
+                    | WrapperType::Result(_) => "void*".to_string(),
+                    WrapperType::UnitExpr => "void".to_string(),
+                    WrapperType::Trait(_) => {
+                        panic!("Trait return type is not supported in traits")
+                    }
+                },
+                None => "void".to_string(),
+            };
+
+            format!("    {return_type} (*{ext_method_name})(void* self{wrapper_args});\n",)
+        })
+        .collect::<String>();
+    vtable_functions.pop(); // remove last comma and newline
+
+    let class_name = &trait_wrapper.name;
+
+    format!(
+        r#"struct {class_name}VTable {{
+{vtable_functions}
+}};
+
+struct {class_name}Bridge {{
+    void* obj;
+    struct {class_name}VTable* vtable;
+    void (*deleter)(void*);
+}};
+"#
+    )
+}
 
 pub(crate) fn gen_protocol_definition(trait_wrapper: &TraitWrapper) -> String {
     // Generate method signatures for each method in the trait
@@ -30,10 +94,33 @@ pub(crate) fn gen_protocol_definition(trait_wrapper: &TraitWrapper) -> String {
 
     let trait_name = &trait_wrapper.name;
 
+    let global_vtable_fields = trait_wrapper
+        .functions
+        .iter()
+        .map(|f| {
+            let ext_fn_name = &f.extern_function_name;
+            format!("    {ext_fn_name}: {ext_fn_name}")
+        })
+        .collect::<Vec<String>>()
+        .join(",\n");
+
+    let deleter = format!(
+        r#"
+func swift_{trait_name}_deleter(data: UnsafeMutableRawPointer?) {{
+    Unmanaged<AnyObject>.fromOpaque(data!).release()
+}}
+"#
+    );
+
     format!(
         r#"{vtable_functions}
+{deleter}
 
-protocol {trait_name} {{
+var global{trait_name}VTable = {trait_name}VTable (
+{global_vtable_fields}
+)
+
+public protocol {trait_name} {{
 {functions}
 }}"#
     )
@@ -54,35 +141,36 @@ fn gen_method_signature(function_wrapper: &FunctionWrapper) -> String {
     format!("    func {fn_name}({args_signatures}){return_type_sig}")
 }
 
-fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Display) -> String {
-    let extern_fn_name = &function_wrapper.extern_function_name;
-
-    let args_signatures = function_wrapper
+fn vtable_function_args(function_wrapper: &FunctionWrapper) -> String {
+    function_wrapper
         .args_wrappers
         .iter()
-        .map(|arg_wrapper| match &arg_wrapper.wrapper_type {
-            WrapperType::IntegerNumber(_)
-            | WrapperType::FloatingPointNumber(_)
-            | WrapperType::Bool => {
-                format!(
-                    ", {}: {}",
-                    arg_wrapper.arg_name,
-                    arg_wrapper.wrapper_type.name()
-                )
-            }
-            WrapperType::Enum(_) => format!(", {}: Int32", arg_wrapper.arg_name),
-            WrapperType::Struct(_)
-            | WrapperType::Vec(_)
-            | WrapperType::Option(_)
-            | WrapperType::String => format!(", {}: UnsafeMutableRawPointer", arg_wrapper.arg_name),
-            WrapperType::Result(_) => panic!("Unsupported argument type in trait method"),
-            WrapperType::UnitExpr => panic!("Unsupported argument type in trait method"),
-            WrapperType::Trait(_) => panic!("Trait cannot be used as argument in trait method"),
+        .map(|arg_wrapper| {
+            let arg_name = &arg_wrapper.arg_name;
+            let arg_type = vtable_arg_type(&arg_wrapper.wrapper_type);
+            format!(", {arg_name}: {arg_type}")
         })
-        .collect::<String>();
+        .collect()
+}
 
-    let return_type_sig = &function_wrapper
-        .return_wrapper
+fn vtable_arg_type(arg_wrapper: &WrapperType) -> String {
+    match arg_wrapper {
+        WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool => {
+            arg_wrapper.name()
+        }
+        WrapperType::Enum(_) => "Int32".to_string(),
+        WrapperType::Struct(_)
+        | WrapperType::Vec(_)
+        | WrapperType::Option(_)
+        | WrapperType::String => "UnsafeMutableRawPointer?".to_string(),
+        WrapperType::Result(_) => panic!("Unsupported argument type in trait method"),
+        WrapperType::UnitExpr => panic!("Unsupported argument type in trait method"),
+        WrapperType::Trait(_) => panic!("Trait cannot be used as argument in trait method"),
+    }
+}
+
+fn get_vtable_ret_sig(return_wrapper: &Option<FunctionReturnWrapper>) -> String {
+    return_wrapper
         .as_ref()
         .map(|ret_wrapper| match ret_wrapper.wrapper_type {
             WrapperType::IntegerNumber(_)
@@ -92,12 +180,20 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
             WrapperType::Struct(_)
             | WrapperType::Vec(_)
             | WrapperType::Option(_)
-            | WrapperType::String => " -> UnsafeMutableRawPointer".to_string(),
+            | WrapperType::String => " -> UnsafeMutableRawPointer?".to_string(),
             WrapperType::Result(_) => panic!("Unsupported return type in trait method"),
-            WrapperType::UnitExpr => "".to_string(),
+            WrapperType::UnitExpr => " -> Void".to_string(),
             WrapperType::Trait(_) => panic!("Trait cannot be used as return type in trait method"),
         })
-        .unwrap_or_default();
+        .unwrap_or(" -> Void".to_string())
+}
+
+fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Display) -> String {
+    let extern_fn_name = &function_wrapper.extern_function_name;
+
+    let args_signatures = vtable_function_args(function_wrapper);
+
+    let return_type_sig = get_vtable_ret_sig(&function_wrapper.return_wrapper);
 
     let fn_name = &function_wrapper.name;
 
@@ -120,13 +216,13 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
             }
             WrapperType::Struct(s_name) => {
                 let arg_name = &arg_wrapper.arg_name;
-                args_casts.push(format!("let casted_{arg_name} = {s_name}({arg_name})",));
+                args_casts.push(format!("let casted_{arg_name} = {s_name}({arg_name}!)",));
                 args_names.push(format!("casted_{}", arg_wrapper.arg_name));
             }
             WrapperType::String => {
                 let arg_name = &arg_wrapper.arg_name;
                 args_casts.push(format!(
-                    "let casted_{arg_name} = RustString({arg_name}).to_string()"
+                    "let casted_{arg_name} = RustString({arg_name}!).to_string()"
                 ));
                 args_names.push(format!("casted_{}", arg_wrapper.arg_name));
             }
@@ -134,7 +230,7 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
                 let arg_name = &arg_wrapper.arg_name;
                 let inner_name = inner.name();
                 args_casts.push(format!(
-                    "let casted_{arg_name} = Rust{inner_name}Vec({arg_name}).toSwift()",
+                    "let casted_{arg_name} = Rust{inner_name}Vec({arg_name}!).toSwift()",
                 ));
                 args_names.push(format!("casted_{}", arg_wrapper.arg_name));
             }
@@ -142,7 +238,7 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
                 let arg_name = &arg_wrapper.arg_name;
                 let inner_name = inner.name();
                 args_casts.push(format!(
-                    "let casted_{arg_name} = Rust{inner_name}Option({arg_name}).toSwift()",
+                    "let casted_{arg_name} = Rust{inner_name}Option({arg_name}!).toSwift()",
                 ));
                 args_names.push(format!("casted_{}", arg_wrapper.arg_name));
             }
@@ -192,8 +288,8 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
     format!(
         r#"
 @_cdecl("{extern_fn_name}")
-func {extern_fn_name}(obj: UnsafeMutableRawPointer{args_signatures}){return_type_sig} {{
-    let obj_ptr = Unmanaged<AnyObject>.fromOpaque(obj).takeUnretainedValue() as! {trait_name}
+func {extern_fn_name}(obj: UnsafeMutableRawPointer?{args_signatures}){return_type_sig} {{
+    let obj_ptr = Unmanaged<AnyObject>.fromOpaque(obj!).takeUnretainedValue() as! {trait_name}
 {args_casts}
 {return_result}
 }}"#
