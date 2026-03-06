@@ -259,7 +259,9 @@ pub fn gen_class_methods_definition_from_struct(struct_wrapper: &StructWrapper) 
     format!(
         r#"
     deinit {{
-        {destructor_extern_fn}(self.rawPtr());
+        if self._self != nil {{
+            {destructor_extern_fn}(self.rawPtr())
+        }}
     }}
 {default_constructor}
 {props}
@@ -342,6 +344,7 @@ fn gen_property(field: &FieldWrapper) -> String {
                 WrapperType::Result(_) => panic!("Vec of results not supported as property"),
                 WrapperType::Option(_) => panic!("Option in vec not supported as property"),
                 WrapperType::UnitExpr => panic!("Empty expression cannot be a swift property"),
+                WrapperType::Trait(_) => panic!("Trait not supported as property"),
             };
             (
                 getter
@@ -371,6 +374,7 @@ fn gen_property(field: &FieldWrapper) -> String {
                 WrapperType::Result(_) => panic!("Result in option not supported as property"),
                 WrapperType::Option(_) => panic!("Nested options not supported as property"),
                 WrapperType::UnitExpr => panic!("Empty expression cannot be a swift property"),
+                WrapperType::Trait(_) => panic!("Trait not supported as property"),
             };
             (
                 getter
@@ -498,7 +502,7 @@ fn map_vec_getter(
             let ptr = {extern_fn_name}(self.rawPtr())
             let rust_vec = {vec_class_name}(ptr!)
             let swift_array = rust_vec.toSwift()
-            rust_vec.leak()
+            let _ = rust_vec.leak()
             return swift_array
         }}"#,
     )
@@ -536,7 +540,7 @@ fn map_option_getter(
         get {{
             let ptr = {extern_fn_name}(self.rawPtr())
             let rust_option = {option_class_name}(ptr!)
-            defer {{ rust_option.leak() }}
+            defer {{ let _  = rust_option.leak() }}
             return rust_option.toSwift()
         }}"#,
     )

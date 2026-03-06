@@ -1,13 +1,14 @@
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::ops::Deref;
 
 use quote::ToTokens;
 use syn::ItemImpl;
 
-use crate::EXPORTED_SYMBOLS_PREFIX;
 use crate::translator::{NoWrapperErr, map_arg, map_wrapper_to_reusable};
 use crate::wrapper::Wrapper;
 use crate::wrapper::impl_block_wrapper::MethodWrapper;
+use crate::{EXPORTED_SYMBOLS_PREFIX, ReusableWrapper};
 
 use super::impl_block_wrapper::ImplBlockWrapper;
 use super::{ParsedWrapper, return_wrapper};
@@ -30,35 +31,12 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
         .iter()
         .map(|item| {
             if let syn::ImplItem::Fn(method) = item {
-                let args = method
-                    .sig
-                    .inputs
-                    .iter()
-                    .filter(|arg| !matches!(arg, syn::FnArg::Receiver(_))) // ignore receiver
-                    .map(map_arg)
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                for arg in &args {
-                    reusable_wrappers.extend(map_wrapper_to_reusable(&arg.wrapper_type));
-                }
-
-                let return_wrapper = return_wrapper(&method.sig.output)?;
-
-                if let Some(return_wrapper) = &return_wrapper {
-                    reusable_wrappers.extend(map_wrapper_to_reusable(&return_wrapper.wrapper_type));
-                }
-
-                Ok(MethodWrapper {
-                    name: method.sig.ident.clone(),
-                    extern_function_name: format!(
-                        "{EXPORTED_SYMBOLS_PREFIX}_{}_{}",
-                        struct_name, method.sig.ident
-                    ),
-                    public: matches!(method.vis, syn::Visibility::Public(_)),
-                    is_static: method.sig.receiver().is_none(),
-                    args,
-                    return_wrapper,
-                })
+                trait_method_wrapper_from_signature(
+                    &method.sig,
+                    matches!(method.vis, syn::Visibility::Public(_)),
+                    &mut reusable_wrappers,
+                    &struct_name,
+                )
             } else {
                 panic!("Unsupported impl item")
             }
@@ -85,5 +63,38 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
             methods,
         }),
         reusable_wrappers,
+    })
+}
+
+pub(crate) fn trait_method_wrapper_from_signature(
+    sig: &syn::Signature,
+    public: bool,
+    reusable_wrappers: &mut HashSet<ReusableWrapper>,
+    struct_name: impl Display,
+) -> Result<MethodWrapper, NoWrapperErr> {
+    let args = sig
+        .inputs
+        .iter()
+        .filter_map(|arg| map_arg(arg).transpose())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for arg in &args {
+        reusable_wrappers.extend(map_wrapper_to_reusable(&arg.wrapper_type));
+    }
+
+    let return_wrapper: Option<crate::wrapper::FunctionReturnWrapper> =
+        return_wrapper(&sig.output)?;
+
+    if let Some(return_wrapper) = &return_wrapper {
+        reusable_wrappers.extend(map_wrapper_to_reusable(&return_wrapper.wrapper_type));
+    }
+
+    Ok(MethodWrapper {
+        name: sig.ident.clone(),
+        extern_function_name: format!("{EXPORTED_SYMBOLS_PREFIX}_{struct_name}_{}", sig.ident),
+        public,
+        is_static: sig.receiver().is_none(),
+        args,
+        return_wrapper,
     })
 }

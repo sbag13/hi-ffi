@@ -121,8 +121,13 @@ fn gen_body(struct_wrapper: &StructWrapper) -> String {
     let raw_ptr_method = gen_raw_ptr_method();
 
     format!(
-        r#"{properties}
+        r#"
+{properties}
 {default_constructor}
+    def leak(self) -> ctypes.c_void_p:
+        ret = self._self_ptr
+        self._self_ptr = None
+        return ret
 {raw_ptr_method}
 {destructor}"#
     )
@@ -133,7 +138,7 @@ fn gen_destructor(struct_wrapper: &StructWrapper) -> String {
     format!(
         r#"
     def __del__(self):
-        if self._self_ptr is not None:
+        if self._self_ptr and self._self_ptr is not None:
             {PYTHON_LIB_GETTER_NAME}().{drop_ext_fn_name}(self._self_ptr)
             self._self_ptr = None"#
     )

@@ -541,6 +541,159 @@ func assert_options() {
     assert(structWithOptions.opt_struct?.i32_field == 321, "opt_struct_field should have i32_field 321 after set")
 }
 
+func assert_traits() {
+    print("assert_traits")
+
+    class SwiftTraitImpl: RustTrait {
+        func trait_simple_fn() {
+            print("Swift says hello!")
+        }
+
+        func trait_fn_with_simple_args(_ i: i32, _ f: f64, _ e: TestStatus, _ b: bool) {
+            assert(i == 42)
+            assert(f == 4.20)
+            assert(e == TestStatus.Pending)
+            assert(b)
+        }
+
+        func trait_fn_with_string_arg(_ s: String) {
+            assert(s == "Hello from trait object")
+        }
+
+        func trait_fn_with_struct_arg(_ s: TestStruct) {
+            assert(s.i32_field == 123)
+        }
+
+        func trait_fn_with_vec_of_primitives(_ vec: [i32]) {
+            assert(vec == [1, 2, 3, 4, 5])
+        }
+
+        func trait_fn_with_vec_of_bools(_ vec: [bool]) {
+            assert(vec == [true, false, true])
+        }
+
+        func trait_fn_with_vec_of_enums(_ vec: [TestStatus]) {
+            assert(vec == [TestStatus.Active, TestStatus.Inactive])
+        }
+
+        func trait_fn_with_vec_of_strings(_ vec: [String]) {
+            assert(vec == ["Hello", "Trait", "Object"])
+        }
+
+        func trait_fn_with_vec_of_structs(_ vec: [TestStruct2]) {
+            assert(vec.count == 2)
+            assert(vec[0].i32_field == 321)
+            assert(vec[1].i32_field == 654)
+        }
+
+
+        func trait_fn_with_options(_ opt_int: i64?, _ opt_string: String?, _ opt_bool: Bool?, _ opt_enum: TestStatus?, _ opt_struct: TestStruct2?) {
+            assert(opt_int! == 42)
+            assert(opt_string! == "Hello from trait object")
+            assert(!opt_bool!)
+            assert(opt_enum! == TestStatus.Pending)
+            assert(opt_struct!.i32_field == 789)
+        }
+
+        func trait_fn_return_int() -> i32 {
+            return 12345
+        }
+
+        func trait_fn_return_bool() -> bool {
+            return true
+        }
+
+        func trait_fn_return_string() -> String {
+            return "String from trait object"
+        }
+
+        func trait_fn_return_struct() -> TestStruct2 {
+            let ts = TestStruct2()
+            ts.i32_field = 987
+            return ts
+        }
+
+        func trait_fn_return_enum() -> TestStatus {
+            return TestStatus.Inactive
+        }
+
+        func trait_fn_return_vec_of_primitives() -> [i32] {
+            return [10, 20, 30]
+
+        }
+
+        func trait_fn_return_vec_of_bools() -> [bool] {
+            return [true, false, true, true]
+        }
+
+        func trait_fn_return_vec_of_enums() -> [TestStatus] {
+            return [TestStatus.Active, TestStatus.Inactive, TestStatus.Pending]
+        }
+
+        func trait_fn_return_vec_of_strings() -> [String] {
+            return ["Hello", "from", "trait", "object"]
+        }
+
+        func trait_fn_return_vec_of_structs() -> [TestStruct2] {
+            let ts1 = TestStruct2()
+            ts1.i32_field = 111
+            let ts2 = TestStruct2()
+            ts2.i32_field = 222
+            return [ts1, ts2]
+        }
+
+        func trait_fn_returning_option_int(_ some: bool) -> i32? {
+            if some {
+                return 555
+            } else {
+                return nil
+            }
+        }
+
+        func trait_fn_returning_option_bool(_ some: bool) -> bool? {
+            if some {
+                return false
+            } else {
+                return nil
+            }
+        }
+
+        func trait_fn_returning_option_string(_ some: bool) -> String? {
+            if some {
+                return "Some string"
+            } else {
+                return nil
+            }
+        }
+
+        func trait_fn_returning_option_enum(_ some: bool) -> TestStatus? {
+            if some {
+                return TestStatus.Pending
+            } else {
+                return nil
+            }
+        }
+
+        func trait_fn_returning_option_struct(_ some: bool) -> TestStruct2? {
+            if some {
+                let ts = TestStruct2()
+                ts.i32_field = 789
+                return ts
+            } else {
+                return nil
+            }
+        }
+
+        deinit {
+            print("Swift says bye!")
+        }
+    }
+
+    let obj = SwiftTraitImpl()
+    function_taking_trait_object(obj)
+
+}
+
 func run() {
     assert_struct_basics()
     assert_functions()
@@ -552,6 +705,7 @@ func run() {
     assert_enums()
     assert_results()
     assert_options()
+    assert_traits()
     print("All assertions passed.")
 }
 

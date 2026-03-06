@@ -12,6 +12,7 @@ int main()
     assert_enums();
     assert_results();
     assert_options();
+    assert_traits();
 
     std::cout << "All assertions passed!" << std::endl;
 

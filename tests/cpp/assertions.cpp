@@ -52,6 +52,8 @@
 #include "function_returning_opt_enum.h"
 #include "function_returning_opt_struct.h"
 #include "StructWithOptions.h"
+#include "RustTrait.h"
+#include "function_taking_trait_object.h"
 #include <iostream>
 #include <cassert>
 #include <cstring>
@@ -455,10 +457,12 @@ void assert_functions()
     function_taking_struct(ts2);
     auto struct2_from_function = function_returning_struct();
     assert(struct2_from_function.get_i32_field() == 48);
-    assert(combo_function("str1", "str2", true, TestStruct()) == "str1");
+    auto new_ts1 = TestStruct();
+    assert(combo_function("str1", "str2", true, new_ts1) == "str1");
     auto s1 = TestStruct();
     s1.set_i32_field(49);
-    auto combo_struct_function_result = combo_struct_function(s1, TestStruct(), TestStruct2());
+    auto new_ts2 = TestStruct2();
+    auto combo_struct_function_result = combo_struct_function(s1, new_ts1, new_ts2);
     assert(combo_struct_function_result.get_i32_field() == 49);
 }
 
@@ -537,4 +541,200 @@ void assert_results()
     assert(ok_vec_of_structs[1].get_i32_field() == -5);
     assert(ts1.method_with_vec_of_bools_result() == std::vector<bool>({false, true, true, true}));
     assert(TestStruct::static_method_with_vec_of_enum_result() == std::vector<TestStatus>({TestStatus::Inactive, TestStatus::Pending, TestStatus::Active}));
+}
+
+class MyStructWithTrait : public RustTrait
+{
+public:
+    void trait_simple_fn() override
+    {
+        // std::cout << "MyStructWithTrait::trait_simple_fn called!" << std::endl;
+    }
+
+    void trait_fn_with_simple_args(i32 i, f64 f, TestStatus e, bool b) override
+    {
+        assert(i == 42);
+        assert(f == 4.2);
+        assert(e == TestStatus::Pending);
+        assert(b == true);
+    }
+
+    void trait_fn_with_string_arg(std::string s) override
+    {
+        assert(s == "Hello from trait object");
+    }
+
+    void trait_fn_with_struct_arg(TestStruct &s) override
+    {
+        assert(s.get_i32_field() == 123);
+    }
+
+    void trait_fn_with_vec_of_primitives(std::vector<i32> &vec) override
+    {
+        std::vector<i32> expected = {1, 2, 3, 4, 5};
+        assert(vec == expected);
+    }
+
+    void trait_fn_with_vec_of_bools(std::vector<bool> &vec) override
+    {
+        std::vector<bool> expected = {true, false, true};
+        assert(vec == expected);
+    }
+
+    void trait_fn_with_vec_of_strings(std::vector<std::string> &vec) override
+    {
+        std::vector<std::string> expected = {"Hello", "Trait", "Object"};
+        assert(vec == expected);
+    }
+
+    void trait_fn_with_vec_of_structs(std::vector<TestStruct2> &vec) override
+    {
+        assert(vec.size() == 2);
+        assert(vec[0].get_i32_field() == 321);
+        assert(vec[1].get_i32_field() == 654);
+    }
+
+    void trait_fn_with_vec_of_enums(std::vector<TestStatus> &vec) override
+    {
+        std::vector<TestStatus> expected = {TestStatus::Active, TestStatus::Inactive};
+        assert(vec == expected);
+    }
+
+    void trait_fn_with_options(std::optional<i64> &opt_int, std::optional<std::string> &opt_string, std::optional<bool> &opt_bool, std::optional<TestStatus> &opt_enum, std::optional<TestStruct2> &opt_struct) override
+    {
+        assert(opt_int.value() == 42);
+        assert(opt_string.value() == "Hello from trait object");
+        assert(opt_bool.value() == false);
+        assert(opt_enum.value() == TestStatus::Pending);
+        assert(opt_struct.value().get_i32_field() == 789);
+    }
+
+    i32 trait_fn_return_int() override
+    {
+        return 12345;
+    }
+
+    bool trait_fn_return_bool() override
+    {
+        return true;
+    }
+
+    std::string trait_fn_return_string() override
+    {
+        return "String from trait object";
+    }
+
+    TestStruct2 trait_fn_return_struct() override
+    {
+        TestStruct2 s;
+        s.set_i32_field(987);
+        return s;
+    }
+
+    TestStatus trait_fn_return_enum() override
+    {
+        return TestStatus::Inactive;
+    }
+
+    std::vector<i32> trait_fn_return_vec_of_primitives() override
+    {
+        return {10, 20, 30};
+    }
+
+    std::vector<bool> trait_fn_return_vec_of_bools() override
+    {
+        return {true, false, true, true};
+    }
+
+    std::vector<std::string> trait_fn_return_vec_of_strings() override
+    {
+        return {"Hello", "from", "trait", "object"};
+    }
+
+    std::vector<TestStatus> trait_fn_return_vec_of_enums() override
+    {
+        return {TestStatus::Active, TestStatus::Inactive, TestStatus::Pending};
+    }
+
+    std::vector<TestStruct2> trait_fn_return_vec_of_structs() override
+    {
+        TestStruct2 s1;
+        s1.set_i32_field(111);
+        TestStruct2 s2;
+        s2.set_i32_field(222);
+        return {s1, s2};
+    }
+
+    std::optional<i32> trait_fn_returning_option_int(bool some) override
+    {
+        if (some)
+        {
+            return std::optional<i32>(555);
+        }
+        else
+        {
+            return std::optional<i32>();
+        }
+    }
+
+    std::optional<std::string> trait_fn_returning_option_string(bool some) override
+    {
+        if (some)
+        {
+            return std::optional<std::string>("Some string");
+        }
+        else
+        {
+            return std::optional<std::string>();
+        }
+    }
+
+    std::optional<bool> trait_fn_returning_option_bool(bool some) override
+    {
+        if (some)
+        {
+            return std::optional<bool>(false);
+        }
+        else
+        {
+            return std::optional<bool>();
+        }
+    }
+
+    std::optional<TestStatus> trait_fn_returning_option_enum(bool some) override
+    {
+        if (some)
+        {
+            return std::optional<TestStatus>(TestStatus::Pending);
+        }
+        else
+        {
+            return std::optional<TestStatus>();
+        }
+    }
+
+    std::optional<TestStruct2> trait_fn_returning_option_struct(bool some) override
+    {
+        if (some)
+        {
+            TestStruct2 s;
+            s.set_i32_field(789);
+            return std::optional<TestStruct2>(s);
+        }
+        else
+        {
+            return std::optional<TestStruct2>();
+        }
+    }
+
+    ~MyStructWithTrait() override
+    {
+        // std::cout << "MyStructWithTrait destructor called!" << std::endl;
+    }
+};
+
+void assert_traits()
+{
+    std::cout << "assert_traits" << std::endl;
+    function_taking_trait_object(std::make_unique<MyStructWithTrait>());
 }

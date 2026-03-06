@@ -18,9 +18,9 @@
 
 Add `hi-ffi` to your `Cargo.toml`:
 
-```toml
+```toml,ignore
 [dependencies]
-hi_ffi = { version = "0.4", features = ["cpp", "swift", "python"] }
+hi_ffi = { version = "0.6", features = ["cpp", "swift", "python"] }
 ```
 
 **Note**: `hi-ffi` is a procedural macro crate. Enable the `cpp` and/or `swift`, `python` features based on your target languages.
@@ -33,6 +33,20 @@ Annotate your Rust code with `#[ffi]` to generate FFI bindings:
 
 ```rust
 use hi_ffi::ffi;
+
+// It's possible to implement traits/protocols outside Rust
+#[ffi]
+pub trait Shape {
+    fn draw(&self, title: Option<String>);
+    fn area(&self) -> f64;
+    fn center_point(&self) -> Vec<f64>;
+}
+
+// A shape argument may be passed from Rust and from other languages as well
+#[ffi]
+pub fn take_shape(shape: Box<dyn Shape>) {
+    shape.draw("Give it a title in Rust".to_string().into());
+}
 
 #[ffi]
 #[derive(Default, Clone)]
@@ -55,6 +69,18 @@ struct Person {
     _internal_id: u64,
 }
 
+// Exposing methods
+#[ffi]
+impl Person {
+    // only public methods are exposed
+    pub fn info(&self) -> Result<Vec<String>, SimpleError> {
+        Ok(vec![
+            self.name.as_ref().map_or("no_name", |n| n).to_string(),
+            format!("age: {}", self.age)
+        ])
+    }
+}
+
 #[derive(Debug)]
 pub struct SimpleError;
 impl std::fmt::Display for SimpleError {
@@ -62,6 +88,7 @@ impl std::fmt::Display for SimpleError {
         write!(f, "SimpleError")
     }
 }
+// An error must implement std::error::Error to be used with ffi macro
 impl std::error::Error for SimpleError {}
 
 #[ffi]
@@ -130,6 +157,7 @@ These examples demonstrate how to use the generated bindings in real application
 | Struct return       | ✅  | ✅    | ✅     |
 | Vec arguments       | ✅  | ✅    | ✅     |
 | Vec return          | ✅  | ✅    | ✅     |
+| Trait obj arg       | ✅  | ✅    | ✅     |
 | `&str` return       | ❌  | ❌    | ❌     |
 
 ### Vectors
@@ -176,6 +204,19 @@ These examples demonstrate how to use the generated bindings in real application
 | method return   | ✅  | ✅    | ✅     |
 | struct fields   | ✅  | ✅    | ✅     |
 
+### Traits
+
+| Feature                    | C++ | Swift | Python |
+| -------------------------- | --- | ----- | ------ |
+| primitive types in methods | ✅  | ✅    | ✅     |
+| string types in methods    | ✅  | ✅    | ✅     |
+| enum types in methods      | ✅  | ✅    | ✅     |
+| struct types in methods    | ✅  | ✅    | ✅     |
+| vec types in methods       | ✅  | ✅    | ✅     |
+| option types in methods    | ✅  | ✅    | ✅     |
+| result types in methods    | ❌  | ❌    | ❌     |
+| trait objects in methods   | ❌  | ❌    | ❌     |
+
 ## Architecture
 
 `hi-ffi` is built with a modular architecture:
@@ -196,7 +237,7 @@ The translation process:
 
 After building your project, generated FFI code is placed in:
 
-```
+```ignore
 generated_code/
 ├── rust/          # Rust FFI wrapper functions
 ├── cpp/           # C++ headers and implementations
@@ -211,8 +252,6 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 ## Roadmap
 
 - [ ] Doc strings
-- [ ] Options
-- [ ] Traits
 - [ ] Async
 
 ## License

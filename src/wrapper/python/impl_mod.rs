@@ -5,12 +5,12 @@ use quote::ToTokens;
 
 use crate::prepend_each_line_with_n_tabs;
 use crate::python::PYTHON_LIB_GETTER_NAME;
-use crate::wrapper::WrapperType;
 use crate::wrapper::impl_block_wrapper::ImplBlockWrapper;
 use crate::wrapper::python::{
     ClassCode, arg_cast, result_cast_and_return, set_extern_fn_resttype,
     type_hint_from_wrapper_type,
 };
+use crate::wrapper::{FunctionArgWrapper, WrapperType};
 
 pub fn gen_methods_mod(impl_block: &ImplBlockWrapper) -> ClassCode {
     let class_name = impl_block.struct_name.to_string();
@@ -35,62 +35,8 @@ class {class_name}:"#
         let py_name = method.name.to_string();
         let extern_fn_name = &method.extern_function_name;
 
-        // Build python signature receivers
-        let mut py_args_sig: Vec<String> = vec![];
-
-        // map args
-        let mut call_args: Vec<String> = vec![];
-        let mut pre_casts: Vec<String> = vec![];
-        for arg in &method.args {
-            let arg_name = arg.arg_name.to_string();
-
-            if arg.arg_type.to_token_stream().to_string().as_str() == "String" {
-                imports.insert(
-                    "RustString".to_string(),
-                    "from .global_state import RustString".to_string(),
-                );
-            }
-
-            insert_imports_for_vec_inner(&arg.wrapper_type, &mut imports);
-            insert_imports_for_option_inner(&arg.wrapper_type, &mut imports);
-
-            py_args_sig.push(format!(
-                "{}: {}",
-                arg_name,
-                type_hint_from_wrapper_type(&arg.wrapper_type)
-            ));
-
-            // For vector arguments, we need to store the wrapper object to prevent garbage collection
-            if let WrapperType::Vec(_) = &arg.wrapper_type {
-                pre_casts.push(format!(
-                    "casted_{name}_wrapper = {cast}",
-                    name = arg_name,
-                    cast = arg_cast(&arg.arg_type, &arg_name)
-                ));
-                pre_casts.push(format!(
-                    "casted_{name} = casted_{name}_wrapper.raw_ptr()",
-                    name = arg_name
-                ));
-            } else if let WrapperType::Option(_) = &arg.wrapper_type {
-                pre_casts.push(format!(
-                    "casted_{name}_wrapper = {cast}",
-                    name = arg_name,
-                    cast = arg_cast(&arg.arg_type, &arg_name)
-                ));
-                pre_casts.push(format!(
-                    "casted_{name} = casted_{name}_wrapper.raw_ptr()",
-                    name = arg_name
-                ));
-            } else {
-                pre_casts.push(format!(
-                    "casted_{name} = {cast}",
-                    name = arg_name,
-                    cast = arg_cast(&arg.arg_type, &arg_name)
-                ));
-            }
-
-            call_args.push(format!("casted_{}", arg_name));
-        }
+        let (call_args, pre_casts, py_args_sig) =
+            call_args_and_pre_casts(&method.args, &mut imports);
 
         let call_target = if method.is_static {
             // static methods don't use self
@@ -251,6 +197,13 @@ fn insert_imports_for_vec_inner(inner: &WrapperType, imports: &mut HashMap<Strin
             vec_name.clone(),
             format!("from .vec_{} import {}", inner.name(), vec_name),
         );
+
+        match inner.deref() {
+            WrapperType::Enum(inner) | WrapperType::Struct(inner) => {
+                imports.insert(inner.to_string(), format!("from .{inner} import {inner}"));
+            }
+            _ => {}
+        }
     }
 }
 
@@ -266,4 +219,82 @@ fn insert_imports_for_option_inner(inner: &WrapperType, imports: &mut HashMap<St
             format!("from .option_{} import {}", inner.name(), option_name),
         );
     }
+}
+
+pub(crate) fn call_args_and_pre_casts(
+    args: &[FunctionArgWrapper],
+    imports: &mut HashMap<String, String>,
+) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let mut call_args: Vec<String> = vec![];
+    let mut pre_casts: Vec<String> = vec![];
+    let mut py_args_sig: Vec<String> = vec![];
+
+    for arg in args {
+        let arg_name = arg.arg_name.to_string();
+
+        if arg.arg_type.to_token_stream().to_string().as_str() == "String" {
+            imports.insert(
+                "RustString".to_string(),
+                "from .global_state import RustString".to_string(),
+            );
+        }
+
+        py_args_sig.push(format!(
+            "{}: {}",
+            arg_name,
+            type_hint_from_wrapper_type(&arg.wrapper_type)
+        ));
+
+        // For vector arguments, we need to store the wrapper object to prevent garbage collection
+        match &arg.wrapper_type {
+            WrapperType::Vec(_) => {
+                insert_imports_for_vec_inner(&arg.wrapper_type, imports);
+
+                pre_casts.push(format!(
+                    "casted_{name}_wrapper = {cast}",
+                    name = arg_name,
+                    cast = arg_cast(&arg.arg_type, &arg_name)
+                ));
+                pre_casts.push(format!(
+                    "casted_{name} = casted_{name}_wrapper.raw_ptr()",
+                    name = arg_name
+                ));
+            }
+            WrapperType::Option(_) => {
+                insert_imports_for_option_inner(&arg.wrapper_type, imports);
+
+                pre_casts.push(format!(
+                    "casted_{name}_wrapper = {cast}",
+                    name = arg_name,
+                    cast = arg_cast(&arg.arg_type, &arg_name)
+                ));
+                pre_casts.push(format!(
+                    "casted_{name} = casted_{name}_wrapper.raw_ptr()",
+                    name = arg_name
+                ));
+            }
+            WrapperType::Enum(inner_name) | WrapperType::Struct(inner_name) => {
+                imports.insert(
+                    inner_name.to_string(),
+                    format!("from .{inner_name} import {inner_name}"),
+                );
+                pre_casts.push(format!(
+                    "casted_{name} = {cast}",
+                    name = arg_name,
+                    cast = arg_cast(&arg.arg_type, &arg_name)
+                ));
+            }
+            _ => {
+                pre_casts.push(format!(
+                    "casted_{name} = {cast}",
+                    name = arg_name,
+                    cast = arg_cast(&arg.arg_type, &arg_name)
+                ));
+            }
+        }
+
+        call_args.push(format!("casted_{}", arg_name));
+    }
+
+    (call_args, pre_casts, py_args_sig)
 }

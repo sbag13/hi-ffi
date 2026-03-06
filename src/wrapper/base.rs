@@ -8,6 +8,7 @@ pub const SLICE_DROP_FN_NAME: &str = "hiFfi__slice_drop";
 pub const RUST_STRING_DROP_FN_NAME: &str = "hiFfi__rust_string_drop";
 pub const RUST_STRING_DATA_FN_NAME: &str = "hiFfi__rust_string_data";
 pub const RUST_STRING_LEN_FN_NAME: &str = "hiFfi__rust_string_len";
+pub const RUST_STRING_FROM_C_PTR_FN_NAME: &str = "hiFfi__rust_string_from_c_ptr";
 
 pub const RUST_ARC_DYN_ERR_DROP_FN_NAME: &str = "hiFfi__rust_arc_dyn_err_drop";
 pub const RUST_ARC_DYN_ERR_DESC_FN_NAME: &str = "hiFfi__rust_arc_dyn_err_desc";
@@ -20,6 +21,16 @@ pub const RUST_REF_DYN_ERR_SOURCE_FN_NAME: &str = "hiFfi__rust_ref_dyn_err_sourc
 
 pub fn rust_code_base() -> TokenStream2 {
     quote! {
+        #[doc(hidden)]
+        #[unsafe(export_name = #RUST_STRING_FROM_C_PTR_FN_NAME)]
+        pub unsafe extern "C" fn rust_string_from_c_ptr(ptr: *const std::os::raw::c_char) -> *mut std::ffi::c_void {
+            unsafe {
+                let c_str = std::ffi::CStr::from_ptr(ptr);
+                let string = c_str.to_str().unwrap().to_owned();
+                Box::into_raw(Box::new(string)) as *mut std::ffi::c_void
+            }
+        }
+
         #[doc(hidden)]
         #[unsafe(export_name = #RUST_REF_DYN_ERR_DROP_FN_NAME)]
         pub unsafe extern "C" fn rust_ref_dyn_err_drop(_self: *const &dyn std::error::Error) {

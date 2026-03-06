@@ -14,6 +14,7 @@ mod enum_mod;
 mod function;
 mod impl_mod;
 mod struct_mod;
+mod trait_mod;
 
 impl ReusableWrapper {
     pub fn python(&self) -> String {
@@ -124,6 +125,11 @@ class {inner_name}Option:
     def __init__(self, ptr):
         self._ptr = ptr
 
+    def leak(self) -> ctypes.c_void_p:
+        ret = self._ptr
+        self._ptr = None
+        return ret
+
     def raw_ptr(self):
         return self._ptr
 
@@ -147,9 +153,6 @@ class {inner_name}Option:
             return {inner_name}Option({PYTHON_LIB_GETTER_NAME}().{some_ext_name}(casted_value))
         else:
             return {inner_name}Option({PYTHON_LIB_GETTER_NAME}().{none_ext_name}())
-    
-    def leak(self):
-        self._ptr = None
     
     def __del__(self):
         if self._ptr is not None:
@@ -214,6 +217,11 @@ class {type_name}Vec:
     def raw_ptr(self):
         return self._ptr
 
+    def leak(self) -> ctypes.c_void_p:
+        ret = self._ptr
+        self._ptr = None
+        return ret
+
     @staticmethod
     def from_list(list: List[{inner_type_hint}]):
         length = len(list)
@@ -271,6 +279,7 @@ fn gen_vec_push_arg_cast(inner: &WrapperType) -> String {
             panic!("Option types are not supported in Vec wrappers for python");
         }
         WrapperType::UnitExpr => unreachable!(),
+        WrapperType::Trait(_) => panic!("Traits are not supported in Vec wrappers for python"),
     }
 }
 
@@ -294,6 +303,7 @@ fn gen_vec_get_result_cast(inner: &WrapperType, type_name: &str) -> String {
             panic!("Option types are not supported in Vec wrappers for python");
         }
         WrapperType::UnitExpr => unreachable!(),
+        WrapperType::Trait(_) => panic!("Traits are not supported in Vec wrappers for python"),
     }
 }
 
@@ -325,6 +335,7 @@ fn gen_vec_get_restype(inner: &WrapperType, get_ext_fn_name: &str) -> String {
             panic!("Option types are not supported in Vec wrappers for python");
         }
         WrapperType::UnitExpr => unreachable!(),
+        WrapperType::Trait(_) => panic!("Traits are not supported in Vec wrappers for python"),
     }
 }
 
@@ -389,13 +400,18 @@ impl Wrapper {
                 fn_code: None,
                 class_mod: Some(enum_mod::gen_enum_class(enum_wrapper)),
             },
+            ParsedWrapper::Trait(trait_wrapper) => PythonFiles {
+                fn_code: None,
+                class_mod: Some(trait_mod::gen_trait_class(trait_wrapper)),
+            },
         }
     }
 }
 
 fn type_hint_from_wrapper_type(wrapper_type: &crate::wrapper::WrapperType) -> String {
     match wrapper_type {
-        WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) => "int".into(),
+        WrapperType::IntegerNumber(_) => "int".into(),
+        WrapperType::FloatingPointNumber(_) => "float".into(),
         WrapperType::Bool => "bool".into(),
         WrapperType::String => "str".into(),
         WrapperType::Struct(name) => name.to_string(),
@@ -404,6 +420,7 @@ fn type_hint_from_wrapper_type(wrapper_type: &crate::wrapper::WrapperType) -> St
         WrapperType::Result(inner) => type_hint_from_wrapper_type(inner),
         WrapperType::Option(inner) => format!("Optional[{}]", type_hint_from_wrapper_type(inner)),
         WrapperType::UnitExpr => "None".to_string(),
+        WrapperType::Trait(name) => format!("Type[{name}]"),
     }
 }
 
@@ -454,6 +471,29 @@ else:
             let inner_name = inner.name();
             format!("return {inner_name}Option(result).to_python()")
         }
+        WrapperType::Trait(_) => panic!("Traits are not supported as python return types"),
+    }
+}
+
+fn c_type_from_wrapper_type(wrapper: &WrapperType) -> &str {
+    match wrapper {
+        WrapperType::IntegerNumber(r_int) => rust_int_to_c_types(r_int),
+        WrapperType::FloatingPointNumber(r_float) => {
+            if r_float == "f32" {
+                "c_float"
+            } else {
+                "c_double"
+            }
+        }
+        WrapperType::Bool => "c_bool",
+        WrapperType::String
+        | WrapperType::Option(_)
+        | WrapperType::Struct(_)
+        | WrapperType::Result(_)
+        | WrapperType::Trait(_)
+        | WrapperType::Vec(_) => "c_void_p",
+        WrapperType::Enum(_) => "c_int",
+        WrapperType::UnitExpr => "c_void",
     }
 }
 
@@ -532,6 +572,7 @@ fn set_extern_fn_resttype(wrapper: &WrapperType, extern_fn_name: &str) -> String
         WrapperType::UnitExpr => {
             format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void")
         }
+        WrapperType::Trait(_) => panic!("Traits are not supported as python return types"),
     }
 }
 

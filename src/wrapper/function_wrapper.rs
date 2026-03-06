@@ -12,7 +12,7 @@ use crate::wrapper::{is_enum_type, is_struct_type, rust_type};
 pub struct FunctionWrapper {
     pub(crate) name: syn::Ident,
     pub(crate) extern_function_name: String,
-    pub(crate) args_wrappers: Vec<FunctionArgWrapper>,
+    pub(crate) args: Vec<FunctionArgWrapper>,
     pub(crate) return_wrapper: Option<FunctionReturnWrapper>,
 }
 
@@ -102,6 +102,11 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
             return_type_sig: quote! {},
             result_cast: quote! {result},
         },
+
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::Trait(_),
+            ..
+        }) => panic!("Trait return types are not supported"),
     }
 }
 
@@ -115,7 +120,7 @@ impl From<&FunctionWrapper> for TokenStream2 {
             arg_signatures,
             arg_names,
             arg_casts,
-        } = map_function_arg_wrappers(function_wrapper.args_wrappers.iter());
+        } = map_function_arg_wrappers(function_wrapper.args.iter());
 
         let MappedReturnType {
             return_type_sig,
@@ -155,6 +160,7 @@ pub fn map_function_arg_wrappers<'a>(
             arg_signatures.push(quote! {#arg_name: #arg_type});
             arg_names.push(quote! {#arg_name});
         }
+
         FunctionArgWrapper {
             arg_name,
             wrapper_type: WrapperType::String,
@@ -166,6 +172,7 @@ pub fn map_function_arg_wrappers<'a>(
                 let #arg_name = unsafe { std::ffi::CStr::from_ptr(#arg_name).to_str().unwrap().to_owned() };
             });
         }
+
         FunctionArgWrapper {
             arg_name,
             arg_type,
@@ -177,6 +184,7 @@ pub fn map_function_arg_wrappers<'a>(
                 let #arg_name = unsafe { (*#arg_name).clone() };
             });
         }
+
         FunctionArgWrapper {
             arg_name,
             arg_type,
@@ -189,6 +197,7 @@ pub fn map_function_arg_wrappers<'a>(
                 std::mem::swap(&mut new_vec, unsafe { &mut(*#arg_name)} );
             });
         }
+
         FunctionArgWrapper {
             arg_name,
             arg_type,
@@ -219,10 +228,23 @@ pub fn map_function_arg_wrappers<'a>(
         }
 
         FunctionArgWrapper {
-            wrapper_type: WrapperType::UnitExpr,..}
-            => {
-                panic!("UnitExpr function arguments are not supported");
-            }
+            wrapper_type: WrapperType::UnitExpr,..
+        } => {
+            panic!("UnitExpr function arguments are not supported");
+        }
+
+        FunctionArgWrapper {
+            wrapper_type: WrapperType::Trait(trait_name),
+            arg_type,..
+        } => {
+            let arg_name_bridge = format_ident!("{}_bridge", arg.arg_name);
+            let arg_bridge_type = format_ident!("{}Bridge", trait_name);
+            arg_signatures.push(quote! {#arg_name_bridge: #arg_bridge_type});
+            arg_names.push(quote! {boxed_obj});
+            arg_casts.push(quote! {
+                let boxed_obj = Box::new(#arg_name_bridge) as #arg_type;
+            });
+        }
     });
     MappedFunctionArgsTokens {
         arg_signatures,
@@ -257,6 +279,7 @@ pub enum WrapperType {
     Result(Box<WrapperType>),
     Option(Box<WrapperType>),
     UnitExpr,
+    Trait(String),
 }
 
 impl WrapperType {
@@ -265,6 +288,7 @@ impl WrapperType {
             WrapperType::IntegerNumber(inner)
             | WrapperType::FloatingPointNumber(inner)
             | WrapperType::Struct(inner)
+            | WrapperType::Trait(inner)
             | WrapperType::Enum(inner) => inner.to_owned(),
             WrapperType::Vec(inner) => format!("vec_of_{}", inner.name()),
             WrapperType::Bool => "bool".to_string(),
