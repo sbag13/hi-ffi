@@ -551,10 +551,10 @@ public:
         // std::cout << "MyStructWithTrait::trait_simple_fn called!" << std::endl;
     }
 
-    void trait_fn_with_simple_args(i32 i, f32 f, TestStatus e, bool b) override
+    void trait_fn_with_simple_args(i32 i, f64 f, TestStatus e, bool b) override
     {
         assert(i == 42);
-        assert(f == 4.2f);
+        assert(f == 4.2);
         assert(e == TestStatus::Pending);
         assert(b == true);
     }

@@ -10,7 +10,7 @@ use crate::wrapper::*;
 impl FunctionWrapper {
     pub(crate) fn reusable_wrappers(&self) -> HashSet<ReusableWrapper> {
         let mut reusable_wrappers = self
-            .args_wrappers
+            .args
             .iter()
             .flat_map(|arg_wrapper| map_wrapper_to_reusable(&arg_wrapper.wrapper_type))
             .collect::<std::collections::HashSet<_>>();
@@ -47,7 +47,7 @@ pub(crate) fn fn_wrapper_from_sig(sig: &syn::Signature) -> Result<FunctionWrappe
     Ok(FunctionWrapper {
         name: fn_name.clone(),
         extern_function_name: format!("{EXPORTED_SYMBOLS_PREFIX}_{fn_name}"),
-        args_wrappers,
+        args: args_wrappers,
         return_wrapper,
     })
 }

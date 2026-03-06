@@ -178,7 +178,7 @@ pub fn gen_function_declaration(function_wrapper: &FunctionWrapper) -> String {
         wrapper_args,
         mut includes,
         ..
-    } = map_args(function_wrapper.args_wrappers.iter());
+    } = map_args(function_wrapper.args.iter());
 
     let ReturnTypes {
         ext_return_type,
@@ -212,7 +212,7 @@ pub fn gen_function_definition(function_wrapper: &FunctionWrapper) -> String {
         call_args: arg_names,
         arg_casts,
         ..
-    } = map_args(function_wrapper.args_wrappers.iter());
+    } = map_args(function_wrapper.args.iter());
 
     let ReturnTypes {
         return_type,

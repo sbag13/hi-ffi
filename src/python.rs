@@ -117,6 +117,11 @@ def {PYTHON_LIB_GETTER_NAME}():
 class RustString:
     def __init__(self, ptr):
         self._self_ptr = ptr
+    
+    def leak(self) -> ctypes.c_void_p:
+        ret = self._self_ptr
+        self._self_ptr = None
+        return ret
 
     def py_str(self) -> str:
         data = ctypes.c_char_p({PYTHON_LIB_GETTER_NAME}().{RUST_STRING_DATA_FN_NAME}(self._self_ptr))
@@ -124,7 +129,8 @@ class RustString:
         return data.value[0:length].decode("utf-8") if length != 0 else ""
 
     def __del__(self):
-        {PYTHON_LIB_GETTER_NAME}().{RUST_STRING_DROP_FN_NAME}(self._self_ptr)
+        if self._self_ptr and self._self_ptr is not None:
+            {PYTHON_LIB_GETTER_NAME}().{RUST_STRING_DROP_FN_NAME}(self._self_ptr)
 
 
 class FfiSlice:

@@ -23,6 +23,8 @@ from python_ffi.option_String import StringOption
 from python_ffi.option_TestStatus import TestStatusOption
 from python_ffi.option_TestStruct2 import TestStruct2Option
 from python_ffi.StructWithOptions import StructWithOptions
+from python_ffi.RustTrait import RustTrait
+from typing import Protocol, runtime_checkable
 
 
 ext = "so"  # Change to 'dylib' for MacOS, 'dll' for Windows
@@ -506,6 +508,131 @@ def option_tests():
     assert struct_with_options.opt_struct.i32_field == 321
 
 
+class PythonTraitImpl:
+    def trait_simple_fn(self):
+        print("Hello from python")
+
+    def trait_fn_with_simple_args(self, i: int, f: float, e: TestStatus, b: bool):
+        assert i == 42
+        assert f == 4.2
+        assert e == TestStatus.Pending
+        assert b == True
+
+    def trait_fn_with_string_arg(self, s: str):
+        assert s == "Hello from trait object"
+
+    def trait_fn_with_struct_arg(self, s: TestStruct):
+        assert s.i32_field == 123
+
+    def trait_fn_with_vec_of_primitives(self, vec: List[int]):
+        assert vec == [1, 2, 3, 4, 5]
+
+    def trait_fn_with_vec_of_bools(self, vec: List[bool]):
+        assert vec == [True, False, True]
+
+    def trait_fn_with_vec_of_enums(self, vec: List[TestStatus]):
+        assert vec == [TestStatus.Active, TestStatus.Inactive]
+
+    def trait_fn_with_vec_of_strings(self, vec: List[str]):
+        assert vec == ["Hello", "Trait", "Object"]
+
+    def trait_fn_with_vec_of_structs(self, vec: List[TestStruct2]):
+        assert len(vec) == 2
+        assert vec[0].i32_field == 321
+        assert vec[1].i32_field == 654
+
+    def trait_fn_with_options(
+        self,
+        opt_int: Optional[int],
+        opt_string: Optional[str],
+        opt_bool: Optional[bool],
+        opt_enum: Optional[TestStatus],
+        opt_struct: Optional[TestStruct2],
+    ):
+        assert opt_int == 42
+        assert opt_string == "Hello from trait object"
+        assert opt_bool == False
+        assert opt_enum == TestStatus.Pending
+        assert opt_struct.i32_field == 789
+
+    def trait_fn_return_int(self) -> int:
+        return 12345
+
+    def trait_fn_return_bool(self) -> bool:
+        return True
+
+    def trait_fn_return_string(self) -> str:
+        return "String from trait object"
+
+    def trait_fn_return_struct(self) -> TestStruct2:
+        s = TestStruct2()
+        s.i32_field = 987
+        return s
+
+    def trait_fn_return_enum(self) -> TestStatus:
+        return TestStatus.Inactive
+
+    def trait_fn_return_vec_of_primitives(self) -> List[int]:
+        return [10, 20, 30]
+
+    def trait_fn_return_vec_of_bools(self) -> List[bool]:
+        return [True, False, True, True]
+
+    def trait_fn_return_vec_of_enums(self) -> List[TestStatus]:
+        return [TestStatus.Active, TestStatus.Inactive, TestStatus.Pending]
+
+    def trait_fn_return_vec_of_strings(self) -> List[str]:
+        return ["Hello", "from", "trait", "object"]
+
+    def trait_fn_return_vec_of_structs(self) -> List[TestStruct2]:
+        s1 = TestStruct2()
+        s1.i32_field = 111
+        s2 = TestStruct2()
+        s2.i32_field = 222
+        return [s1, s2]
+
+    def trait_fn_returning_option_int(self, some: bool) -> Optional[int]:
+        if some:
+            return 555
+        return None
+
+    def trait_fn_returning_option_bool(self, some: bool) -> Optional[bool]:
+        if some:
+            return False
+        return None
+
+    def trait_fn_returning_option_string(self, some: bool) -> Optional[str]:
+        if some:
+            return "Some string"
+        return None
+
+    def trait_fn_returning_option_enum(self, some: bool) -> Optional[TestStatus]:
+        if some:
+            return TestStatus.Pending
+        return None
+
+    def trait_fn_returning_option_struct(self, some: bool) -> Optional[TestStruct2]:
+        if some:
+            s = TestStruct2()
+            s.i32_field = 789
+            return s
+        return None
+
+    def __del__(self):
+        print("Python delete called for PythonTraitImpl")
+
+
+def trait_tests():
+    print("Trait tests")
+
+    impl = PythonTraitImpl()
+    function_taking_trait_object(impl)
+
+    import gc
+
+    gc.collect()
+
+
 if __name__ == "__main__":
     struct_tests()
     functions_tests()
@@ -516,4 +643,5 @@ if __name__ == "__main__":
     enum_tests()
     result_tests()
     option_tests()
+    trait_tests()
     print("All tests passed!")

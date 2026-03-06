@@ -549,7 +549,7 @@ func assert_traits() {
             print("Swift says hello!")
         }
 
-        func trait_fn_with_simple_args(_ i: i32, _ f: f32, _ e: TestStatus, _ b: bool) {
+        func trait_fn_with_simple_args(_ i: i32, _ f: f64, _ e: TestStatus, _ b: bool) {
             assert(i == 42)
             assert(f == 4.20)
             assert(e == TestStatus.Pending)

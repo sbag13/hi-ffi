@@ -33,7 +33,7 @@ impl From<&TraitWrapper> for TokenStream2 {
         let vtable_functions = functions.iter().map(|function| {
             let FunctionWrapper { name, .. } = function;
 
-            let args = function.args_wrappers.iter().map(|arg| {
+            let args = function.args.iter().map(|arg| {
                 let arg_name = &arg.arg_name;
                 let arg_type = match arg.wrapper_type {
                     WrapperType::Bool
@@ -78,18 +78,18 @@ impl From<&TraitWrapper> for TokenStream2 {
         let impl_functions = functions.iter().map(|function| {
             let FunctionWrapper { name, return_wrapper, .. } = function;
 
-            let args = function.args_wrappers.iter().map(|arg| {
+            let args = function.args.iter().map(|arg| {
                 let arg_name = &arg.arg_name;
                 let arg_type = &arg.arg_type;
                 quote! { #arg_name: #arg_type }
             });
 
-            let arg_names = function.args_wrappers.iter().map(|arg| {
+            let arg_names = function.args.iter().map(|arg| {
                 let arg_name = &arg.arg_name;
                 quote! { #arg_name }
             });
 
-            let arg_casts = function.args_wrappers.iter().map(|arg| {
+            let arg_casts = function.args.iter().map(|arg| {
                 let arg_name = &arg.arg_name;
                 match arg.wrapper_type {
                     WrapperType::String | WrapperType::Struct(_) | WrapperType::Vec(_) | WrapperType::Option(_) => {
@@ -153,6 +153,7 @@ impl From<&TraitWrapper> for TokenStream2 {
             }
 
             #[repr(C)]
+            #[derive(Debug)]
             pub struct #bridge_name {
                 pub obj: *mut std::ffi::c_void,
                 pub vtable: *const #vtable_name,

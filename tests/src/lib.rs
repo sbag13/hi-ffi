@@ -753,7 +753,7 @@ pub(crate) struct StructWithOptions {
 #[ffi]
 pub trait RustTrait {
     fn trait_simple_fn(&self);
-    fn trait_fn_with_simple_args(&self, i: i32, f: f32, e: TestStatus, b: bool);
+    fn trait_fn_with_simple_args(&self, i: i32, f: f64, e: TestStatus, b: bool);
     fn trait_fn_with_string_arg(&self, s: String);
     fn trait_fn_with_struct_arg(&self, s: TestStruct);
 

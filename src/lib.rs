@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use std::fmt::Display;
 use std::fs::OpenOptions;
 use std::io::Write;

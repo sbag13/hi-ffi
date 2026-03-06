@@ -18,7 +18,7 @@ pub mod function_definition;
 pub mod protocol_definition;
 
 // Helper functions for common type conversions and patterns
-fn get_c_return_type(wrapper_type: &WrapperType) -> String {
+fn get_c_type(wrapper_type: &WrapperType) -> String {
     match wrapper_type {
         WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
         WrapperType::Bool => "u8".to_string(),
@@ -95,7 +95,7 @@ pub fn gen_swift_result_declarations(inner: &WrapperType) -> String {
     let drop_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_result");
     let is_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_err_{inner_name}_result");
 
-    let unwrap_return_type = get_c_return_type(inner);
+    let unwrap_return_type = get_c_type(inner);
 
     format!(
         r#"
@@ -115,7 +115,7 @@ pub fn gen_swift_option_declarations(inner: &WrapperType) -> String {
     let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__some_{inner_name}_option");
     let none_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__none_{inner_name}_option");
 
-    let unwrap_return_type = get_c_return_type(inner);
+    let unwrap_return_type = get_c_type(inner);
 
     let some_arg_type = match inner {
         WrapperType::String => "const char*".to_string(),
@@ -449,7 +449,7 @@ impl Wrapper {
                 SwiftCode::Function {
                     header: gen_function_header(
                         &function_wrapper.extern_function_name,
-                        &function_wrapper.args_wrappers,
+                        &function_wrapper.args,
                         &function_wrapper.return_wrapper,
                     ),
                     source,

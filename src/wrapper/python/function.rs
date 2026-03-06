@@ -14,14 +14,16 @@ pub fn gen_function(function: &FunctionWrapper) -> FunctionCode {
     let extern_fn_name = &function.extern_function_name;
     let received_args = received_args(function);
     let (arg_casts, call_args_list) = args(function);
-    let arg_casts = arg_casts.join("\n    ");
+    let arg_casts = arg_casts.join("\n");
+    let arg_casts = prepend_each_line_with_n_tabs(arg_casts.as_str(), 1);
+
     let call_args_list = call_args_list.join(", ");
     let (ret_hint, return_expression, set_restype) = return_expression(function);
 
     let body = format!(
         r#"def {fn_name}({received_args}){ret_hint}:
     {set_restype}
-    {arg_casts}
+{arg_casts}
     result = {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}({call_args_list})
 {return_expression}
 "#
@@ -54,10 +56,26 @@ fn return_expression(function: &FunctionWrapper) -> (String, String, String) {
 }
 
 fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
-    function.args_wrappers.iter().fold(
+    function.args.iter().fold(
         (vec![], vec![]),
         |(mut casts, mut call_list), arg_wrapper| {
             match &arg_wrapper.wrapper_type {
+                WrapperType::Trait(trait_name) => {
+                    casts.push(format!(
+                        r#"if not isinstance(obj, {trait_name}):
+    raise TypeError(f"Object {{type(obj)}} does not implement {trait_name} protocol")
+data_ptr = ctypes.c_void_p(id(obj))
+ctypes.pythonapi.Py_IncRef(data_ptr)
+bridge = {trait_name}Bridge (
+    obj=data_ptr,
+    vtable=ctypes.pointer(global{trait_name}VTable),
+    deleter=global{trait_name}Deleter
+)
+"#
+                    ));
+                    call_list.push("bridge".to_string());
+                }
+
                 WrapperType::IntegerNumber(_)
                 | WrapperType::Bool
                 | WrapperType::FloatingPointNumber(_) => {
@@ -121,7 +139,7 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
 }
 
 fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
-    let mut imports = function.args_wrappers.iter().fold(
+    let mut imports = function.args.iter().fold(
         HashMap::new(),
         |mut acc: HashMap<String, String>, arg_wrapper| {
             let type_name = arg_wrapper.arg_type.to_token_stream().to_string();
@@ -159,6 +177,13 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                     acc.insert(
                         format!("{inner_type_name}Option"),
                         format!("from .option_{inner_type_name} import {inner_type_name}Option"),
+                    );
+                }
+                WrapperType::Trait(trait_name) => {
+                    acc.insert("Type".to_string(), "from typing import Type".to_string());
+                    acc.insert(
+                        trait_name.to_string(),
+                        format!("from .{trait_name} import {trait_name}Bridge, global{trait_name}VTable, global{trait_name}Deleter, RustTrait"),
                     );
                 }
                 _ => {}
@@ -206,7 +231,7 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
 
 fn received_args(function: &FunctionWrapper) -> String {
     function
-        .args_wrappers
+        .args
         .iter()
         .map(arg_receiver)
         .collect::<Vec<String>>()
@@ -215,6 +240,12 @@ fn received_args(function: &FunctionWrapper) -> String {
 
 fn arg_receiver(arg_wrapper: &crate::wrapper::FunctionArgWrapper) -> String {
     match &arg_wrapper.wrapper_type {
+        WrapperType::Trait(trait_name) => {
+            format!(
+                "{arg_name}: Type[{trait_name}]",
+                arg_name = arg_wrapper.arg_name
+            )
+        }
         WrapperType::Vec(inner) => {
             format!(
                 "{}: List[{}]",

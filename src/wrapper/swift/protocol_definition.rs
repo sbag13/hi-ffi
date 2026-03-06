@@ -1,16 +1,13 @@
-use crate::wrapper::{FunctionReturnWrapper, base::RUST_STRING_FROM_C_PTR_FN_NAME};
+use crate::wrapper::base::RUST_STRING_FROM_C_PTR_FN_NAME;
+use crate::wrapper::{FunctionReturnWrapper, FunctionWrapper};
 use std::fmt::Display;
 
-use crate::{
-    prepend_each_line_with_n_tabs,
-    wrapper::{
-        FunctionWrapper, WrapperType,
-        swift::function_definition::{
-            MappedSwiftFunctionArgsTokens, ReturnTypes, map_args, map_return_type,
-        },
-        trait_wrapper::TraitWrapper,
-    },
+use crate::prepend_each_line_with_n_tabs;
+use crate::wrapper::WrapperType;
+use crate::wrapper::swift::function_definition::{
+    MappedSwiftFunctionArgsTokens, ReturnTypes, map_args, map_return_type,
 };
+use crate::wrapper::trait_wrapper::TraitWrapper;
 
 pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
     let mut vtable_functions = trait_wrapper
@@ -20,14 +17,14 @@ pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
             let ext_method_name = &method.extern_function_name;
 
             let wrapper_args = method
-                .args_wrappers
+                .args
                 .iter()
                 .map(|arg| {
                     let ty = match &arg.wrapper_type {
                         WrapperType::IntegerNumber(_)
                         | WrapperType::FloatingPointNumber(_)
                         | WrapperType::Bool => arg.wrapper_type.name(),
-                        WrapperType::Enum(_) => format!("i32"),
+                        WrapperType::Enum(_) => "i32".to_string(),
                         _ => "void*".to_string(),
                     };
                     let arg_name = &arg.arg_name;
@@ -40,7 +37,7 @@ pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
                     WrapperType::IntegerNumber(ty) | WrapperType::FloatingPointNumber(ty) => {
                         ty.to_string()
                     }
-                    WrapperType::Enum(_) => format!("i32"),
+                    WrapperType::Enum(_) => "i32".to_string(),
                     WrapperType::Bool => "bool".to_string(),
                     WrapperType::String
                     | WrapperType::Struct(_)
@@ -131,7 +128,7 @@ fn gen_method_signature(function_wrapper: &FunctionWrapper) -> String {
 
     let MappedSwiftFunctionArgsTokens {
         args_signatures, ..
-    } = map_args(function_wrapper.args_wrappers.iter());
+    } = map_args(function_wrapper.args.iter());
 
     let ReturnTypes {
         return_type_sig, ..
@@ -143,7 +140,7 @@ fn gen_method_signature(function_wrapper: &FunctionWrapper) -> String {
 
 fn vtable_function_args(function_wrapper: &FunctionWrapper) -> String {
     function_wrapper
-        .args_wrappers
+        .args
         .iter()
         .map(|arg_wrapper| {
             let arg_name = &arg_wrapper.arg_name;
@@ -199,7 +196,7 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
 
     let (mut args_casts, mut args_names): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
     function_wrapper
-        .args_wrappers
+        .args
         .iter()
         .for_each(|arg_wrapper| match &arg_wrapper.wrapper_type {
             WrapperType::IntegerNumber(_)

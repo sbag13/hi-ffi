@@ -100,7 +100,7 @@ let bridge = {trait_name}Bridge(
     deleter: swift_{trait_name}_deleter
 )
 "#));
-                args_names.push(format!("bridge"));
+                args_names.push("bridge".to_string());
             },
 
             FunctionArgWrapper {
@@ -268,7 +268,7 @@ public {static_keyword}func {fn_name}({args_signatures}){return_type} {{
 }
 
 pub fn gen_function_definition(function: &FunctionWrapper) -> String {
-    let mapped_args = map_args(function.args_wrappers.iter());
+    let mapped_args = map_args(function.args.iter());
     let return_types = map_return_type(&function.return_wrapper);
 
     compose_function_definition(

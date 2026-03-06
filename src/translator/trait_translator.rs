@@ -3,8 +3,7 @@ use std::collections::HashSet;
 use syn::ItemTrait;
 
 use crate::Wrapper;
-use crate::translator::NoWrapperErr;
-use crate::translator::function_translator::fn_wrapper_from_sig;
+use crate::translator::{NoWrapperErr, fn_wrapper_from_sig, map_wrapper_to_reusable};
 use crate::wrapper::ParsedWrapper;
 use crate::wrapper::trait_wrapper::TraitWrapper;
 
@@ -24,11 +23,17 @@ pub fn translate_trait(item_trait: ItemTrait) -> Result<Wrapper, NoWrapperErr> {
         .filter_map(|item| {
             if let syn::TraitItem::Fn(fn_item) = item {
                 let fn_wrapper = match fn_wrapper_from_sig(&fn_item.sig) {
-                    Err(err) => return Some(Err(err)),
-                    Ok(wrapper) => wrapper,
+                    Ok(fn_wrapper) => fn_wrapper,
+                    e => return Some(e),
                 };
 
-                reusable_wrappers.extend(fn_wrapper.reusable_wrappers());
+                for arg in &fn_wrapper.args {
+                    reusable_wrappers.extend(map_wrapper_to_reusable(&arg.wrapper_type));
+                }
+
+                if let Some(return_wrapper) = &fn_wrapper.return_wrapper {
+                    reusable_wrappers.extend(map_wrapper_to_reusable(&return_wrapper.wrapper_type));
+                }
 
                 Some(Ok(fn_wrapper))
             } else {

@@ -12,7 +12,7 @@ use crate::wrapper::{is_enum_type, is_struct_type, rust_type};
 pub struct FunctionWrapper {
     pub(crate) name: syn::Ident,
     pub(crate) extern_function_name: String,
-    pub(crate) args_wrappers: Vec<FunctionArgWrapper>,
+    pub(crate) args: Vec<FunctionArgWrapper>,
     pub(crate) return_wrapper: Option<FunctionReturnWrapper>,
 }
 
@@ -120,7 +120,7 @@ impl From<&FunctionWrapper> for TokenStream2 {
             arg_signatures,
             arg_names,
             arg_casts,
-        } = map_function_arg_wrappers(function_wrapper.args_wrappers.iter());
+        } = map_function_arg_wrappers(function_wrapper.args.iter());
 
         let MappedReturnType {
             return_type_sig,

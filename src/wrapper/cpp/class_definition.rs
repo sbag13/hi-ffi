@@ -26,8 +26,7 @@ pub fn gen_trait_vtable(trait_wrapper: &TraitWrapper) -> String {
         .map(|method| {
             let ext_method_name = &method.extern_function_name;
 
-            let MappedCppFunctionArgsTokens { wrapper_args, .. } =
-                map_args(method.args_wrappers.iter());
+            let MappedCppFunctionArgsTokens { wrapper_args, .. } = map_args(method.args.iter());
             let wrapper_args = if wrapper_args.is_empty() {
                 wrapper_args
             } else {
@@ -61,7 +60,7 @@ pub fn gen_interface_class(trait_wrapper: &TraitWrapper) -> ClassHeaderParts {
                 wrapper_args,
                 includes: arg_includes,
                 ..
-            } = map_args(method.args_wrappers.iter());
+            } = map_args(method.args.iter());
 
             let return_type = trait_bridge_fn_ret_type(&method.return_wrapper);
             let cpp_return_type = map_return_type(&method.return_wrapper).return_type;
@@ -163,7 +162,7 @@ pub fn gen_trait_methods_definitions(trait_wrapper: &TraitWrapper) -> ClassSourc
                 wrapper_args,
                 from_rust_casts,
                 ..
-            } = map_args(method.args_wrappers.iter());
+            } = map_args(method.args.iter());
 
             let wrapper_args = if wrapper_args.is_empty() {
                 wrapper_args
