@@ -692,6 +692,8 @@ func assert_traits() {
     let obj = SwiftTraitImpl()
     function_taking_trait_object(obj)
 
+    // make sure that obj is still usable after passing to Rust
+    assert(obj.trait_fn_return_int() == 12345)
 }
 
 func run() {

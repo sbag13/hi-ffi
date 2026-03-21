@@ -85,6 +85,13 @@ pub fn return_wrapper(
                                     wrapper_type: option_wrapper_type,
                                     return_type: ty.deref().clone(),
                                 }))
+                            } else if let Some(trait_wrapper_type) =
+                                segment_as_boxed_trait(segment)?
+                            {
+                                Ok(Some(FunctionReturnWrapper {
+                                    wrapper_type: trait_wrapper_type,
+                                    return_type: ty.deref().clone(),
+                                }))
                             } else {
                                 panic!("Unsupported return type: {:?}", segment.ident);
                             }
@@ -96,6 +103,20 @@ pub fn return_wrapper(
                 panic!("No path found in return type")
             }
         }
+    }
+}
+
+fn segment_as_boxed_trait(segment: &PathSegment) -> Result<Option<WrapperType>, NoWrapperErr> {
+    match segment.ident.to_string().as_str() {
+        "Box" => {
+            let inner_wrapper_type: WrapperType =
+                parse_generic_single_inner_type_from_segment(segment)?;
+            match inner_wrapper_type {
+                wt @ WrapperType::Trait(_) => Ok(Some(wt)),
+                _ => panic!("Returned Box inner type must be a trait"),
+            }
+        }
+        _ => Ok(None),
     }
 }
 

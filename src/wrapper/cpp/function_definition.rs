@@ -136,16 +136,18 @@ auto casted_{arg_name} = tmp_casted_{arg_name}.raw_ptr();"));
             arg_name,
             ..
         } => {
-            cpp_args.push(format!("std::unique_ptr<{trait_name}>&& {arg_name}"));
+            cpp_args.push(format!("std::shared_ptr<{trait_name}>&& {arg_name}"));
             includes.insert(format!("#include \"{trait_name}.h\""));
 
             let uppercase_trait_name = trait_name.to_string().to_uppercase();
             let vtable_instance_name = format!("{}_VTABLE_INST", uppercase_trait_name);
             arg_casts.push(format!("{trait_name}Bridge bridge;
-bridge.obj = {arg_name}.release();
+std::shared_ptr<{trait_name}>* heap_{arg_name}_ptr = new std::shared_ptr<{trait_name}>({arg_name});
+bridge.obj = heap_{arg_name}_ptr;
 bridge.vtable = &{vtable_instance_name};
 bridge.deleter = [](void* obj) {{
-    delete static_cast<{trait_name}*>(obj);
+    auto* to_clean = static_cast<std::shared_ptr<{trait_name}>*>(obj);
+    delete to_clean;
 }};
 "));
             call_args.push("bridge".to_string());

@@ -104,9 +104,15 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
         },
 
         Some(FunctionReturnWrapper {
-            wrapper_type: WrapperType::Trait(_),
+            wrapper_type: WrapperType::Trait(trait_name),
             ..
-        }) => panic!("Trait return types are not supported"),
+        }) => {
+            let trait_name = format_ident!("{trait_name}");
+            MappedReturnType {
+                return_type_sig: quote! {-> *mut Box<dyn #trait_name>},
+                result_cast: quote! {Box::into_raw(Box::new(result))},
+            }
+        }
     }
 }
 
@@ -220,10 +226,11 @@ pub fn map_function_arg_wrappers<'a>(
             wrapper_type: WrapperType::Option(_),
         } => {
             arg_signatures.push(quote! {#arg_name: *mut #arg_type});
-            arg_names.push(quote! {new_opt});
+            let new_opt_ident = format_ident!("new_opt_{arg_name}");
+            arg_names.push(quote! {#new_opt_ident});
             arg_casts.push(quote! {
-                let mut new_opt = None;
-                std::mem::swap(&mut new_opt, unsafe { &mut(*#arg_name)} );
+                let mut #new_opt_ident = None;
+                std::mem::swap(&mut #new_opt_ident, unsafe { &mut(*#arg_name)} );
             });
         }
 

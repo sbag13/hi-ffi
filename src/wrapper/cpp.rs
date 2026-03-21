@@ -689,9 +689,20 @@ return rust_result.is_err() ? throw RustException(rust_result.unwrap_err()) : ru
         },
 
         Some(FunctionReturnWrapper {
-            wrapper_type: WrapperType::Trait(_),
+            wrapper_type: WrapperType::Trait(trait_name),
             ..
-        }) => panic!("Trait objects in cpp function return type not supported"),
+        }) => ReturnTypes {
+            ext_return_type: "void*".to_string(),
+            return_type: format!("std::shared_ptr<{trait_name}>"),
+            return_cast: format!(
+                r#"
+return std::make_shared<{trait_name}RustImpl>({trait_name}RustImpl(result));"#
+            ),
+            return_type_includes: HashSet::from([
+                format!("#include \"{trait_name}.h\""),
+                "#include <memory>".to_string(),
+            ]),
+        },
     }
 }
 

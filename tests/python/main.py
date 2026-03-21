@@ -628,6 +628,9 @@ def trait_tests():
     impl = PythonTraitImpl()
     function_taking_trait_object(impl)
 
+    # make sure that impl is still usable after passing to Rust
+    assert impl.trait_fn_return_int() == 12345
+
     import gc
 
     gc.collect()

@@ -54,6 +54,7 @@
 #include "StructWithOptions.h"
 #include "RustTrait.h"
 #include "function_taking_trait_object.h"
+#include "function_returning_trait_object.h"
 #include <iostream>
 #include <cassert>
 #include <cstring>
@@ -736,5 +737,68 @@ public:
 void assert_traits()
 {
     std::cout << "assert_traits" << std::endl;
-    function_taking_trait_object(std::make_unique<MyStructWithTrait>());
+
+    auto cpp_trait_obj = std::make_shared<MyStructWithTrait>();
+    function_taking_trait_object(cpp_trait_obj);
+    assert(cpp_trait_obj->trait_fn_return_int() == 12345); // cpp handle can still be used
+
+    auto rust_trait_obj = function_returning_trait_object();
+    rust_trait_obj->trait_simple_fn();
+    rust_trait_obj->trait_fn_with_simple_args(42, 4.2, TestStatus::Pending, true);
+    rust_trait_obj->trait_fn_with_string_arg("Hello from trait object");
+    auto ts = TestStruct();
+    ts.set_i32_field(123);
+    rust_trait_obj->trait_fn_with_struct_arg(ts);
+
+    std::vector<i32> vi32 = {1, 2, 3, 4, 5};
+    rust_trait_obj->trait_fn_with_vec_of_primitives(vi32);
+    std::vector<bool> vb = {true, false, true};
+    rust_trait_obj->trait_fn_with_vec_of_bools(vb);
+    std::vector<std::string> vs = {"Hello", "Trait", "Object"};
+    rust_trait_obj->trait_fn_with_vec_of_strings(vs);
+    std::vector<TestStatus> ve = {TestStatus::Active, TestStatus::Inactive};
+    rust_trait_obj->trait_fn_with_vec_of_enums(ve);
+    auto ts2_1 = TestStruct2();
+    auto ts2_2 = TestStruct2();
+    ts2_1.set_i32_field(321);
+    ts2_2.set_i32_field(654);
+    std::vector<TestStruct2> vts2 = {ts2_1, ts2_2};
+    rust_trait_obj->trait_fn_with_vec_of_structs(vts2);
+
+    std::optional<i64> opt_int = std::optional<i64>(42);
+    std::optional<std::string> opt_string = std::optional<std::string>("Hello from trait object");
+    std::optional<bool> opt_bool = std::optional<bool>(false);
+    std::optional<TestStatus> opt_enum = std::optional<TestStatus>(TestStatus::Pending);
+    auto ts2_3 = TestStruct2();
+    ts2_3.set_i32_field(789);
+    std::optional<TestStruct2> opt_struct = std::optional<TestStruct2>(ts2_3);
+    rust_trait_obj->trait_fn_with_options(opt_int, opt_string, opt_bool, opt_enum, opt_struct);
+
+    assert(rust_trait_obj->trait_fn_return_int() == 12345);
+    assert(rust_trait_obj->trait_fn_return_string() == "String from trait object");
+    assert(rust_trait_obj->trait_fn_return_bool() == true);
+    assert(rust_trait_obj->trait_fn_return_enum() == TestStatus::Inactive);
+    assert(rust_trait_obj->trait_fn_return_struct().get_i32_field() == 987);
+
+    assert(rust_trait_obj->trait_fn_return_vec_of_primitives() == std::vector<i32>({10, 20, 30}));
+    assert(rust_trait_obj->trait_fn_return_vec_of_bools() == std::vector<bool>({true, false, true, true}));
+    assert(rust_trait_obj->trait_fn_return_vec_of_strings() == std::vector<std::string>({"Hello", "from", "trait", "object"}));
+    assert(rust_trait_obj->trait_fn_return_vec_of_enums() == std::vector<TestStatus>({TestStatus::Active, TestStatus::Inactive, TestStatus::Pending}));
+    auto vec_of_ts2 = rust_trait_obj->trait_fn_return_vec_of_structs();
+    assert(vec_of_ts2.size() == 2);
+    assert(vec_of_ts2[0].get_i32_field() == 111);
+    assert(vec_of_ts2[1].get_i32_field() == 222);
+
+    auto opt_int2 = rust_trait_obj->trait_fn_returning_option_int(true);
+    auto opt_string2 = rust_trait_obj->trait_fn_returning_option_string(true);
+    auto opt_bool2 = rust_trait_obj->trait_fn_returning_option_bool(true);
+    auto opt_enum2 = rust_trait_obj->trait_fn_returning_option_enum(true);
+    auto opt_struct2 = rust_trait_obj->trait_fn_returning_option_struct(true);
+    assert(opt_int2.value() == 555);
+    assert(opt_string2.value() == "Some string");
+    assert(opt_bool2.value() == false);
+    assert(opt_enum2.value() == TestStatus::Pending);
+    assert(opt_struct2.value().get_i32_field() == 789);
+
+    function_taking_trait_object(std::move(rust_trait_obj));
 }

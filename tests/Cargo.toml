@@ -7,5 +7,6 @@ version = "0.1.0"
 crate-type = ["cdylib", "lib", "staticlib"]
 
 [dependencies]
-hi-ffi = { path = "../", features = ["cpp", "swift", "python"] }
+hi-ffi = { path = "../", features = ["cpp"] }
+# hi-ffi = { path = "../", features = ["cpp", "swift", "python"] }
 serde = { version = "1.0", features = ["derive"] }

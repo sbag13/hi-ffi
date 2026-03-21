@@ -52,44 +52,50 @@ pub fn gen_trait_vtable(trait_wrapper: &TraitWrapper) -> String {
 pub fn gen_interface_class(trait_wrapper: &TraitWrapper) -> ClassHeaderParts {
     let class_name = &trait_wrapper.name;
 
-    let (method_declarations, includes, extern_fns_decl) = trait_wrapper.functions.iter().fold(
-        (String::new(), HashSet::new(), String::new()),
-        |(mut methods, mut includes, mut extern_fns_decl), method| {
-            let MappedCppFunctionArgsTokens {
-                cpp_args,
-                wrapper_args,
-                includes: arg_includes,
-                ..
-            } = map_args(method.args.iter());
+    let (abstract_method_declarations, mut includes, extern_fns_decl, overridden_methods) =
+        trait_wrapper.functions.iter().fold(
+            (String::new(), HashSet::new(), String::new(), String::new()),
+            |(mut methods, mut includes, mut extern_fns_decl, mut overridden_methods), method| {
+                let MappedCppFunctionArgsTokens {
+                    cpp_args,
+                    wrapper_args,
+                    includes: arg_includes,
+                    ..
+                } = map_args(method.args.iter());
 
-            let return_type = trait_bridge_fn_ret_type(&method.return_wrapper);
-            let cpp_return_type = map_return_type(&method.return_wrapper).return_type;
+                let return_type = trait_bridge_fn_ret_type(&method.return_wrapper);
+                let cpp_return_type = map_return_type(&method.return_wrapper).return_type;
 
-            let ext_method_name = &method.extern_function_name;
-            let method_name = &method.name;
+                let ext_method_name = &method.extern_function_name;
+                let method_name = &method.name;
 
-            let method_declaration = format!(
-                r#"    virtual {cpp_return_type} {method_name}({cpp_args}) = 0;
+                let abstract_method_declaration = format!(
+                    r#"    virtual {cpp_return_type} {method_name}({cpp_args}) = 0;
 "#,
-            );
-
-            let wrapper_args = if wrapper_args.is_empty() {
-                wrapper_args
-            } else {
-                format!(", {wrapper_args}")
-            };
-            let extern_fn_decl = format!(
-                r#"    {return_type} {ext_method_name}(void* self{wrapper_args});
+                );
+                let method_declaration = format!(
+                    r#"    virtual {cpp_return_type} {method_name}({cpp_args}) override;
 "#,
-            );
+                );
 
-            methods.push_str(&method_declaration);
-            includes.extend(arg_includes);
-            extern_fns_decl.push_str(&extern_fn_decl);
+                let wrapper_args = if wrapper_args.is_empty() {
+                    wrapper_args
+                } else {
+                    format!(", {wrapper_args}")
+                };
+                let extern_fn_decl = format!(
+                    r#"    {return_type} {ext_method_name}(void* self{wrapper_args});
+"#,
+                );
 
-            (methods, includes, extern_fns_decl)
-        },
-    );
+                methods.push_str(&abstract_method_declaration);
+                includes.extend(arg_includes);
+                extern_fns_decl.push_str(&extern_fn_decl);
+                overridden_methods.push_str(&method_declaration);
+
+                (methods, includes, extern_fns_decl, overridden_methods)
+            },
+        );
 
     let vtable = prepend_each_line_with_n_tabs(gen_trait_vtable(trait_wrapper).as_str(), 1);
     let class_name_uppercase = class_name.to_string().to_uppercase();
@@ -103,7 +109,34 @@ pub fn gen_interface_class(trait_wrapper: &TraitWrapper) -> ClassHeaderParts {
         .collect::<String>();
     vtable_fields.pop(); // remove last comma and newline
 
-    // TODO
+    let rust_impl_class_name = format!("{class_name}RustImpl");
+    let impl_pointer_constructor = pointer_constructor_declaration(rust_impl_class_name.as_str());
+    let impl_destructor_decl = format!("    virtual ~{rust_impl_class_name}();\n");
+    let impl_move_constructor = move_constructor_declaration(rust_impl_class_name.as_str());
+
+    let mut box_dyn_ext_functions =
+        trait_wrapper
+            .functions
+            .iter()
+            .fold(String::new(), |mut acc, method| {
+                let MappedCppFunctionArgsTokens { wrapper_args, .. } = map_args(method.args.iter());
+
+                let extern_fn = method_extern_fn(
+                    format!("{}_BoxDyn", method.extern_function_name),
+                    false,
+                    &wrapper_args,
+                    &map_return_type(&method.return_wrapper).ext_return_type,
+                );
+                acc.push_str(&extern_fn);
+                acc
+            });
+
+    includes.insert("#include <memory>\n".to_string());
+
+    let box_dyn_destructor_ext_fn =
+        format!("\n    void {EXPORTED_SYMBOLS_PREFIX}{class_name}_BoxDyn_drop(void* self);");
+    box_dyn_ext_functions.push_str(&box_dyn_destructor_ext_fn);
+
     ClassHeaderParts {
         class_definition: format!(
             r#"
@@ -137,21 +170,38 @@ extern "C" {{
     }};
 }}
 
+extern "C" {{{box_dyn_ext_functions}
+}}
+
+class {rust_impl_class_name} : public {class_name} {{
+    void* self = nullptr;
+public:
+
+    void* self_ptr() const;
+    void* leak();
+
+{impl_pointer_constructor}
+{impl_move_constructor}
+{impl_destructor_decl}
+{overridden_methods}
+}};
+
 #endif
 "#
         ),
         includes,
         extern_fns: extern_fns_decl,
-        method_declarations,
+        method_declarations: abstract_method_declarations,
     }
 }
 
 pub fn gen_trait_methods_definitions(trait_wrapper: &TraitWrapper) -> ClassSourceParts {
     let class_name = &trait_wrapper.name;
+    let rust_impl_class_name = format!("{}RustImpl", &trait_wrapper.name);
 
-    let extern_fns_decl = trait_wrapper.functions.iter().fold(
+    let mut methods_definitions = trait_wrapper.functions.iter().fold(
         String::new(),
-        |mut extern_fns_decl, method| {
+        |mut methods_definitions, method| {
             let return_type = trait_bridge_fn_ret_type(&method.return_wrapper);
 
             let method_name = &method.name;
@@ -172,18 +222,19 @@ pub fn gen_trait_methods_definitions(trait_wrapper: &TraitWrapper) -> ClassSourc
 
             let from_rust_casts = prepend_each_line_with_n_tabs(&from_rust_casts, 1);
 
+            // TODO refactor
             let get_and_return_result = match &method.return_wrapper {
                 Some(rt) => {
                     match &rt.wrapper_type {
                         WrapperType::Vec(inner) => {
                             let inner_name = inner.name();
-                            format!("auto cpp_vec = static_cast<{class_name}*>(self)->{method_name}({call_args});
+                            format!("auto cpp_vec = (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args});
 auto rust_vec = Rust{inner_name}Vec::from_std(cpp_vec);
 return rust_vec.leak();")
                         }
 
                         WrapperType::String => {
-                            format!("std::string cpp_string = static_cast<{class_name}*>(self)->{method_name}({call_args});
+                            format!("std::string cpp_string = (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args});
 auto rust_string_ptr = {RUST_STRING_FROM_C_PTR_FN_NAME}(cpp_string.data());
 return rust_string_ptr;"
                 )
@@ -191,24 +242,24 @@ return rust_string_ptr;"
 
                         WrapperType::Option(inner) => {
                             let inner_name = inner.name();
-                            format!("auto cpp_option = static_cast<{class_name}*>(self)->{method_name}({call_args});
+                            format!("auto cpp_option = (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args});
 auto rust_option = Rust{inner_name}Option::from_std(cpp_option);
 return rust_option.leak();")
                         }
 
                         WrapperType::Struct(_) => {
-                            format!("return static_cast<{class_name}*>(self)->{method_name}({call_args}).leak();")
+                            format!("return (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args}).leak();")
                         },
 
                         _ => {
-                            format!("return static_cast<{class_name}*>(self)->{method_name}({call_args});")
+                            format!("return (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args});")
                         }
                     }
                 }
 
 
                 _ => {
-                    format!("return static_cast<{class_name}*>(self)->{method_name}({call_args});")
+                    format!("return (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args});")
                 }
             };
             let get_and_return_result = prepend_each_line_with_n_tabs(&get_and_return_result, 1);
@@ -221,15 +272,39 @@ return rust_option.leak();")
 "#,
             );
 
-            extern_fns_decl.push_str(&extern_fn_decl);
+            let extern_fn = format!("{}_BoxDyn", &method.extern_function_name);
+            let MappedCppFunctionArgsTokens {
+                cpp_args,
+                call_args,
+                arg_casts,
+                ..
+            } = map_args(method.args.iter());
+            let return_types = map_return_type(&method.return_wrapper);
+            let rust_impl_method = method_definition(&method.name, extern_fn, false, &cpp_args, &call_args, &arg_casts, &return_types, &rust_impl_class_name);
 
-            extern_fns_decl
+            methods_definitions.push_str(&format!("{extern_fn_decl}
+{rust_impl_method}
+"));
+
+            methods_definitions
         },
     );
 
+    let rust_impl_constructor = pointer_constructor_definition(&rust_impl_class_name);
+    let rust_impl_destructor = destructor(
+        &rust_impl_class_name,
+        format!("{EXPORTED_SYMBOLS_PREFIX}{}_BoxDyn_drop", &class_name),
+    );
+    let rust_impl_move_constructor = move_constructor_definition(&rust_impl_class_name);
+    methods_definitions.extend([
+        rust_impl_constructor.as_str(),
+        rust_impl_destructor.definition.as_str(),
+        rust_impl_move_constructor.as_str(),
+    ]);
+
     ClassSourceParts {
         base: format!(r#"#include "{class_name}.h""#),
-        methods_definitions: extern_fns_decl,
+        methods_definitions,
     }
 }
 
@@ -436,12 +511,12 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
 
     let pointer_constructor_definition = pointer_constructor_definition(class_name);
     let copy_constructor = copy_constructor_definition(struct_wrapper);
-    let move_constructor = move_constructor_definition(struct_wrapper);
+    let move_constructor = move_constructor_definition(&struct_wrapper.name);
 
     let default_constructor = default_constructor(struct_wrapper);
     let default_constructor_definition = default_constructor.definition;
 
-    let destructor = destructor(struct_wrapper);
+    let destructor = destructor(&struct_wrapper.name, &struct_wrapper.drop_ext_fn_name);
     let destructor_definition = destructor.definition;
 
     let method_definitions = struct_wrapper
@@ -533,13 +608,13 @@ pub fn gen_class_definition_parts_from_struct(struct_wrapper: &StructWrapper) ->
     let default_constructor_declaration = default_constructor.declaration;
     let default_constructor_extern_fn = default_constructor.extern_fn;
 
-    let destructor = destructor(struct_wrapper);
+    let destructor = destructor(&struct_wrapper.name, &struct_wrapper.drop_ext_fn_name);
     let destructor_declaration = destructor.declaration;
     let destructor_extern_fn = destructor.extern_fn;
 
     let pointer_constructor_declaration = pointer_constructor_declaration(class_name);
     let copy_constructor = copy_constructor_declaration(struct_wrapper);
-    let move_constructor = move_constructor_declaration(struct_wrapper);
+    let move_constructor = move_constructor_declaration(&struct_wrapper.name);
     let clone_extern_fn = clone_ext_fn(struct_wrapper);
 
     ClassHeaderParts {
@@ -615,8 +690,7 @@ fn copy_constructor_declaration(struct_wrapper: &StructWrapper) -> String {
     format!(r#"    {class_name}(const {class_name}& other);"#,)
 }
 
-fn move_constructor_definition(struct_wrapper: &StructWrapper) -> String {
-    let class_name = &struct_wrapper.name;
+fn move_constructor_definition(class_name: impl Display) -> String {
     format!(
         r#"
 {class_name}::{class_name}({class_name}&& other) {{
@@ -625,8 +699,7 @@ fn move_constructor_definition(struct_wrapper: &StructWrapper) -> String {
 }}"#,
     )
 }
-fn move_constructor_declaration(struct_wrapper: &StructWrapper) -> String {
-    let class_name = &struct_wrapper.name;
+fn move_constructor_declaration(class_name: impl Display) -> String {
     format!(
         r#"
     {class_name}({class_name}&& other);"#,
@@ -1023,10 +1096,7 @@ fn default_constructor(struct_wrapper: &StructWrapper) -> Method {
     }
 }
 
-fn destructor(struct_wrapper: &StructWrapper) -> Method {
-    let class_name = &struct_wrapper.name;
-    let drop_ext_fn_name = &struct_wrapper.drop_ext_fn_name;
-
+fn destructor(class_name: impl Display, drop_ext_fn_name: impl Display) -> Method {
     let definition = format!(
         r#"
 {class_name}::~{class_name}() {{

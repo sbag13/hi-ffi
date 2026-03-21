@@ -881,3 +881,142 @@ pub fn function_taking_trait_object(obj: Box<dyn RustTrait>) {
     );
     assert_eq!(obj.trait_fn_returning_option_struct(false), None);
 }
+
+#[ffi]
+pub fn function_returning_trait_object() -> Box<dyn RustTrait> {
+    Box::new(TestTraitObject)
+}
+
+struct TestTraitObject;
+
+impl RustTrait for TestTraitObject {
+    fn trait_simple_fn(&self) {}
+    fn trait_fn_with_simple_args(&self, i: i32, f: f64, e: TestStatus, b: bool) {
+        assert_eq!(i, 42);
+        assert_eq!(f, 4.20);
+        assert_eq!(e, TestStatus::Pending);
+        assert!(b);
+    }
+    fn trait_fn_with_string_arg(&self, s: String) {
+        assert_eq!(s, "Hello from trait object");
+    }
+    fn trait_fn_with_struct_arg(&self, s: TestStruct) {
+        assert_eq!(s.i32_field, 123);
+    }
+
+    fn trait_fn_with_vec_of_primitives(&self, vec: Vec<i32>) {
+        assert_eq!(vec![1, 2, 3, 4, 5], vec);
+    }
+    fn trait_fn_with_vec_of_bools(&self, vec: Vec<bool>) {
+        assert_eq!(vec![true, false, true], vec);
+    }
+    fn trait_fn_with_vec_of_enums(&self, vec: Vec<TestStatus>) {
+        assert_eq!(vec![TestStatus::Active, TestStatus::Inactive], vec);
+    }
+    fn trait_fn_with_vec_of_strings(&self, vec: Vec<String>) {
+        assert_eq!(
+            vec![
+                "Hello".to_string(),
+                "Trait".to_string(),
+                "Object".to_string()
+            ],
+            vec
+        );
+    }
+    fn trait_fn_with_vec_of_structs(&self, vec: Vec<TestStruct2>) {
+        assert_eq!(
+            vec![
+                TestStruct2 { i32_field: 321 },
+                TestStruct2 { i32_field: 654 }
+            ],
+            vec
+        );
+    }
+
+    fn trait_fn_with_options(
+        &self,
+        opt_int: Option<i64>,
+        opt_string: Option<String>,
+        opt_bool: Option<bool>,
+        opt_enum: Option<TestStatus>,
+        opt_struct: Option<TestStruct2>,
+    ) {
+        assert_eq!(opt_int, Some(42i64));
+        assert_eq!(opt_string, Some("Hello from trait object".to_string()));
+        assert_eq!(opt_bool, Some(false));
+        assert_eq!(opt_enum, Some(TestStatus::Pending));
+        assert_eq!(opt_struct, Some(TestStruct2 { i32_field: 789 }));
+    }
+
+    fn trait_fn_return_int(&self) -> i32 {
+        12345
+    }
+    fn trait_fn_return_bool(&self) -> bool {
+        true
+    }
+    fn trait_fn_return_string(&self) -> String {
+        "String from trait object".to_string()
+    }
+    fn trait_fn_return_struct(&self) -> TestStruct2 {
+        TestStruct2 { i32_field: 987 }
+    }
+    fn trait_fn_return_enum(&self) -> TestStatus {
+        TestStatus::Inactive
+    }
+
+    fn trait_fn_return_vec_of_primitives(&self) -> Vec<i32> {
+        vec![10, 20, 30]
+    }
+    fn trait_fn_return_vec_of_bools(&self) -> Vec<bool> {
+        vec![true, false, true, true]
+    }
+    fn trait_fn_return_vec_of_enums(&self) -> Vec<TestStatus> {
+        vec![
+            TestStatus::Active,
+            TestStatus::Inactive,
+            TestStatus::Pending,
+        ]
+    }
+    fn trait_fn_return_vec_of_strings(&self) -> Vec<String> {
+        vec![
+            "Hello".to_string(),
+            "from".to_string(),
+            "trait".to_string(),
+            "object".to_string(),
+        ]
+    }
+    fn trait_fn_return_vec_of_structs(&self) -> Vec<TestStruct2> {
+        vec![
+            TestStruct2 { i32_field: 111 },
+            TestStruct2 { i32_field: 222 },
+        ]
+    }
+
+    fn trait_fn_returning_option_int(&self, some: bool) -> Option<i32> {
+        if some { Some(555) } else { None }
+    }
+    fn trait_fn_returning_option_bool(&self, some: bool) -> Option<bool> {
+        if some { Some(false) } else { None }
+    }
+    fn trait_fn_returning_option_string(&self, some: bool) -> Option<String> {
+        if some {
+            Some("Some string".to_string())
+        } else {
+            None
+        }
+    }
+    fn trait_fn_returning_option_enum(&self, some: bool) -> Option<TestStatus> {
+        if some {
+            Some(TestStatus::Pending)
+        } else {
+            None
+        }
+    }
+    fn trait_fn_returning_option_struct(&self, some: bool) -> Option<TestStruct2> {
+        if some {
+            Some(TestStruct2 { i32_field: 789 })
+        } else {
+            None
+        }
+    }
+}

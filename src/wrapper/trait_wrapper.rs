@@ -1,6 +1,10 @@
 use std::fmt::Debug;
 
-use crate::wrapper::{FunctionWrapper, WrapperType};
+use crate::EXPORTED_SYMBOLS_PREFIX;
+use crate::wrapper::{
+    FunctionWrapper, MappedFunctionArgsTokens, MappedReturnType, WrapperType,
+    map_function_arg_wrappers, map_return_type,
+};
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use syn::ItemTrait;
@@ -146,6 +150,45 @@ impl From<&TraitWrapper> for TokenStream2 {
             }
         });
 
+        let box_dyn_functions = functions.iter().map(|function| {
+            let ext_name = format!("{}_BoxDyn", &function.extern_function_name);
+            let fn_name = &function.name;
+            let bridge_fn_name = format_ident!("{}_bridge", &function.name);
+
+            let MappedFunctionArgsTokens {
+                arg_signatures,
+                arg_names,
+                arg_casts,
+            } = map_function_arg_wrappers(function.args.iter());
+
+            let MappedReturnType {
+                return_type_sig,
+                result_cast,
+            } = map_return_type(&function.return_wrapper);
+
+            quote! {
+                #[doc(hidden)]
+                #[unsafe(no_mangle)]
+                #[unsafe(export_name = #ext_name)]
+                pub unsafe extern "C" fn #bridge_fn_name(obj: *mut std::ffi::c_void, #(#arg_signatures,)*) #return_type_sig {
+                    #(#arg_casts)*
+                    let result = (*(obj as *mut Box<dyn #name>)).#fn_name(#(#arg_names,)*);
+                    #result_cast
+                }
+            }
+        });
+
+        let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}{name}_BoxDyn_drop");
+        let drop_wrapper_ident = format_ident!("{name}_BoxDyn_drop");
+        let box_dyn_drop = quote! {
+            #[doc(hidden)]
+            #[unsafe(no_mangle)]
+            #[unsafe(export_name = #drop_ext_name)]
+            pub unsafe extern "C" fn #drop_wrapper_ident(obj: *mut std::ffi::c_void) {
+                drop(Box::from_raw(obj as *mut Box<dyn #name>));
+            }
+        };
+
         quote! {
             #[repr(C)]
             pub struct #vtable_name {
@@ -169,6 +212,10 @@ impl From<&TraitWrapper> for TokenStream2 {
                     (self.deleter)(self.obj);
                 }
             }
+
+            #(#box_dyn_functions)*
+
+            #box_dyn_drop
         }
     }
 }
