@@ -43,17 +43,6 @@ pub struct TestStruct {
 
 #[ffi]
 impl TestStruct {
-    //     #[ffi(constructor)]
-    //     fn new() -> Self {
-    //         Self {
-    //             i32_field: 42,
-    //             bool_field: true,
-    //             string_field: "Hello from Rust".to_string(),
-    //             _skip_field: 0,
-    //             struct_field: TestStruct2::default(),
-    //         }
-    //     }
-
     pub fn public_method(&self) {
         // println!("Rust: Public method called");
     }
@@ -888,6 +877,12 @@ pub fn function_returning_trait_object() -> Box<dyn RustTrait> {
 }
 
 struct TestTraitObject;
+
+impl Drop for TestTraitObject {
+    fn drop(&mut self) {
+        // println!("Dropping TestTraitObject");
+    }
+}
 
 impl RustTrait for TestTraitObject {
     fn trait_simple_fn(&self) {}

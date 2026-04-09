@@ -59,6 +59,54 @@ pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
 
     let class_name = &trait_wrapper.name;
 
+    // Generate BoxDyn extern function declarations
+    let mut boxdyn_externs = String::new();
+    for method in &trait_wrapper.functions {
+        let boxdyn_name = format!("{}_BoxDyn", &method.extern_function_name);
+
+        let wrapper_args = method
+            .args
+            .iter()
+            .map(|arg| {
+                let ty = match &arg.wrapper_type {
+                    WrapperType::IntegerNumber(_)
+                    | WrapperType::FloatingPointNumber(_)
+                    | WrapperType::Bool => arg.wrapper_type.name(),
+                    WrapperType::Enum(_) => "i32".to_string(),
+                    _ => "void*".to_string(),
+                };
+                let arg_name = &arg.arg_name;
+                format!(", {ty} {arg_name}")
+            })
+            .collect::<String>();
+
+        let return_type = match &method.return_wrapper {
+            Some(ret) => match &ret.wrapper_type {
+                WrapperType::IntegerNumber(ty) | WrapperType::FloatingPointNumber(ty) => {
+                    ty.to_string()
+                }
+                WrapperType::Enum(_) => "i32".to_string(),
+                WrapperType::Bool => "bool".to_string(),
+                WrapperType::String
+                | WrapperType::Struct(_)
+                | WrapperType::Vec(_)
+                | WrapperType::Option(_)
+                | WrapperType::Result(_) => "void*".to_string(),
+                WrapperType::UnitExpr => "void".to_string(),
+                WrapperType::Trait(_) => {
+                    panic!("Trait return type is not supported in traits")
+                }
+            },
+            None => "void".to_string(),
+        };
+
+        boxdyn_externs.push_str(&format!(
+            "{return_type} {boxdyn_name}(void* self{wrapper_args});\n"
+        ));
+    }
+
+    let drop_fn = format!("void hiFfi__{class_name}_BoxDyn_drop(void* self);\n");
+
     format!(
         r#"struct {class_name}VTable {{
 {vtable_functions}
@@ -69,7 +117,9 @@ struct {class_name}Bridge {{
     struct {class_name}VTable* vtable;
     void (*deleter)(void*);
 }};
-"#
+
+// BoxDyn wrapper function pointers
+{boxdyn_externs}{drop_fn}"#
     )
 }
 
@@ -109,6 +159,9 @@ func swift_{trait_name}_deleter(data: UnsafeMutableRawPointer?) {{
 "#
     );
 
+    // Generate the trait impl class for BoxDyn
+    let trait_impl_class = gen_trait_box_dyn_impl_class(trait_wrapper);
+
     format!(
         r#"{vtable_functions}
 {deleter}
@@ -119,7 +172,9 @@ var global{trait_name}VTable = {trait_name}VTable (
 
 public protocol {trait_name} {{
 {functions}
-}}"#
+}}
+
+{trait_impl_class}"#
     )
 }
 
@@ -289,6 +344,153 @@ func {extern_fn_name}(obj: UnsafeMutableRawPointer?{args_signatures}){return_typ
     let obj_ptr = Unmanaged<AnyObject>.fromOpaque(obj!).takeUnretainedValue() as! {trait_name}
 {args_casts}
 {return_result}
+}}"#
+    )
+}
+
+pub(crate) fn gen_trait_box_dyn_impl_class(trait_wrapper: &TraitWrapper) -> String {
+    let trait_name = &trait_wrapper.name;
+    let mut methods = String::new();
+
+    for method in &trait_wrapper.functions {
+        let fn_name = &method.name;
+        let boxdyn_extern_name = format!("{}_BoxDyn", &method.extern_function_name);
+
+        let MappedSwiftFunctionArgsTokens {
+            args_signatures, ..
+        } = map_args(method.args.iter());
+
+        let ReturnTypes {
+            return_type_sig,
+            result_cast,
+            ..
+        } = map_return_type(&method.return_wrapper);
+
+        let return_type_sig = return_type_sig.unwrap_or_default();
+
+        // Build argument list for BoxDyn call - convert types appropriately
+        let mut call_args = vec!["self_ptr".to_string()];
+        let mut pre_call_casts = String::new();
+
+        for arg in &method.args {
+            let arg_name = &arg.arg_name;
+            match &arg.wrapper_type {
+                WrapperType::Enum(_) => {
+                    // Enums: pass raw i32 value directly
+                    call_args.push(format!("i32({arg_name}.rawValue)"));
+                }
+                WrapperType::String => {
+                    // Strings: convert to C string and pass pointer
+                    if !pre_call_casts.is_empty() {
+                        pre_call_casts.push('\n');
+                    }
+                    pre_call_casts.push_str(&format!(
+                        "        let casted_{arg_name} = {arg_name}.utf8CString.withUnsafeBufferPointer({{ ptr in return UnsafeMutableRawPointer(mutating: ptr.baseAddress!) }})"
+                    ));
+                    call_args.push(format!("casted_{arg_name}"));
+                }
+                WrapperType::Struct(_) => {
+                    // Structs: get raw pointer
+                    if !pre_call_casts.is_empty() {
+                        pre_call_casts.push('\n');
+                    }
+                    pre_call_casts.push_str(&format!(
+                        "        let casted_{arg_name} = {arg_name}.rawPtr()"
+                    ));
+                    call_args.push(format!("casted_{arg_name}"));
+                }
+                WrapperType::Vec(inner_type) => {
+                    // Vecs: convert to Rust vec wrapper
+                    if !pre_call_casts.is_empty() {
+                        pre_call_casts.push('\n');
+                    }
+                    pre_call_casts.push_str(&format!(
+                        "        let casted_{arg_name} = Rust{}Vec.fromSwift({arg_name})",
+                        inner_type.name()
+                    ));
+                    call_args.push(format!("casted_{arg_name}.rawPtr()"));
+                }
+                WrapperType::Option(inner_type) => {
+                    // Options: convert using wrapper
+                    if !pre_call_casts.is_empty() {
+                        pre_call_casts.push('\n');
+                    }
+                    pre_call_casts.push_str(&format!(
+                        "        let casted_{arg_name} = Rust{}Option.fromSwift({arg_name})",
+                        inner_type.name()
+                    ));
+                    call_args.push(format!("casted_{arg_name}.rawPtr()"));
+                }
+                WrapperType::Trait(_)
+                | WrapperType::IntegerNumber(_)
+                | WrapperType::Bool
+                | WrapperType::FloatingPointNumber(_) => {
+                    // Primitive types: pass directly
+                    call_args.push(arg_name.to_string());
+                }
+                WrapperType::Result(_) | WrapperType::UnitExpr => {
+                    panic!("Unsupported type in trait method: {:?}", arg.wrapper_type);
+                }
+            }
+        }
+
+        let args_for_call = call_args.join(", ");
+        let pre_call_str = if pre_call_casts.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n        ", pre_call_casts)
+        };
+
+        // For BoxDyn, we need to handle returns differently than regular functions
+        // since BoxDyn returns primitives or void* directly
+        let method_body = match &method.return_wrapper {
+            Some(FunctionReturnWrapper {
+                wrapper_type: WrapperType::Enum(enum_name),
+                ..
+            }) => {
+                // Enum returns from BoxDyn are already i32, no need for result_cast
+                format!(
+                    "let result = CFfiModule.{boxdyn_extern_name}({args_for_call})\n        return {enum_name}(rawValue: Int32(result))!"
+                )
+            }
+            Some(_) if result_cast.is_some() => {
+                // Other complex return types (String, Struct, Vec, etc.)
+                let cast = result_cast.unwrap();
+                format!(
+                    "let result = CFfiModule.{boxdyn_extern_name}({args_for_call})\n        {cast}\n        return casted_result"
+                )
+            }
+            Some(_) => {
+                // Primitive returns
+                format!("return CFfiModule.{boxdyn_extern_name}({args_for_call})")
+            }
+            None => {
+                // Void returns
+                format!("CFfiModule.{boxdyn_extern_name}({args_for_call})")
+            }
+        };
+
+        methods.push_str(&format!(
+            r#"
+    public func {fn_name}({args_signatures}){return_type_sig} {{
+{pre_call_str}
+        {method_body}
+    }}
+"#
+        ));
+    }
+
+    format!(
+        r#"public class {trait_name}Impl: {trait_name} {{
+    private var self_ptr: UnsafeMutableRawPointer
+
+    public init(_ ptr: UnsafeMutableRawPointer) {{
+        self_ptr = ptr
+    }}
+
+    deinit {{
+        CFfiModule.hiFfi__{trait_name}_BoxDyn_drop(self_ptr)
+    }}{methods}
 }}"#
     )
 }

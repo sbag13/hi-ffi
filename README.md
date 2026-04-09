@@ -115,107 +115,108 @@ These examples demonstrate how to use the generated bindings in real application
 
 | Feature                     | C++ | Swift | Python |
 | --------------------------- | --- | ----- | ------ |
-| Primitive getters/setters   | ✅  | ✅    | ✅     |
-| String getters/setters      | ✅  | ✅    | ✅     |
-| Struct getters/setters      | ✅  | ✅    | ✅     |
-| Vec getters/setters         | ✅  | ✅    | ✅     |
-| C-like Enum getters/setters | ❌  | ❌    | ❌     |
-| Default constructor         | ✅  | ✅    | ✅     |
-| PartialEq                   | ❌  | ❌    | ❌     |
+| Primitive getters/setters   | ✅   | ✅     | ✅      |
+| String getters/setters      | ✅   | ✅     | ✅      |
+| Struct getters/setters      | ✅   | ✅     | ✅      |
+| Vec getters/setters         | ✅   | ✅     | ✅      |
+| C-like Enum getters/setters | ❌   | ❌     | ❌      |
+| Default constructor         | ✅   | ✅     | ✅      |
+| PartialEq                   | ❌   | ❌     | ❌      |
 
 ### Methods
 
 | Feature             | C++ | Swift | Python |
 | ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅  | ✅    | ✅     |
-| String arguments    | ✅  | ✅    | ✅     |
-| Primitive return    | ✅  | ✅    | ✅     |
-| String return       | ✅  | ✅    | ✅     |
-| Struct arguments    | ✅  | ✅    | ✅     |
-| Struct return       | ✅  | ✅    | ✅     |
+| Primitive arguments | ✅   | ✅     | ✅      |
+| String arguments    | ✅   | ✅     | ✅      |
+| Primitive return    | ✅   | ✅     | ✅      |
+| String return       | ✅   | ✅     | ✅      |
+| Struct arguments    | ✅   | ✅     | ✅      |
+| Struct return       | ✅   | ✅     | ✅      |
 
 ### Static Methods
 
 | Feature             | C++ | Swift | Python |
 | ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅  | ✅    | ✅     |
-| String arguments    | ✅  | ✅    | ✅     |
-| Primitive return    | ✅  | ✅    | ✅     |
-| String return       | ✅  | ✅    | ✅     |
-| Struct arguments    | ✅  | ✅    | ✅     |
-| Struct return       | ✅  | ✅    | ✅     |
+| Primitive arguments | ✅   | ✅     | ✅      |
+| String arguments    | ✅   | ✅     | ✅      |
+| Primitive return    | ✅   | ✅     | ✅      |
+| String return       | ✅   | ✅     | ✅      |
+| Struct arguments    | ✅   | ✅     | ✅      |
+| Struct return       | ✅   | ✅     | ✅      |
 
 ### Functions
 
 | Feature             | C++ | Swift | Python |
 | ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅  | ✅    | ✅     |
-| String arguments    | ✅  | ✅    | ✅     |
-| Primitive return    | ✅  | ✅    | ✅     |
-| String return       | ✅  | ✅    | ✅     |
-| Struct arguments    | ✅  | ✅    | ✅     |
-| Struct return       | ✅  | ✅    | ✅     |
-| Vec arguments       | ✅  | ✅    | ✅     |
-| Vec return          | ✅  | ✅    | ✅     |
-| Trait obj arg       | ✅  | ✅    | ✅     |
-| `&str` return       | ❌  | ❌    | ❌     |
+| Primitive arguments | ✅   | ✅     | ✅      |
+| String arguments    | ✅   | ✅     | ✅      |
+| Primitive return    | ✅   | ✅     | ✅      |
+| String return       | ✅   | ✅     | ✅      |
+| Struct arguments    | ✅   | ✅     | ✅      |
+| Struct return       | ✅   | ✅     | ✅      |
+| Vec arguments       | ✅   | ✅     | ✅      |
+| Vec return          | ✅   | ✅     | ✅      |
+| Trait obj arg       | ✅   | ✅     | ✅      |
+| Trait obj return    | ✅   | ✅     | ❌      |
+| `&str` return       | ❌   | ❌     | ❌      |
 
 ### Vectors
 
 | Feature      | C++ | Swift | Python |
 | ------------ | --- | ----- | ------ |
-| Primitive    | ✅  | ✅    | ✅     |
-| String       | ✅  | ✅    | ✅     |
-| Struct       | ✅  | ✅    | ✅     |
-| C-like enums | ✅  | ✅    | ✅     |
-| `&str`       | ❌  | ❌    | ❌     |
-| Traits       | ❌  | ❌    | ❌     |
+| Primitive    | ✅   | ✅     | ✅      |
+| String       | ✅   | ✅     | ✅      |
+| Struct       | ✅   | ✅     | ✅      |
+| C-like enums | ✅   | ✅     | ✅      |
+| `&str`       | ❌   | ❌     | ❌      |
+| Traits       | ❌   | ❌     | ❌      |
 
 ### Enums
 
 | Feature                 | C++ | Swift | Python |
 | ----------------------- | --- | ----- | ------ |
-| C-like enums            | ✅  | ✅    | ✅     |
-| Single element variants | ❌  | ❌    | ❌     |
-| Tuple variants          | ❌  | ❌    | ❌     |
+| C-like enums            | ✅   | ✅     | ✅      |
+| Single element variants | ❌   | ❌     | ❌      |
+| Tuple variants          | ❌   | ❌     | ❌      |
 
 ### Results
 
 | Feature                  | C++ | Swift | Python |
 | ------------------------ | --- | ----- | ------ |
-| Fn primitive Result      | ✅  | ✅    | ✅     |
-| Fn struct Result         | ✅  | ✅    | ✅     |
-| Fn string Result         | ✅  | ✅    | ✅     |
-| Fn vec results           | ✅  | ✅    | ✅     |
-| Fn enum Result           | ✅  | ✅    | ✅     |
-| Methods primitive Result | ✅  | ✅    | ✅     |
-| Methods struct Result    | ✅  | ✅    | ✅     |
-| Methods string Result    | ✅  | ✅    | ✅     |
-| Methods vec results      | ✅  | ✅    | ✅     |
-| Methods enum Result      | ✅  | ✅    | ✅     |
+| Fn primitive Result      | ✅   | ✅     | ✅      |
+| Fn struct Result         | ✅   | ✅     | ✅      |
+| Fn string Result         | ✅   | ✅     | ✅      |
+| Fn vec results           | ✅   | ✅     | ✅      |
+| Fn enum Result           | ✅   | ✅     | ✅      |
+| Methods primitive Result | ✅   | ✅     | ✅      |
+| Methods struct Result    | ✅   | ✅     | ✅      |
+| Methods string Result    | ✅   | ✅     | ✅      |
+| Methods vec results      | ✅   | ✅     | ✅      |
+| Methods enum Result      | ✅   | ✅     | ✅      |
 
 ### Options
 
 | Feature         | C++ | Swift | Python |
 | --------------- | --- | ----- | ------ |
-| function args   | ✅  | ✅    | ✅     |
-| function return | ✅  | ✅    | ✅     |
-| method args     | ✅  | ✅    | ✅     |
-| method return   | ✅  | ✅    | ✅     |
-| struct fields   | ✅  | ✅    | ✅     |
+| function args   | ✅   | ✅     | ✅      |
+| function return | ✅   | ✅     | ✅      |
+| method args     | ✅   | ✅     | ✅      |
+| method return   | ✅   | ✅     | ✅      |
+| struct fields   | ✅   | ✅     | ✅      |
 
 ### Traits
 
 | Feature                    | C++ | Swift | Python |
 | -------------------------- | --- | ----- | ------ |
-| primitive types in methods | ✅  | ✅    | ✅     |
-| string types in methods    | ✅  | ✅    | ✅     |
-| enum types in methods      | ✅  | ✅    | ✅     |
-| struct types in methods    | ✅  | ✅    | ✅     |
-| vec types in methods       | ✅  | ✅    | ✅     |
-| option types in methods    | ✅  | ✅    | ✅     |
-| result types in methods    | ❌  | ❌    | ❌     |
-| trait objects in methods   | ❌  | ❌    | ❌     |
+| primitive types in methods | ✅   | ✅     | ✅      |
+| string types in methods    | ✅   | ✅     | ✅      |
+| enum types in methods      | ✅   | ✅     | ✅      |
+| struct types in methods    | ✅   | ✅     | ✅      |
+| vec types in methods       | ✅   | ✅     | ✅      |
+| option types in methods    | ✅   | ✅     | ✅      |
+| result types in methods    | ❌   | ❌     | ❌      |
+| trait objects in methods   | ❌   | ❌     | ❌      |
 
 ## Architecture
 

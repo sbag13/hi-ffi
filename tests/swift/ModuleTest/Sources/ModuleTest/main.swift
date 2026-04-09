@@ -1,5 +1,5 @@
-import Foundation
 import FfiModule
+import Foundation
 
 func assert_struct_basics() {
     let s = TestStruct()
@@ -77,7 +77,9 @@ func assert_struct_basics() {
 
     let vec_of_enums = struct_with_vectors.vec_of_enums
     assert(vec_of_enums.count == 0)
-    let new_vec_of_enums: [TestStatus] = [TestStatus.Pending, TestStatus.Active, TestStatus.Inactive]
+    let new_vec_of_enums: [TestStatus] = [
+        TestStatus.Pending, TestStatus.Active, TestStatus.Inactive,
+    ]
     struct_with_vectors.vec_of_enums = new_vec_of_enums
     let vec_of_enums_2 = struct_with_vectors.vec_of_enums
     assert(vec_of_enums_2.count == 3)
@@ -90,23 +92,31 @@ func assert_functions() {
     take_status_before_it_is_defined(TestStatus.Pending)
     let ts1 = TestStruct()
     ts1.i32_field = (-5)
-    assert(take_struct_and_return_status_before_they_are_defined(ts1) == TestStatus.Pending);
+    assert(take_struct_and_return_status_before_they_are_defined(ts1) == TestStatus.Pending)
     simple_function()
     function_with_primitive_args(100, true)
     function_with_string_arg("Hello, World!")
     function_with_primitive_and_string_arg(42, false, "Complex function!")
     assert(function_return_primitive() == 42, "function_return_primitive should return 42")
     assert(function_return_float() == 5.21, "function_return_float should return 5.21")
-    assert(function_return_string() == "String returned from Rust", "function_return_string should return correct string")
-    assert(function_return_negated_bool(true) == false, "function_return_negated_bool should return false when input is true")
+    assert(
+        function_return_string() == "String returned from Rust",
+        "function_return_string should return correct string")
+    assert(
+        function_return_negated_bool(true) == false,
+        "function_return_negated_bool should return false when input is true")
     let s = TestStruct()
-    assert(combo_function("Combo!", "Don't print me", true, s) == "Combo!", "combo_function should return correct string")
+    assert(
+        combo_function("Combo!", "Don't print me", true, s) == "Combo!",
+        "combo_function should return correct string")
     let s2 = function_returning_struct()
     assert(s2.i32_field == 48, "function_returning_struct should return struct with i32_field 48")
     s2.i32_field = 55
     function_taking_struct(s2)
     let combo_struct_result = combo_struct_function(s, TestStruct(), s2)
-    assert(combo_struct_result.i32_field == s.i32_field, "combo_struct_result i32_field should match input")
+    assert(
+        combo_struct_result.i32_field == s.i32_field,
+        "combo_struct_result i32_field should match input")
 }
 
 func assert_struct_methods() {
@@ -117,9 +127,15 @@ func assert_struct_methods() {
     let struct_from_method = s.public_method_returning_struct()
     struct_from_method.i32_field = 55
     s.public_method_taking_struct(struct_from_method)
-    assert(s.public_method_returning_primitive() == 24, "public_method_returning_primitive should return 24")
-    assert(s.public_method_returning_string() == "String returned from Rust method", "public_method_returning_string should return correct string")
-    assert(s.combo_method("Combo!", "Don't print me", true) == "Combo!", "combo_method should return correct string")
+    assert(
+        s.public_method_returning_primitive() == 24,
+        "public_method_returning_primitive should return 24")
+    assert(
+        s.public_method_returning_string() == "String returned from Rust method",
+        "public_method_returning_string should return correct string")
+    assert(
+        s.combo_method("Combo!", "Don't print me", true) == "Combo!",
+        "combo_method should return correct string")
 }
 
 func assert_struct_static_methods() {
@@ -127,13 +143,23 @@ func assert_struct_static_methods() {
     TestStruct.static_method()
     TestStruct.static_method_taking_primitives(20, true)
     TestStruct.static_method_taking_string("static method string")
-    assert(TestStruct.static_method_returning_primitive() == 22, "static_method_returning_primitive should return 22")
-    assert(TestStruct.static_method_returning_string() == "String returned from Rust static method", "static_method_returning_string should return correct string")
+    assert(
+        TestStruct.static_method_returning_primitive() == 22,
+        "static_method_returning_primitive should return 22")
+    assert(
+        TestStruct.static_method_returning_string() == "String returned from Rust static method",
+        "static_method_returning_string should return correct string")
     let static_struct = TestStruct.static_method_returning_struct()
-    assert(static_struct.i32_field == 77, "static_method_returning_struct should return struct with i32_field 77")
+    assert(
+        static_struct.i32_field == 77,
+        "static_method_returning_struct should return struct with i32_field 77")
     let static_combo_struct_result = TestStruct.static_combo_struct_method(s2, static_struct)
-    assert(static_combo_struct_result.i32_field == s2.i32_field, "static_combo_struct_result i32_field should match input")
-    assert(TestStruct.static_combo_method("Combo!", "Don't print me", true) == "Combo!", "static_combo_method should return correct string")
+    assert(
+        static_combo_struct_result.i32_field == s2.i32_field,
+        "static_combo_struct_result i32_field should match input")
+    assert(
+        TestStruct.static_combo_method("Combo!", "Don't print me", true) == "Combo!",
+        "static_combo_method should return correct string")
 }
 
 func assert_vec_functions() {
@@ -152,7 +178,7 @@ func assert_vec_functions() {
     s2.i32_field = 17
     let vec_structs: [TestStruct] = [s1, s2]
     function_taking_vec_of_structs(vec_structs)
-    
+
     let returned_vec_ints = function_returning_vec_of_int()
     assert(returned_vec_ints.count == 4)
     let expected_ints: [i32] = [3, 2, 7, 8]
@@ -174,12 +200,16 @@ func assert_vec_functions() {
     assert(returned_vec_strings == expected_strings)
 
     // Test vector of enums
-    let vec_enums: [TestStatus] = [TestStatus.Active, TestStatus.Inactive, TestStatus.Pending, TestStatus.Active]
+    let vec_enums: [TestStatus] = [
+        TestStatus.Active, TestStatus.Inactive, TestStatus.Pending, TestStatus.Active,
+    ]
     function_taking_vec_of_enums(vec_enums)
 
     let returned_vec_enums = function_returning_vec_of_enums()
     assert(returned_vec_enums.count == 4)
-    let expected_enums: [TestStatus] = [TestStatus.Pending, TestStatus.Active, TestStatus.Inactive, TestStatus.Active]
+    let expected_enums: [TestStatus] = [
+        TestStatus.Pending, TestStatus.Active, TestStatus.Inactive, TestStatus.Active,
+    ]
     assert(returned_vec_enums == expected_enums)
 }
 
@@ -219,11 +249,15 @@ func assert_vec_methods() {
     // Test instance methods returning vectors
     let returnedPrimitives = testStruct.public_method_returning_vec_of_primitives()
     let expectedPrimitives: [i32] = [10, 20, 30, 40, 50]
-    assert(returnedPrimitives == expectedPrimitives, "Instance method returning primitives should match expected")
+    assert(
+        returnedPrimitives == expectedPrimitives,
+        "Instance method returning primitives should match expected")
 
     let returnedStrings = testStruct.public_method_returning_vec_of_strings()
     let expectedStrings: [String] = ["Method", "Vector", "Return"]
-    assert(returnedStrings == expectedStrings, "Instance method returning strings should match expected")
+    assert(
+        returnedStrings == expectedStrings,
+        "Instance method returning strings should match expected")
 
     let returnedStructs = testStruct.public_method_returning_vec_of_structs()
     assert(returnedStructs.count == 2, "Instance method should return 2 structs")
@@ -233,16 +267,22 @@ func assert_vec_methods() {
     // Test static methods returning vectors
     let staticReturnedPrimitives = TestStruct.static_method_returning_vec_of_primitives()
     let staticExpectedPrimitives: [i32] = [60, 70, 80, 90, 100]
-    assert(staticReturnedPrimitives == staticExpectedPrimitives, "Static method returning primitives should match expected")
+    assert(
+        staticReturnedPrimitives == staticExpectedPrimitives,
+        "Static method returning primitives should match expected")
 
     let staticReturnedStrings = TestStruct.static_method_returning_vec_of_strings()
     let staticExpectedStrings: [String] = ["Static", "Method", "Vector"]
-    assert(staticReturnedStrings == staticExpectedStrings, "Static method returning strings should match expected")
+    assert(
+        staticReturnedStrings == staticExpectedStrings,
+        "Static method returning strings should match expected")
 
     let staticReturnedStructs = TestStruct.static_method_returning_vec_of_structs()
     assert(staticReturnedStructs.count == 2, "Static method should return 2 structs")
-    assert(staticReturnedStructs[0].i32_field == 500, "First static struct should have i32_field 500")
-    assert(staticReturnedStructs[1].i32_field == 600, "Second static struct should have i32_field 600")
+    assert(
+        staticReturnedStructs[0].i32_field == 500, "First static struct should have i32_field 500")
+    assert(
+        staticReturnedStructs[1].i32_field == 600, "Second static struct should have i32_field 600")
 }
 
 func assert_enums() {
@@ -354,7 +394,9 @@ func assert_results() {
         assert(vec_struct_ok[0].i32_field == 512)
         assert(vec_struct_ok[1].i32_field == 1024)
         let vec_enum_ok = try function_with_vec_enum_result(false)
-        let expected_vec_enum: [TestStatus] = [TestStatus.Pending, TestStatus.Active, TestStatus.Inactive]
+        let expected_vec_enum: [TestStatus] = [
+            TestStatus.Pending, TestStatus.Active, TestStatus.Inactive,
+        ]
         assert(vec_enum_ok == expected_vec_enum)
         try function_with_unit_expression_result()
     } catch {
@@ -364,7 +406,7 @@ func assert_results() {
     // methods
     let ts1 = TestStruct()
     do {
-        let _ = try ts1.method_with_int_result(true);
+        let _ = try ts1.method_with_int_result(true)
         assert(false)
     } catch let rustError as RustError {
         assert(rustError.description() == "StructError: EnumError: VariantTwo")
@@ -374,7 +416,7 @@ func assert_results() {
 
     do {
         let ok_int = try ts1.method_with_int_result(false)
-        assert(ok_int == 16);
+        assert(ok_int == 16)
         let ok_bool = try TestStruct.static_method_with_bool_result(false)
         assert(ok_bool)
         let ok_str = try ts1.method_with_string_result()
@@ -393,8 +435,8 @@ func assert_results() {
         assert(ok_vec_of_strings == ["some", "string"])
         let ok_vec_of_structs = try TestStruct.static_method_with_vec_of_structs_result()
         assert(ok_vec_of_structs.count == 2)
-        assert(ok_vec_of_structs[0].i32_field == 2);
-        assert(ok_vec_of_structs[1].i32_field == -5);
+        assert(ok_vec_of_structs[0].i32_field == 2)
+        assert(ok_vec_of_structs[1].i32_field == -5)
         let ok_vec_enum = try TestStruct.static_method_with_vec_of_enum_result()
         assert(ok_vec_enum == [TestStatus.Inactive, TestStatus.Pending, TestStatus.Active])
     } catch {
@@ -404,114 +446,126 @@ func assert_results() {
 
 func assert_options() {
     print("assert_options")
-    
+
     // Test function arguments with Option types
     let some_i32: i32? = 10
     function_taking_some_int(some_i32, true)
     let none_i32: i32? = nil
     function_taking_some_int(none_i32, false)
-    
+
     let some_bool: Bool? = true
     function_taking_some_bool(some_bool, true)
     let none_bool: Bool? = nil
     function_taking_some_bool(none_bool, false)
-    
+
     let some_string: String? = "Some string"
     function_taking_some_string(some_string, true)
     let none_string: String? = nil
     function_taking_some_string(none_string, false)
-    
+
     let some_enum: TestStatus? = TestStatus.Pending
     function_taking_some_enum(some_enum, true)
     let none_enum: TestStatus? = nil
     function_taking_some_enum(none_enum, false)
-    
+
     let ts1 = TestStruct()
     ts1.i32_field = 567
     let some_struct: TestStruct? = ts1
     function_taking_some_struct(some_struct, true)
     let none_struct: TestStruct? = nil
     function_taking_some_struct(none_struct, false)
-    
+
     // Test function return values with Option types
     let ret_some_int = function_returning_opt_int(true)
     assert(ret_some_int == 100, "function_returning_opt_int(true) should return 100")
     let ret_none_int = function_returning_opt_int(false)
     assert(ret_none_int == nil, "function_returning_opt_int(false) should return nil")
-    
+
     let ret_some_bool = function_returning_opt_bool(true)
     assert(ret_some_bool == true, "function_returning_opt_bool(true) should return true")
     let ret_none_bool = function_returning_opt_bool(false)
     assert(ret_none_bool == nil, "function_returning_opt_bool(false) should return nil")
-    
+
     let ret_some_str = function_returning_opt_string(true)
-    assert(ret_some_str == "Some Rust String", "function_returning_opt_string(true) should return correct string")
+    assert(
+        ret_some_str == "Some Rust String",
+        "function_returning_opt_string(true) should return correct string")
     let ret_none_str = function_returning_opt_string(false)
     assert(ret_none_str == nil, "function_returning_opt_string(false) should return nil")
-    
+
     let ret_some_enum = function_returning_opt_enum(true)
-    assert(ret_some_enum == TestStatus.Pending, "function_returning_opt_enum(true) should return Pending")
+    assert(
+        ret_some_enum == TestStatus.Pending,
+        "function_returning_opt_enum(true) should return Pending")
     let ret_none_enum = function_returning_opt_enum(false)
     assert(ret_none_enum == nil, "function_returning_opt_enum(false) should return nil")
-    
+
     let ret_some_struct = function_returning_opt_struct(true)
-    assert(ret_some_struct?.i32_field == 234, "function_returning_opt_struct(true) should return struct with i32_field 234")
+    assert(
+        ret_some_struct?.i32_field == 234,
+        "function_returning_opt_struct(true) should return struct with i32_field 234")
     let ret_none_struct = function_returning_opt_struct(false)
     assert(ret_none_struct == nil, "function_returning_opt_struct(false) should return nil")
-    
+
     // Test struct methods with Option types
     let test_struct = TestStruct()
-    
+
     let some_opt_int: i32? = 20
     test_struct.method_taking_opt_int(some_opt_int, true)
     let none_opt_int: i32? = nil
     test_struct.method_taking_opt_int(none_opt_int, false)
-    
+
     let some_opt_string: String? = "Optional string"
     TestStruct.static_method_taking_opt_string(some_opt_string, true)
     let none_opt_string: String? = nil
     TestStruct.static_method_taking_opt_string(none_opt_string, false)
-    
+
     let some_opt_bool: Bool? = false
     test_struct.method_taking_opt_bool(some_opt_bool, true)
     let none_opt_bool: Bool? = nil
     test_struct.method_taking_opt_bool(none_opt_bool, false)
-    
+
     let some_opt_enum: TestStatus? = TestStatus.Active
     TestStruct.static_method_taking_opt_enum(some_opt_enum, true)
     let none_opt_enum: TestStatus? = nil
     TestStruct.static_method_taking_opt_enum(none_opt_enum, false)
-    
+
     let ts2 = TestStruct2()
     ts2.i32_field = 789
     let some_opt_struct: TestStruct2? = ts2
     test_struct.method_taking_opt_struct(some_opt_struct, true)
     let none_opt_struct: TestStruct2? = nil
     test_struct.method_taking_opt_struct(none_opt_struct, false)
-    
+
     // Test struct methods returning Option types
     let some_opt_int_2 = test_struct.method_returning_opt_int(true)
     assert(some_opt_int_2 == 30, "method_returning_opt_int(true) should return 30")
     let none_opt_int_2 = test_struct.method_returning_opt_int(false)
     assert(none_opt_int_2 == nil, "method_returning_opt_int(false) should return nil")
-    
+
     let some_opt_bool_2 = TestStruct.static_method_returning_opt_bool(true)
     assert(some_opt_bool_2 == false, "static_method_returning_opt_bool(true) should return false")
     let none_opt_bool_2 = TestStruct.static_method_returning_opt_bool(false)
     assert(none_opt_bool_2 == nil, "static_method_returning_opt_bool(false) should return nil")
-    
+
     let some_opt_str = test_struct.method_returning_opt_string(true)
-    assert(some_opt_str == "Optional string from Rust", "method_returning_opt_string(true) should return correct string")
+    assert(
+        some_opt_str == "Optional string from Rust",
+        "method_returning_opt_string(true) should return correct string")
     let none_opt_str = test_struct.method_returning_opt_string(false)
     assert(none_opt_str == nil, "method_returning_opt_string(false) should return nil")
-    
+
     let some_opt_enum_2 = TestStruct.static_method_returning_opt_enum(true)
-    assert(some_opt_enum_2 == TestStatus.Inactive, "static_method_returning_opt_enum(true) should return Active")
+    assert(
+        some_opt_enum_2 == TestStatus.Inactive,
+        "static_method_returning_opt_enum(true) should return Active")
     let none_opt_enum_2 = TestStruct.static_method_returning_opt_enum(false)
     assert(none_opt_enum_2 == nil, "static_method_returning_opt_enum(false) should return nil")
-    
+
     let some_opt_struct_2 = test_struct.method_returning_opt_struct(true)
-    assert(some_opt_struct_2?.i32_field == 654, "method_returning_opt_struct(true) should return struct with i32_field 345")
+    assert(
+        some_opt_struct_2?.i32_field == 654,
+        "method_returning_opt_struct(true) should return struct with i32_field 345")
     let none_opt_struct_2 = test_struct.method_returning_opt_struct(false)
     assert(none_opt_struct_2 == nil, "method_returning_opt_struct(false) should return nil")
 
@@ -528,17 +582,23 @@ func assert_options() {
 
     assert(structWithOptions.opt_string == nil, "opt_string_field should be nil initially")
     structWithOptions.opt_string = "Optional string field"
-    assert(structWithOptions.opt_string == "Optional string field", "opt_string_field should be correct after set")
+    assert(
+        structWithOptions.opt_string == "Optional string field",
+        "opt_string_field should be correct after set")
 
     assert(structWithOptions.opt_enum == nil, "opt_enum_field should be nil initially")
     structWithOptions.opt_enum = TestStatus.Active
-    assert(structWithOptions.opt_enum == TestStatus.Active, "opt_enum_field should be Active after set")
+    assert(
+        structWithOptions.opt_enum == TestStatus.Active, "opt_enum_field should be Active after set"
+    )
 
     assert(structWithOptions.opt_struct == nil, "opt_struct_field should be nil initially")
     let ts3 = TestStruct2()
     ts3.i32_field = 321
     structWithOptions.opt_struct = ts3
-    assert(structWithOptions.opt_struct?.i32_field == 321, "opt_struct_field should have i32_field 321 after set")
+    assert(
+        structWithOptions.opt_struct?.i32_field == 321,
+        "opt_struct_field should have i32_field 321 after set")
 }
 
 func assert_traits() {
@@ -586,8 +646,10 @@ func assert_traits() {
             assert(vec[1].i32_field == 654)
         }
 
-
-        func trait_fn_with_options(_ opt_int: i64?, _ opt_string: String?, _ opt_bool: Bool?, _ opt_enum: TestStatus?, _ opt_struct: TestStruct2?) {
+        func trait_fn_with_options(
+            _ opt_int: i64?, _ opt_string: String?, _ opt_bool: Bool?, _ opt_enum: TestStatus?,
+            _ opt_struct: TestStruct2?
+        ) {
             assert(opt_int! == 42)
             assert(opt_string! == "Hello from trait object")
             assert(!opt_bool!)
@@ -694,6 +756,88 @@ func assert_traits() {
 
     // make sure that obj is still usable after passing to Rust
     assert(obj.trait_fn_return_int() == 12345)
+
+    let rust_trait_object = function_returning_trait_object()
+
+    rust_trait_object.trait_simple_fn()
+    rust_trait_object.trait_fn_with_simple_args(42, 4.20, TestStatus.Pending, true)
+    rust_trait_object.trait_fn_with_string_arg("Hello from trait object")
+
+    let ts = TestStruct()
+    ts.i32_field = 123
+    rust_trait_object.trait_fn_with_struct_arg(ts)
+
+    let vi32 = [i32](arrayLiteral: 1, 2, 3, 4, 5)
+    rust_trait_object.trait_fn_with_vec_of_primitives(vi32)
+    let vb = [bool](arrayLiteral: true, false, true)
+    rust_trait_object.trait_fn_with_vec_of_bools(vb)
+    let vs = [String](arrayLiteral: "Hello", "Trait", "Object")
+    rust_trait_object.trait_fn_with_vec_of_strings(vs)
+    let ve = [TestStatus](arrayLiteral: TestStatus.Active, TestStatus.Inactive)
+    rust_trait_object.trait_fn_with_vec_of_enums(ve)
+
+    let ts2_1 = TestStruct2()
+    ts2_1.i32_field = 321
+    let ts2_2 = TestStruct2()
+    ts2_2.i32_field = 654
+    let vts2 = [TestStruct2](arrayLiteral: ts2_1, ts2_2)
+    rust_trait_object.trait_fn_with_vec_of_structs(vts2)
+
+    let opt_struct_test = TestStruct2()
+    opt_struct_test.i32_field = 789
+    rust_trait_object.trait_fn_with_options(
+        i64(42),
+        "Hello from trait object",
+        false,
+        TestStatus.Pending,
+        opt_struct_test
+    )
+
+    assert(rust_trait_object.trait_fn_return_int() == 12345, "Should return 12345")
+    assert(
+        rust_trait_object.trait_fn_return_string() == "String from trait object",
+        "Should return correct string")
+    assert(rust_trait_object.trait_fn_return_bool() == true, "Should return true")
+    assert(
+        rust_trait_object.trait_fn_return_enum() == TestStatus.Inactive, "Should return Inactive")
+    assert(
+        rust_trait_object.trait_fn_return_struct().i32_field == 987,
+        "Should return struct with i32_field=987")
+
+    assert(
+        rust_trait_object.trait_fn_return_vec_of_primitives() == [i32](arrayLiteral: 10, 20, 30),
+        "Should return correct int vec")
+    assert(
+        rust_trait_object.trait_fn_return_vec_of_bools()
+            == [bool](arrayLiteral: true, false, true, true), "Should return correct bool vec")
+    assert(
+        rust_trait_object.trait_fn_return_vec_of_strings()
+            == [String](arrayLiteral: "Hello", "from", "trait", "object"),
+        "Should return correct string vec")
+    assert(
+        rust_trait_object.trait_fn_return_vec_of_enums()
+            == [TestStatus](
+                arrayLiteral: TestStatus.Active, TestStatus.Inactive, TestStatus.Pending),
+        "Should return correct enum vec")
+
+    let vec_of_ts2 = rust_trait_object.trait_fn_return_vec_of_structs()
+    assert(vec_of_ts2.count == 2, "Should return 2 structs")
+    assert(vec_of_ts2[0].i32_field == 111, "First struct should have i32_field=111")
+    assert(vec_of_ts2[1].i32_field == 222, "Second struct should have i32_field=222")
+
+    let opt_int = rust_trait_object.trait_fn_returning_option_int(true)
+    let opt_string = rust_trait_object.trait_fn_returning_option_string(true)
+    let opt_bool = rust_trait_object.trait_fn_returning_option_bool(true)
+    let opt_enum = rust_trait_object.trait_fn_returning_option_enum(true)
+    let opt_struct = rust_trait_object.trait_fn_returning_option_struct(true)
+
+    assert(opt_int == 555, "Should return Some(555)")
+    assert(opt_string == "Some string", "Should return Some(\"Some string\")")
+    assert(opt_bool == false, "Should return Some(false)")
+    assert(opt_enum == TestStatus.Pending, "Should return Some(Pending)")
+    assert(opt_struct!.i32_field == 789, "Should return Some with i32_field=789")
+
+    function_taking_trait_object(rust_trait_object)
 }
 
 func run() {

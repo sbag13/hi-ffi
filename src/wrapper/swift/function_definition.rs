@@ -289,11 +289,13 @@ pub struct ReturnTypes {
 pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnTypes {
     match return_wrapper {
         Some(FunctionReturnWrapper {
-            wrapper_type: WrapperType::Trait(_),
+            wrapper_type: WrapperType::Trait(trait_name),
             ..
-        }) => {
-            panic!("Trait types are not supported as function return types")
-        }
+        }) => ReturnTypes {
+            return_type_sig: Some(format!(" -> {}", trait_name)),
+            cpp_return_type: "void*".to_string(),
+            result_cast: Some(format!("let casted_result = {}Impl(result!)", trait_name)),
+        },
 
         Some(FunctionReturnWrapper {
             wrapper_type:
