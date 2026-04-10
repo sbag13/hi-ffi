@@ -222,6 +222,12 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                     "from typing import Optional".to_string(),
                 );
             }
+            WrapperType::Trait(trait_name) => {
+                imports.insert(
+                    format!("{trait_name}Impl"),
+                    format!("from .{trait_name} import {trait_name}Impl"),
+                );
+            }
             _ => {}
         }
     }

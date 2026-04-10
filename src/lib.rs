@@ -21,11 +21,15 @@ use crate::wrapper::ReusableWrapper;
 
 #[cfg(feature = "cpp")]
 mod cpp;
+
 #[cfg(feature = "python")]
 mod python;
+
 #[cfg(feature = "swift")]
 mod swift;
+
 mod translator;
+
 mod wrapper;
 
 const EXPORTED_SYMBOLS_PREFIX: &str = "hiFfi__";
@@ -196,6 +200,7 @@ fn prepend_to_file(content: impl Display, path: impl AsRef<Path>) {
     create_file(new_content, path);
 }
 
+#[cfg(any(feature = "python", feature = "swift"))]
 fn prepend_each_line_with_n_tabs(s: &str, n: usize) -> String {
     let tabs = "    ".repeat(n);
     s.lines()

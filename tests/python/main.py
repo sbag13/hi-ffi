@@ -631,6 +631,81 @@ def trait_tests():
     # make sure that impl is still usable after passing to Rust
     assert impl.trait_fn_return_int() == 12345
 
+    # Test returning trait objects from Rust
+    rust_trait_obj = function_returning_trait_object()
+    
+    # Test calling simple method with no args
+    rust_trait_obj.trait_simple_fn()
+    
+    # Test calling method with simple args (int, float, enum, bool)
+    rust_trait_obj.trait_fn_with_simple_args(42, 4.2, TestStatus.Pending, True)
+    
+    # Test calling method with string arg
+    rust_trait_obj.trait_fn_with_string_arg("Hello from trait object")
+    
+    # Test calling method with struct arg
+    ts = TestStruct()
+    ts.i32_field = 123
+    rust_trait_obj.trait_fn_with_struct_arg(ts)
+    
+    # Test calling method with vec of primitives
+    rust_trait_obj.trait_fn_with_vec_of_primitives([1, 2, 3, 4, 5])
+    
+    # Test calling method with vec of bools
+    rust_trait_obj.trait_fn_with_vec_of_bools([True, False, True])
+    
+    # Test calling method with vec of enums
+    rust_trait_obj.trait_fn_with_vec_of_enums([TestStatus.Active, TestStatus.Inactive])
+    
+    # Test calling method with vec of strings
+    rust_trait_obj.trait_fn_with_vec_of_strings(["Hello", "Trait", "Object"])
+    
+    # Test calling method with vec of structs
+    ts2_1 = TestStruct2()
+    ts2_1.i32_field = 321
+    ts2_2 = TestStruct2()
+    ts2_2.i32_field = 654
+    rust_trait_obj.trait_fn_with_vec_of_structs([ts2_1, ts2_2])
+    
+    # Test calling method with options
+    ts2_opt = TestStruct2()
+    ts2_opt.i32_field = 789
+    rust_trait_obj.trait_fn_with_options(42, "Hello from trait object", False, TestStatus.Pending, ts2_opt)
+    
+    # Test return values from trait object methods
+    assert rust_trait_obj.trait_fn_return_int() == 12345
+    assert rust_trait_obj.trait_fn_return_string() == "String from trait object"
+    assert rust_trait_obj.trait_fn_return_bool() == True
+    assert rust_trait_obj.trait_fn_return_enum() == TestStatus.Inactive
+    assert rust_trait_obj.trait_fn_return_struct().i32_field == 987
+    
+    # Test vec returns
+    assert rust_trait_obj.trait_fn_return_vec_of_primitives() == [10, 20, 30]
+    assert rust_trait_obj.trait_fn_return_vec_of_bools() == [True, False, True, True]
+    assert rust_trait_obj.trait_fn_return_vec_of_strings() == ["Hello", "from", "trait", "object"]
+    assert rust_trait_obj.trait_fn_return_vec_of_enums() == [TestStatus.Active, TestStatus.Inactive, TestStatus.Pending]
+    
+    vec_of_ts2 = rust_trait_obj.trait_fn_return_vec_of_structs()
+    assert len(vec_of_ts2) == 2
+    assert vec_of_ts2[0].i32_field == 111
+    assert vec_of_ts2[1].i32_field == 222
+    
+    # Test option returns
+    assert rust_trait_obj.trait_fn_returning_option_int(True) == 555
+    assert rust_trait_obj.trait_fn_returning_option_string(True) == "Some string"
+    assert rust_trait_obj.trait_fn_returning_option_bool(True) == False
+    assert rust_trait_obj.trait_fn_returning_option_enum(True) == TestStatus.Pending
+    assert rust_trait_obj.trait_fn_returning_option_struct(True).i32_field == 789
+
+    assert rust_trait_obj.trait_fn_returning_option_int(False) is None
+    assert rust_trait_obj.trait_fn_returning_option_string(False) is None
+    assert rust_trait_obj.trait_fn_returning_option_bool(False) is None
+    assert rust_trait_obj.trait_fn_returning_option_enum(False) is None
+    assert rust_trait_obj.trait_fn_returning_option_struct(False) is None
+
+    # Test that returned trait object can be passed to a function taking trait object
+    function_taking_trait_object(rust_trait_obj)
+
     import gc
 
     gc.collect()

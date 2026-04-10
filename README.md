@@ -20,7 +20,7 @@ Add `hi-ffi` to your `Cargo.toml`:
 
 ```toml,ignore
 [dependencies]
-hi_ffi = { version = "0.6", features = ["cpp", "swift", "python"] }
+hi_ffi = { version = "0.7", features = ["cpp", "swift", "python"] }
 ```
 
 **Note**: `hi-ffi` is a procedural macro crate. Enable the `cpp` and/or `swift`, `python` features based on your target languages.
@@ -158,7 +158,7 @@ These examples demonstrate how to use the generated bindings in real application
 | Vec arguments       | ✅   | ✅     | ✅      |
 | Vec return          | ✅   | ✅     | ✅      |
 | Trait obj arg       | ✅   | ✅     | ✅      |
-| Trait obj return    | ✅   | ✅     | ❌      |
+| Trait obj return    | ✅   | ✅     | ✅      |
 | `&str` return       | ❌   | ❌     | ❌      |
 
 ### Vectors

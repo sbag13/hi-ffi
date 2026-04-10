@@ -471,7 +471,9 @@ else:
             let inner_name = inner.name();
             format!("return {inner_name}Option(result).to_python()")
         }
-        WrapperType::Trait(_) => panic!("Traits are not supported as python return types"),
+        WrapperType::Trait(trait_name) => {
+            format!("return {trait_name}Impl(result)")
+        }
     }
 }
 
@@ -572,7 +574,9 @@ fn set_extern_fn_resttype(wrapper: &WrapperType, extern_fn_name: &str) -> String
         WrapperType::UnitExpr => {
             format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void")
         }
-        WrapperType::Trait(_) => panic!("Traits are not supported as python return types"),
+        WrapperType::Trait(_) => {
+            format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p")
+        }
     }
 }
 

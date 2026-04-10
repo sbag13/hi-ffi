@@ -222,12 +222,188 @@ global{trait_name}VTable = {trait_name}VTable(
 @runtime_checkable
 class {trait_name}(Protocol):
 {methods}
+
+
+class {trait_name}Impl:
+    def __init__(self, trait_ptr):
+        self._trait_ptr = ctypes.c_void_p(trait_ptr)
+
+    def __del__(self):
+        if hasattr(self, '_trait_ptr'):
+            {PYTHON_LIB_GETTER_NAME}().hiFfi__{trait_name}_BoxDyn_drop(self._trait_ptr)
 "#
     );
 
+    let impl_class_methods = trait_wrapper
+        .functions
+        .iter()
+        .map(|method| {
+            let method_name = &method.name;
+            let boxdyn_func_name = format!("{}_BoxDyn", &method.extern_function_name);
+
+            let arg_names = method
+                .args
+                .iter()
+                .map(|a| a.arg_name.to_string())
+                .collect::<Vec<String>>()
+                .join(", ");
+
+            let args_signature = if method.args.is_empty() {
+                "self".to_string()
+            } else {
+                format!("self, {arg_names}")
+            };
+
+            let ret_hint = if let Some(ret) = &method.return_wrapper {
+                format!(" -> {}", type_hint_from_wrapper_type(&ret.wrapper_type))
+            } else {
+                String::new()
+            };
+
+            let arg_casts = prepend_each_line_with_n_tabs(
+                &method
+                    .args
+                    .iter()
+                    .filter_map(|arg| {
+                        match &arg.wrapper_type {
+                            WrapperType::String => {
+                                Some(format!(
+                                    "casted_{} = {} if isinstance({}, int) else {}.encode('utf-8')",
+                                    arg.arg_name, arg.arg_name, arg.arg_name, arg.arg_name
+                                ))
+                            }
+                            WrapperType::Enum(_) => {
+                                Some(format!(
+                                    "casted_{} = {}.to_ffi() if hasattr({}, 'to_ffi') else {}",
+                                    arg.arg_name, arg.arg_name, arg.arg_name, arg.arg_name
+                                ))
+                            }
+                            WrapperType::Struct(_) => {
+                                Some(format!(
+                                    "casted_{} = {}.raw_ptr() if hasattr({}, 'raw_ptr') else {}",
+                                    arg.arg_name, arg.arg_name, arg.arg_name, arg.arg_name
+                                ))
+                            }
+                            WrapperType::Vec(inner) => {
+                                let inner_name = inner.name();
+                                Some(format!(
+                                    "casted_{arg_name} = {inner_name}Vec.from_list({arg_name})",
+                                    arg_name = arg.arg_name
+                                ))
+                            }
+                            WrapperType::Option(inner) => {
+                                let inner_name = inner.name();
+                                Some(format!(
+                                    "casted_{arg_name} = {inner_name}Option.from_python({arg_name})",
+                                    arg_name = arg.arg_name
+                                ))
+                            }
+                            _ => None,
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                2,
+            );
+
+            let call_args = method
+                .args
+                .iter()
+                .map(|arg| {
+                    match &arg.wrapper_type {
+                        WrapperType::String => format!("casted_{}", arg.arg_name),
+                        WrapperType::Enum(_) => format!("ctypes.c_int(casted_{})", arg.arg_name),
+                        WrapperType::Struct(_) => format!("casted_{}", arg.arg_name),
+                        WrapperType::Vec(_) => format!("casted_{}.raw_ptr()", arg.arg_name),
+                        WrapperType::Option(_) => format!("casted_{}.raw_ptr()", arg.arg_name),
+                        _ => arg.arg_name.to_string(),
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let call_line = if method.args.is_empty() {
+                format!("result = {PYTHON_LIB_GETTER_NAME}().{}(self._trait_ptr)", boxdyn_func_name)
+            } else {
+                format!("result = {PYTHON_LIB_GETTER_NAME}().{}(self._trait_ptr, {})", boxdyn_func_name, call_args)
+            };
+
+            // Build argtypes for the function
+            let mut arg_types = vec!["ctypes.c_void_p".to_string()];
+            for arg in &method.args {
+                arg_types.push(format!("ctypes.{}", c_type_from_wrapper_type(&arg.wrapper_type)));
+            }
+            let argtypes_str = format!("[{}]", arg_types.join(", "));
+            
+            let set_argtypes = format!(
+                "{PYTHON_LIB_GETTER_NAME}().{boxdyn_func_name}.argtypes = {}",
+                argtypes_str
+            );
+
+            // Build restype for the function
+            let set_restype = if let Some(ret) = &method.return_wrapper {
+                let ret_type = c_type_from_wrapper_type(&ret.wrapper_type);
+                format!(
+                    "{PYTHON_LIB_GETTER_NAME}().{boxdyn_func_name}.restype = ctypes.{ret_type}",
+                )
+            } else {
+                format!("{PYTHON_LIB_GETTER_NAME}().{boxdyn_func_name}.restype = None")
+            };
+
+            let result_cast_str = if let Some(ret) = &method.return_wrapper {
+                let return_expr = match &ret.wrapper_type {
+                    WrapperType::String => {
+                        imports.insert("RustString".to_string(), "from .global_state import RustString".to_string());
+                        "RustString(result).py_str()".to_string()
+                    }
+                    WrapperType::Enum(name) => {
+                        imports.insert(name.clone(), format!("from .{name} import {name}"));
+                        format!("{}.from_ffi(result)", name)
+                    }
+                    WrapperType::Struct(name) => {
+                        imports.insert(name.clone(), format!("from .{name} import {name}"));
+                        format!("{}(result)", name)
+                    }
+                    WrapperType::Vec(inner) => {
+                        let inner_name = inner.name();
+                        imports.insert(format!("{inner_name}Vec"), format!("from .vec_{inner_name} import {inner_name}Vec"));
+                        format!("{}Vec(result).to_list()", inner_name)
+                    }
+                    WrapperType::Option(inner) => {
+                        let inner_name = inner.name();
+                        imports.insert(format!("{inner_name}Option"), format!("from .option_{inner_name} import {inner_name}Option"));
+                        format!("{}Option(result).to_python()", inner_name)
+                    }
+                    _ => "result".to_string(),
+                };
+                format!("        return {}", return_expr)
+            } else {
+                String::new()
+            };
+
+            let pre_casts = if arg_casts.is_empty() {
+                String::new()
+            } else {
+                format!("{}\n", arg_casts)
+            };
+
+            format!(
+                r#"
+    def {method_name}({args_signature}){ret_hint}:
+        {set_argtypes}
+        {set_restype}
+{pre_casts}        {call_line}
+{result_cast_str}"#
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let body = format!("{impl_class_methods}\n");
+
     ClassCode {
         header,
-        body: String::new(),
+        body,
         name: trait_name.to_string(),
         imports,
     }

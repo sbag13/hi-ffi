@@ -10,7 +10,9 @@ pub struct EnumWrapper {
 
 #[derive(Debug)]
 pub struct EnumVariant {
+    #[allow(dead_code)]
     pub(crate) name: Ident,
+    #[allow(dead_code)]
     pub(crate) discriminant: Option<String>,
 }
 
