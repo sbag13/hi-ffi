@@ -222,7 +222,6 @@ pub fn gen_trait_methods_definitions(trait_wrapper: &TraitWrapper) -> ClassSourc
 
             let from_rust_casts = prepend_each_line_with_n_tabs(&from_rust_casts, 1);
 
-            // TODO refactor
             let get_and_return_result = match &method.return_wrapper {
                 Some(rt) => {
                     match &rt.wrapper_type {
@@ -717,7 +716,8 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
     match field {
         FieldWrapper {
             field_type,
-            wrapper_type: FieldWrapperType::Primitive,
+            wrapper_type:
+                WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool,
             setter,
             getter,
             ..
@@ -735,7 +735,28 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
         }
 
         FieldWrapper {
-            wrapper_type: FieldWrapperType::String,
+            wrapper_type: WrapperType::Enum(_),
+            setter,
+            getter,
+            field_type,
+            ..
+        } => {
+            let field_type = quote::quote! { #field_type }.to_string();
+            let mut getter = getter
+                .as_ref()
+                .map(|g| map_primitive_getter(g, &field_type, &class_name));
+            getter
+                .as_mut()
+                .map(|g| g.include.push_str(&format!("#include \"{field_type}.h\""))); // Enums are represented as their underlying integer type in C++
+            let setter = setter
+                .as_ref()
+                .map(|s| map_primitive_setter(s, &field_type, &class_name));
+
+            Methods { getter, setter }
+        }
+
+        FieldWrapper {
+            wrapper_type: WrapperType::String,
             setter,
             getter,
             ..
@@ -746,7 +767,7 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
         }
 
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Custom(_),
+            wrapper_type: WrapperType::Struct(_),
             setter,
             getter,
             field_type,
@@ -762,7 +783,7 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
         }
 
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Vec(inner),
+            wrapper_type: WrapperType::Vec(inner),
             getter,
             setter,
             ..
@@ -778,7 +799,7 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
         }
 
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Option(inner),
+            wrapper_type: WrapperType::Option(inner),
             getter,
             setter,
             ..
@@ -791,6 +812,27 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
                 .map(|s| map_option_setter(s, inner, &class_name));
 
             Methods { getter, setter }
+        }
+
+        FieldWrapper {
+            wrapper_type: WrapperType::Result(_),
+            ..
+        } => {
+            panic!("Result wrapper type is not yet supported for struct fields")
+        }
+
+        FieldWrapper {
+            wrapper_type: WrapperType::Trait(_),
+            ..
+        } => {
+            panic!("Trait wrapper type is not yet supported for struct fields")
+        }
+
+        FieldWrapper {
+            wrapper_type: WrapperType::UnitExpr,
+            ..
+        } => {
+            panic!("UnitExpr wrapper type is not supported for struct fields")
         }
     }
 }

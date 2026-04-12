@@ -6,9 +6,7 @@ use crate::wrapper::swift::function_definition::{
     ReturnTypes, compose_function_definition, map_args, map_header_declaration_args,
     map_return_type,
 };
-use crate::wrapper::{
-    FieldWrapper, FieldWrapperType, Getter, ImplBlockWrapper, Setter, StructWrapper, WrapperType,
-};
+use crate::wrapper::{FieldWrapper, Getter, ImplBlockWrapper, Setter, StructWrapper, WrapperType};
 use quote::ToTokens;
 
 use super::impl_block_wrapper::MethodWrapper;
@@ -128,7 +126,8 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
     let field_type = &field.field_type.to_token_stream().to_string();
     let (getter, setter) = match field {
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Primitive,
+            wrapper_type:
+                WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool,
             setter,
             getter,
             ..
@@ -140,8 +139,23 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
                 .as_ref()
                 .map(|g| map_primitive_setter_as_extern_fn(g, field_type)),
         ),
+
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Custom(_),
+            wrapper_type: WrapperType::Enum(_),
+            setter,
+            getter,
+            ..
+        } => (
+            getter
+                .as_ref()
+                .map(|g| map_enum_getter_as_extern_fn(g, field_type)),
+            setter
+                .as_ref()
+                .map(|g| map_enum_setter_as_extern_fn(g, field_type)),
+        ),
+
+        FieldWrapper {
+            wrapper_type: WrapperType::Struct(_),
             getter,
             setter,
             ..
@@ -160,8 +174,9 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
             });
             (getter_code, setter_code)
         }
+
         FieldWrapper {
-            wrapper_type: FieldWrapperType::String,
+            wrapper_type: WrapperType::String,
             setter,
             getter,
             ..
@@ -169,8 +184,9 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
             getter.as_ref().map(map_string_getter_as_extern_fn),
             setter.as_ref().map(map_string_setter_as_extern_fn),
         ),
+
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Vec(_),
+            wrapper_type: WrapperType::Vec(_),
             getter,
             setter,
             ..
@@ -189,8 +205,9 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
             });
             (getter_code, setter_code)
         }
+
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Option(_),
+            wrapper_type: WrapperType::Option(_),
             getter,
             setter,
             ..
@@ -209,6 +226,11 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
             });
             (getter_code, setter_code)
         }
+
+        FieldWrapper {
+            wrapper_type: WrapperType::Result(_) | WrapperType::Trait(_) | WrapperType::UnitExpr,
+            ..
+        } => panic!("Unsupported wrapper type for struct field"),
     };
 
     match (getter, setter) {
@@ -232,6 +254,20 @@ fn map_primitive_getter_as_extern_fn(
     field_type: impl Display,
 ) -> String {
     format!("{field_type} {extern_fn_name}(void*);")
+}
+
+fn map_enum_getter_as_extern_fn(
+    Getter { extern_fn_name, .. }: &Getter,
+    field_type: impl Display,
+) -> String {
+    format!("enum {field_type} {extern_fn_name}(void*);")
+}
+
+fn map_enum_setter_as_extern_fn(
+    Setter { extern_fn_name, .. }: &Setter,
+    field_type: impl Display,
+) -> String {
+    format!("void {extern_fn_name}(void*, enum {field_type});")
 }
 
 fn map_primitive_setter_as_extern_fn(
@@ -292,7 +328,8 @@ fn gen_props(struct_wrapper: &StructWrapper) -> String {
 fn gen_property(field: &FieldWrapper) -> String {
     let (getter, setter, swift_field_type) = match field {
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Primitive,
+            wrapper_type:
+                WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool,
             setter,
             getter,
             ..
@@ -303,7 +340,18 @@ fn gen_property(field: &FieldWrapper) -> String {
         ),
 
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Custom(_),
+            wrapper_type: WrapperType::Enum(e_name),
+            setter,
+            getter,
+            ..
+        } => (
+            getter.as_ref().map(|g| map_enum_getter(g, e_name)),
+            setter.as_ref().map(|s| map_enum_setter(s, e_name)),
+            field.field_type.to_token_stream().to_string(),
+        ),
+
+        FieldWrapper {
+            wrapper_type: WrapperType::Struct(s_ty),
             setter,
             getter,
             field_type,
@@ -313,11 +361,11 @@ fn gen_property(field: &FieldWrapper) -> String {
                 .as_ref()
                 .map(|g| map_custom_getter(g, field_type.to_token_stream())),
             setter.as_ref().map(map_custom_setter),
-            field.field_type.to_token_stream().to_string(),
+            s_ty.clone(),
         ),
 
         FieldWrapper {
-            wrapper_type: FieldWrapperType::String,
+            wrapper_type: WrapperType::String,
             setter,
             getter,
             ..
@@ -328,12 +376,12 @@ fn gen_property(field: &FieldWrapper) -> String {
         ),
 
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Vec(inner),
+            wrapper_type: WrapperType::Vec(inner),
             setter,
             getter,
             ..
         } => {
-            let swift_inner_type = match inner {
+            let swift_inner_type = match inner.deref() {
                 WrapperType::IntegerNumber(name)
                 | WrapperType::FloatingPointNumber(name)
                 | WrapperType::Struct(name)
@@ -358,7 +406,7 @@ fn gen_property(field: &FieldWrapper) -> String {
         }
 
         FieldWrapper {
-            wrapper_type: FieldWrapperType::Option(inner),
+            wrapper_type: WrapperType::Option(inner),
             setter,
             getter,
             ..
@@ -386,6 +434,11 @@ fn gen_property(field: &FieldWrapper) -> String {
                 format!("{}?", swift_inner_type),
             )
         }
+
+        FieldWrapper {
+            wrapper_type: WrapperType::Result(_) | WrapperType::Trait(_) | WrapperType::UnitExpr,
+            ..
+        } => panic!("Unsupported wrapper type for struct field"),
     };
 
     let field_name = &field.field_name;
@@ -455,6 +508,24 @@ fn map_primitive_setter(Setter { extern_fn_name, .. }: &Setter) -> String {
         r#"
         set {{
             {extern_fn_name}(self.rawPtr(), newValue)
+        }}"#,
+    )
+}
+
+fn map_enum_getter(Getter { extern_fn_name, .. }: &Getter, enum_name: impl Display) -> String {
+    format!(
+        r#"
+        get {{
+            return {enum_name}(rawValue: Int32({extern_fn_name}(self.rawPtr()).rawValue))!
+        }}"#,
+    )
+}
+
+fn map_enum_setter(Setter { extern_fn_name, .. }: &Setter, enum_name: impl Display) -> String {
+    format!(
+        r#"
+        set {{
+            {extern_fn_name}(self.rawPtr(), CFfiModule.{enum_name}(rawValue: UInt32(newValue.rawValue)))
         }}"#,
     )
 }

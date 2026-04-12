@@ -2,32 +2,33 @@ use core::panic;
 use std::collections::HashSet;
 use std::fmt::Display;
 
-use quote::{ToTokens, format_ident, quote};
-use syn::{GenericArgument, ItemStruct, Type};
+use quote::{format_ident, quote};
+use syn::ItemStruct;
 
 use crate::EXPORTED_SYMBOLS_PREFIX;
+use crate::translator::{NoWrapperErr, path_to_wrapper_type};
 use crate::wrapper::*;
 
-pub fn translate_struct(item_struct: ItemStruct) -> Wrapper {
+pub fn translate_struct(item_struct: ItemStruct) -> Result<Wrapper, NoWrapperErr> {
     let class_name = &item_struct.ident;
 
     register_struct_type(class_name.to_string());
 
-    Wrapper {
+    Ok(Wrapper {
         original_definition: quote! {#item_struct},
         parsed: ParsedWrapper::Struct(StructWrapper {
             name: class_name.clone(),
-            fields: fields_wrappers(&item_struct),
+            fields: fields_wrappers(&item_struct)?,
             default_constructor: default_constructor(&item_struct),
             drop_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__drop"),
             clone_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__clone"),
             original_item_struct: item_struct,
         }),
         reusable_wrappers: HashSet::new(),
-    }
+    })
 }
 
-fn fields_wrappers(item_struct: &ItemStruct) -> Vec<FieldWrapper> {
+fn fields_wrappers(item_struct: &ItemStruct) -> Result<Vec<FieldWrapper>, NoWrapperErr> {
     let class_name = &item_struct.ident;
     item_struct
         .fields
@@ -42,92 +43,14 @@ fn fields_wrappers(item_struct: &ItemStruct) -> Vec<FieldWrapper> {
             let setter = generate_setter(&field_attributes, class_name, &field_name, is_public);
 
             if let syn::Type::Path(path) = &field.ty {
-                if let Some(ident) = path.path.get_ident() {
-                    let wrapper_type = match ident.to_string().as_str() {
-                        "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64"
-                        | "u128" | "f32" | "f64" | "bool" => FieldWrapperType::Primitive,
-                        "String" => FieldWrapperType::String,
-                        _custom_type => FieldWrapperType::Custom(ident.to_string()),
-                    };
-
-                    FieldWrapper {
-                        field_name,
-                        field_type: field.ty.clone(),
-                        getter,
-                        wrapper_type,
-                        setter,
-                    }
-                } else {
-                    // Handle non-trivial paths, e.g., Vec<T>, Option<T>
-                    match path.path.segments.first() {
-                        Some(segment) => match segment.ident.to_string().as_str() {
-                            "Vec" => {
-                                let inner_wrapper_type: WrapperType = match &segment.arguments {
-                                    syn::PathArguments::AngleBracketed(args) => {
-                                        let Some(inner_arg) = args.args.first() else {
-                                            panic!("No argument found in Vec return type");
-                                        };
-                                        match inner_arg {
-                                            GenericArgument::Type(Type::Path(inner_path)) => {
-                                                inner_path
-                                                    .to_token_stream()
-                                                    .to_string()
-                                                    .as_str()
-                                                    .parse()
-                                                    .unwrap()
-                                            }
-                                            _ => panic!("Vector inner return type must be a path"),
-                                        }
-                                    }
-                                    _ => panic!("Vec return type arguments not supported"),
-                                };
-
-                                FieldWrapper {
-                                    field_name,
-                                    field_type: field.ty.clone(),
-                                    wrapper_type: FieldWrapperType::Vec(inner_wrapper_type),
-                                    setter,
-                                    getter,
-                                }
-                            }
-                            "Option" => {
-                                let inner_wrapper_type: WrapperType = match &segment.arguments {
-                                    syn::PathArguments::AngleBracketed(args) => {
-                                        let Some(inner_arg) = args.args.first() else {
-                                            panic!("No argument found in Option field type");
-                                        };
-                                        match inner_arg {
-                                            GenericArgument::Type(Type::Path(inner_path)) => {
-                                                inner_path
-                                                    .to_token_stream()
-                                                    .to_string()
-                                                    .as_str()
-                                                    .parse()
-                                                    .unwrap()
-                                            }
-                                            _ => panic!("Option inner field type must be a path"),
-                                        }
-                                    }
-                                    _ => panic!("Option field type arguments not supported"),
-                                };
-
-                                FieldWrapper {
-                                    field_name,
-                                    field_type: field.ty.clone(),
-                                    wrapper_type: FieldWrapperType::Option(Box::new(
-                                        inner_wrapper_type,
-                                    )),
-                                    setter,
-                                    getter,
-                                }
-                            }
-                            _ => panic!("Unsupported field type: {:?}", segment.ident),
-                        },
-                        None => {
-                            panic!("No segment found in a field wrapper")
-                        }
-                    }
-                }
+                let wrapper_type = path_to_wrapper_type(&path.path)?;
+                Ok(FieldWrapper {
+                    field_name,
+                    field_type: field.ty.clone(),
+                    wrapper_type,
+                    setter,
+                    getter,
+                })
             } else {
                 panic!("No path found")
             }

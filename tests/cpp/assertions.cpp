@@ -55,6 +55,7 @@
 #include "RustTrait.h"
 #include "function_taking_trait_object.h"
 #include "function_returning_trait_object.h"
+#include "StructWithStatus.h"
 #include <iostream>
 #include <cassert>
 #include <cstring>
@@ -331,6 +332,11 @@ void assert_structs()
     assert(vec_of_enums_2[0] == TestStatus::Pending);
     assert(vec_of_enums_2[1] == TestStatus::Active);
     assert(vec_of_enums_2[2] == TestStatus::Inactive);
+
+    auto struct_with_status = StructWithStatus::inactivate();
+    assert(struct_with_status.get_status() == TestStatus::Inactive);
+    struct_with_status.set_status(TestStatus::Active);
+    assert(struct_with_status.get_status() == TestStatus::Active);
 }
 
 void assert_struct_impl_block()

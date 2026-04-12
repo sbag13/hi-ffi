@@ -436,9 +436,10 @@ fn function_returning_vec_of_string() -> Vec<String> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Default)]
 #[ffi]
 pub enum TestStatus {
+    #[default]
     Active = 1,
     Inactive = 2,
     Pending = 3,
@@ -1012,6 +1013,21 @@ impl RustTrait for TestTraitObject {
             Some(TestStruct2 { i32_field: 789 })
         } else {
             None
+        }
+    }
+}
+
+#[ffi]
+#[derive(Clone)]
+struct StructWithStatus {
+    pub status: TestStatus,
+}
+
+#[ffi]
+impl StructWithStatus {
+    pub fn inactivate() -> StructWithStatus {
+        Self {
+            status: TestStatus::Inactive,
         }
     }
 }

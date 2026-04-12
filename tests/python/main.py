@@ -24,6 +24,7 @@ from python_ffi.option_TestStatus import TestStatusOption
 from python_ffi.option_TestStruct2 import TestStruct2Option
 from python_ffi.StructWithOptions import StructWithOptions
 from python_ffi.RustTrait import RustTrait
+from python_ffi.StructWithStatus import StructWithStatus
 from typing import Protocol, runtime_checkable
 
 
@@ -137,6 +138,11 @@ def struct_tests():
     assert len(struct_with_vecs.vec_of_enums) == 0
     struct_with_vecs.vec_of_enums = [TestStatus.Active, TestStatus.Pending]
     assert struct_with_vecs.vec_of_enums == [TestStatus.Active, TestStatus.Pending]
+
+    struct_with_status = StructWithStatus.inactivate()
+    assert struct_with_status.status == TestStatus.Inactive
+    struct_with_status.status = TestStatus.Active
+    assert struct_with_status.status == TestStatus.Active
 
 
 def functions_tests():

@@ -17,9 +17,7 @@ pub(crate) fn write_cpp_code(wrapper: &Wrapper) {
     std::fs::create_dir_all(&cpp_path).expect("Unable to create cpp directory");
 
     let code_base_path = cpp_path.join("base.h");
-    // if !code_base_path.exists() { // TODO: uncomment when stable implementation is ready
     create_file(cpp_code_base(), code_base_path);
-    // }
 
     let header_file_name = format!("{}.h", wrapper.name());
     let source_file_name = format!("{}.cpp", wrapper.name());

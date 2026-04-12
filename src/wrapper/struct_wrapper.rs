@@ -19,7 +19,6 @@ impl Debug for StructWrapper {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StructWrapper")
             .field("name", &self.name)
-            .field("fields", &self.fields)
             .finish()
     }
 }
@@ -32,11 +31,25 @@ impl From<&StructWrapper> for TokenStream2 {
             .fields
             .iter()
             .map(|field| match &field.wrapper_type {
-                FieldWrapperType::Primitive => map_primitive_field(field, class_name),
-                FieldWrapperType::String => map_string_field(field, class_name),
-                FieldWrapperType::Custom(_) => map_custom_field(field, class_name),
-                FieldWrapperType::Vec(_) => map_vec_field(field, class_name),
-                FieldWrapperType::Option(_) => map_option_field(field, class_name),
+                WrapperType::IntegerNumber(_)
+                | WrapperType::FloatingPointNumber(_)
+                | WrapperType::Enum(_)
+                | WrapperType::Bool => map_primitive_field(field, class_name),
+                WrapperType::String => map_string_field(field, class_name),
+                WrapperType::Struct(_) => map_custom_field(field, class_name),
+                WrapperType::Vec(_) => map_vec_field(field, class_name),
+                WrapperType::Option(_) => map_option_field(field, class_name),
+                WrapperType::Result(wrapper_type) => {
+                    todo!(
+                        "Result wrapper type is not supported yet as struct field: {wrapper_type:?}"
+                    )
+                }
+                WrapperType::UnitExpr => {
+                    panic!("UnitExpr wrapper type is not supported for struct fields")
+                }
+                WrapperType::Trait(_) => {
+                    panic!("Trait wrapper type is not supported for struct fields")
+                }
             });
 
         let default_constructor =
@@ -370,7 +383,7 @@ pub struct DefaultConstructor {
 pub struct FieldWrapper {
     pub(crate) field_name: Ident,
     pub(crate) field_type: Type,
-    pub(crate) wrapper_type: FieldWrapperType,
+    pub(crate) wrapper_type: WrapperType,
     pub(crate) setter: Option<Setter>,
     pub(crate) getter: Option<Getter>,
 }
@@ -383,22 +396,4 @@ pub struct Getter {
 pub struct Setter {
     pub(crate) name: Ident,
     pub(crate) extern_fn_name: String,
-}
-
-impl Debug for FieldWrapper {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FieldWrapper")
-            .field("field_name", &self.field_name)
-            .field("wrapper_type", &self.wrapper_type)
-            .finish()
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum FieldWrapperType {
-    Primitive,
-    String,
-    Vec(WrapperType),
-    Option(Box<WrapperType>),
-    Custom(String),
 }

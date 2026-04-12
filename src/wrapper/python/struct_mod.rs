@@ -1,10 +1,12 @@
+use core::panic;
 use std::collections::HashMap;
+use std::ops::Deref;
 
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::python::{
     ClassCode, arg_cast, set_extern_fn_resttype_field, type_hint_from_field_wrapper_type,
 };
-use crate::wrapper::{FieldWrapper, FieldWrapperType, StructWrapper, WrapperType};
+use crate::wrapper::{FieldWrapper, StructWrapper, WrapperType};
 use quote::ToTokens;
 use syn::Type;
 
@@ -40,23 +42,25 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
         imports,
         |mut acc: HashMap<String, String>, field_wrapper| {
             match &field_wrapper.wrapper_type {
-                FieldWrapperType::Custom(_) => {
-                    let type_name = field_wrapper.field_type.to_token_stream().to_string();
-                    acc.insert(
-                        type_name.clone(),
-                        format!("from .{type_name} import {type_name}"),
-                    );
+                WrapperType::Struct(s_name) => {
+                    acc.insert(s_name.clone(), format!("from .{s_name} import {s_name}"));
                 }
-                FieldWrapperType::String => {
+                WrapperType::String => {
                     acc.insert(
                         "FfiSlice".to_string(),
                         "from .global_state import FfiSlice".to_string(),
                     );
                 }
-                FieldWrapperType::Primitive => {
+                WrapperType::IntegerNumber(_)
+                | WrapperType::FloatingPointNumber(_)
+                | WrapperType::Bool => {
                     acc.insert("ctypes".to_string(), "import ctypes".to_string());
                 }
-                FieldWrapperType::Vec(inner) => {
+                WrapperType::Enum(e_name) => {
+                    acc.insert("ctypes".to_string(), "import ctypes".to_string());
+                    acc.insert(e_name.clone(), format!("from .{e_name} import {e_name}"));
+                }
+                WrapperType::Vec(inner) => {
                     let inner_type_name = inner.name();
                     acc.insert("List".to_string(), "from typing import List".to_string());
                     acc.insert(
@@ -68,19 +72,19 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
                     );
                     acc.insert("ctypes".to_owned(), "import ctypes".to_string());
 
-                    if let WrapperType::Struct(struct_name) = inner {
+                    if let WrapperType::Struct(struct_name) = inner.deref() {
                         acc.insert(
                             struct_name.to_owned(),
                             format!("from .{struct_name} import {struct_name}"),
                         );
-                    } else if let WrapperType::Enum(enum_name) = inner {
+                    } else if let WrapperType::Enum(enum_name) = inner.deref() {
                         acc.insert(
                             enum_name.to_owned(),
                             format!("from .{enum_name} import {enum_name}"),
                         );
                     }
                 }
-                FieldWrapperType::Option(inner) => {
+                WrapperType::Option(inner) => {
                     let inner_type_name = inner.name();
                     acc.insert(
                         "Optional".to_string(),
@@ -107,6 +111,13 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
                         );
                     }
                 }
+                WrapperType::Result(_) => {
+                    panic!("Result wrapper type is not yet supported for struct fields")
+                }
+                WrapperType::Trait(_) => {
+                    panic!("Trait wrapper type is not yet supported for struct fields")
+                }
+                WrapperType::UnitExpr => (),
             };
 
             acc
@@ -185,12 +196,12 @@ fn gen_property(field_wrapper: &FieldWrapper) -> String {
     let field_name = &field_wrapper.field_name;
 
     // Handle Vec fields specially
-    if let FieldWrapperType::Vec(inner) = &field_wrapper.wrapper_type {
+    if let WrapperType::Vec(inner) = &field_wrapper.wrapper_type {
         return gen_vec_property(field_wrapper, inner);
     }
 
     // Handle Option fields specially
-    if let FieldWrapperType::Option(inner) = &field_wrapper.wrapper_type {
+    if let WrapperType::Option(inner) = &field_wrapper.wrapper_type {
         return gen_option_property(field_wrapper, inner);
     }
 
@@ -199,7 +210,7 @@ fn gen_property(field_wrapper: &FieldWrapper) -> String {
         let type_hint = type_hint_from_field_wrapper_type(&field_wrapper.wrapper_type);
         let result_cast = prop_result_cast(&field_wrapper.field_type, "result");
         let set_extern_fn_resttype =
-            set_extern_fn_resttype_field(field_type, &field_wrapper.wrapper_type, extern_fn_name);
+            set_extern_fn_resttype_field(&field_wrapper.wrapper_type, extern_fn_name);
 
         format!(
             r#"    

@@ -48,6 +48,29 @@ pub fn take_shape(shape: Box<dyn Shape>) {
     shape.draw("Give it a title in Rust".to_string().into());
 }
 
+struct Circle {
+    radius: f64,
+}
+impl Shape for Circle {
+    fn draw(&self, title: Option<String>) {
+        println!("Drawing a circle with radius {} and title {:?}", self.radius, title);
+    }
+    fn area(&self) -> f64 {
+        std::f64::consts::PI * self.radius * self.radius
+    }
+    fn center_point(&self) -> Vec<f64> {
+        vec![0.0, 0.0]
+    }
+}
+
+// A Rust implementation of Shape can be returned to other language,
+// and then received in a function like take_shape, interchangeably
+// with other language implementations of Shape
+#[ffi]
+pub fn create_circle(radius: f64) -> Box<dyn Shape> {
+    Box::new(Circle { radius })
+}
+
 #[ffi]
 #[derive(Default, Clone)]
 struct Person {
@@ -119,7 +142,7 @@ These examples demonstrate how to use the generated bindings in real application
 | String getters/setters      | ✅   | ✅     | ✅      |
 | Struct getters/setters      | ✅   | ✅     | ✅      |
 | Vec getters/setters         | ✅   | ✅     | ✅      |
-| C-like Enum getters/setters | ❌   | ❌     | ❌      |
+| C-like Enum getters/setters | ✅   | ✅     | ✅      |
 | Default constructor         | ✅   | ✅     | ✅      |
 | PartialEq                   | ❌   | ❌     | ❌      |
 
@@ -189,11 +212,13 @@ These examples demonstrate how to use the generated bindings in real application
 | Fn string Result         | ✅   | ✅     | ✅      |
 | Fn vec results           | ✅   | ✅     | ✅      |
 | Fn enum Result           | ✅   | ✅     | ✅      |
+| Fn trait obj Result      | ❌   | ❌     | ❌      |
 | Methods primitive Result | ✅   | ✅     | ✅      |
 | Methods struct Result    | ✅   | ✅     | ✅      |
 | Methods string Result    | ✅   | ✅     | ✅      |
 | Methods vec results      | ✅   | ✅     | ✅      |
 | Methods enum Result      | ✅   | ✅     | ✅      |
+| Methods trait obj Result | ❌   | ❌     | ❌      |
 
 ### Options
 

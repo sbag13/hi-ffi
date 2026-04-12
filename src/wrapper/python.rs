@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 
 use crate::python::PYTHON_LIB_GETTER_NAME;
-use crate::wrapper::{FieldWrapperType, WrapperType, is_enum_type};
+use crate::wrapper::{WrapperType, is_enum_type};
 use crate::{ReusableWrapper, prepend_each_line_with_n_tabs};
 use quote::ToTokens;
 use syn::Type;
@@ -424,17 +424,25 @@ fn type_hint_from_wrapper_type(wrapper_type: &crate::wrapper::WrapperType) -> St
     }
 }
 
-fn type_hint_from_field_wrapper_type(wrapper_type: &FieldWrapperType) -> String {
+fn type_hint_from_field_wrapper_type(wrapper_type: &WrapperType) -> String {
     match wrapper_type {
-        FieldWrapperType::Primitive => "int".into(),
-        FieldWrapperType::String => "str".into(),
-        FieldWrapperType::Custom(inner) => inner.into(), // Placeholder
-        FieldWrapperType::Vec(inner) => {
+        WrapperType::IntegerNumber(_) => "int".into(),
+        WrapperType::FloatingPointNumber(_) => "float".into(),
+        WrapperType::Bool => "bool".into(),
+        WrapperType::String => "str".into(),
+        WrapperType::Struct(inner) => inner.into(),
+        WrapperType::Vec(inner) => {
             format!("List[{}]", type_hint_from_wrapper_type(inner))
         }
-        FieldWrapperType::Option(inner) => {
+        WrapperType::Option(inner) => {
             format!("Optional[{}]", type_hint_from_wrapper_type(inner))
         }
+        WrapperType::Enum(inner) => inner.into(),
+        WrapperType::Result(_) => {
+            todo!("Result types are not supported as field types in Python wrappers")
+        }
+        WrapperType::UnitExpr => panic!("UnitExpr should not be used as a field type"),
+        WrapperType::Trait(_) => panic!("Trait should not be used as a field type"),
     }
 }
 
@@ -594,46 +602,33 @@ fn rust_int_to_c_types(r_int: &str) -> &'static str {
     }
 }
 
-fn set_extern_fn_resttype_field(
-    ty: &Type,
-    wrapper: &FieldWrapperType,
-    extern_fn_name: &str,
-) -> String {
+fn set_extern_fn_resttype_field(wrapper: &WrapperType, extern_fn_name: &str) -> String {
     match wrapper {
-        FieldWrapperType::Primitive => match ty {
-            syn::Type::Path(type_path) => {
-                let segment = type_path.path.segments.last().unwrap();
-                match segment.ident.to_string().as_str() {
-                    "i32" | "i64" | "u32" | "u64" => {
-                        format!(
-                            "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int"
-                        )
-                    }
-                    "f32" => {
-                        format!(
-                            "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_float"
-                        )
-                    }
-                    "f64" => {
-                        format!(
-                            "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_double"
-                        )
-                    }
-                    "bool" => {
-                        format!(
-                            "{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int"
-                        )
-                    }
-                    _ => panic!("Unsupported primitive type for field"),
-                }
+        WrapperType::IntegerNumber(_) => {
+            format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int")
+        }
+        WrapperType::FloatingPointNumber(r_float) => {
+            if r_float == "f32" {
+                format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_float")
+            } else if r_float == "f64" {
+                format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_double")
+            } else {
+                panic!("Unsupported floating point type for field")
             }
-            _ => panic!("Unsupported type for primitive field"),
-        },
-        FieldWrapperType::String
-        | FieldWrapperType::Custom(_)
-        | FieldWrapperType::Vec(_)
-        | FieldWrapperType::Option(_) => {
+        }
+        WrapperType::Bool | WrapperType::Enum(_) => {
+            format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_int")
+        }
+        WrapperType::String
+        | WrapperType::Struct(_)
+        | WrapperType::Vec(_)
+        | WrapperType::Result(_)
+        | WrapperType::Trait(_)
+        | WrapperType::Option(_) => {
             format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p")
+        }
+        WrapperType::UnitExpr => {
+            format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void")
         }
     }
 }

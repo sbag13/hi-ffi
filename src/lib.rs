@@ -117,9 +117,7 @@ fn write_rust_code(wrapper: &Wrapper) {
     std::fs::create_dir_all(&rust_path).expect("Unable to create rust directory");
 
     let rust_base_path = rust_path.join("base.rs");
-    // if !code_base_path.exists() { // TODO: uncomment when stable implementation is ready
     create_file(rust_code_base(), rust_base_path);
-    // }
 
     let file_name = format!("{}.rs", wrapper.name());
     let full_file_path = rust_path.join(&file_name);
