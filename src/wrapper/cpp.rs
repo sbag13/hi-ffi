@@ -546,6 +546,7 @@ struct ReturnTypes {
     return_type: String,
     return_cast: String,
     return_type_includes: HashSet<String>,
+    header_declarations: HashSet<String>,
 }
 
 fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnTypes {
@@ -559,6 +560,7 @@ fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnType
             return_type: return_type.to_token_stream().to_string(),
             return_cast: "return result;".to_string(),
             return_type_includes: HashSet::new(),
+            header_declarations: HashSet::new(),
         },
 
         Some(FunctionReturnWrapper {
@@ -572,6 +574,7 @@ auto rust_str = RustString(result);
 return rust_str.to_string();"
                 .to_string(),
             return_type_includes: HashSet::new(),
+            header_declarations: HashSet::new(),
         },
 
         Some(FunctionReturnWrapper {
@@ -588,6 +591,7 @@ return {}(result);",
                     struct_type
                 ),
                 return_type_includes: HashSet::from([format!("#include \"{struct_type}.h\"")]),
+                header_declarations: HashSet::from([format!("class {struct_type};")]),
             }
         }
 
@@ -614,6 +618,7 @@ return rust_vec.to_std();
                 return_type: cpp_type(wt),
                 return_cast,
                 return_type_includes: includes,
+                header_declarations: HashSet::new(),
             }
         }
 
@@ -627,6 +632,7 @@ return rust_vec.to_std();
                 return_type: enum_type.clone(),
                 return_cast: "return result;".to_string(),
                 return_type_includes: HashSet::from([format!("#include \"{}.h\"", enum_type)]),
+                header_declarations: HashSet::from([format!("enum class {enum_type};")]),
             }
         }
 
@@ -650,6 +656,7 @@ return rust_vec.to_std();
 return rust_opt.to_std();"#
                 ),
                 return_type_includes: includes,
+                header_declarations: HashSet::new(),
             }
         }
 
@@ -674,6 +681,7 @@ return rust_result.is_err() ? throw RustException(rust_result.unwrap_err()) : ru
                 return_type_includes: HashSet::from([format!(
                     "{inner_type_include}#include \"result_{inner_name}.h\""
                 )]),
+                header_declarations: HashSet::new(),
             }
         }
 
@@ -686,6 +694,7 @@ return rust_result.is_err() ? throw RustException(rust_result.unwrap_err()) : ru
             return_type: "void".to_string(),
             return_cast: "".to_string(),
             return_type_includes: HashSet::new(),
+            header_declarations: HashSet::new(),
         },
 
         Some(FunctionReturnWrapper {
@@ -702,6 +711,9 @@ return std::make_shared<{trait_name}RustImpl>({trait_name}RustImpl(result));"#
                 format!("#include \"{trait_name}.h\""),
                 "#include <memory>".to_string(),
             ]),
+            header_declarations: HashSet::from([format!(
+                "class {trait_name};\nstruct {trait_name}Bridge;"
+            )]),
         },
     }
 }

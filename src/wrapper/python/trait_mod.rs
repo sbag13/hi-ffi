@@ -239,7 +239,7 @@ class {trait_name}Impl:
         .iter()
         .map(|method| {
             let method_name = &method.name;
-            let boxdyn_func_name = format!("{}_BoxDyn", &method.extern_function_name);
+            let boxdyn_func_name = format!("{}_BoxDyn", method.extern_function_name);
 
             let arg_names = method
                 .args
@@ -357,12 +357,12 @@ class {trait_name}Impl:
                         "RustString(result).py_str()".to_string()
                     }
                     WrapperType::Enum(name) => {
-                        imports.insert(name.clone(), format!("from .{name} import {name}"));
-                        format!("{}.from_ffi(result)", name)
+                        imports.insert(name.clone(), format!("from . import {name}"));
+                        format!("{}.{}.from_ffi(result)", name, name)
                     }
                     WrapperType::Struct(name) => {
-                        imports.insert(name.clone(), format!("from .{name} import {name}"));
-                        format!("{}(result)", name)
+                        imports.insert(name.clone(), format!("from . import {name}"));
+                        format!("{}.{}(result)", name, name)
                     }
                     WrapperType::Vec(inner) => {
                         let inner_name = inner.name();

@@ -717,6 +717,30 @@ def trait_tests():
     gc.collect()
 
 
+def method_trait_tests():
+    print("Method trait tests")
+
+    test_struct = TestStruct()
+    impl = PythonTraitImpl()
+    test_struct.method_taking_trait_object(impl)
+    assert impl.trait_fn_return_int() == 12345
+
+    rust_trait_obj = test_struct.method_returning_trait_object()
+    rust_trait_obj.trait_simple_fn()
+    assert rust_trait_obj.trait_fn_return_int() == 12345
+    assert rust_trait_obj.trait_fn_return_string() == "String from trait object"
+    test_struct.method_taking_trait_object(rust_trait_obj)
+
+    static_impl = PythonTraitImpl()
+    TestStruct.static_method_taking_trait_object(static_impl)
+    assert static_impl.trait_fn_return_int() == 12345
+
+    static_rust_trait_obj = TestStruct.static_method_returning_trait_object()
+    static_rust_trait_obj.trait_simple_fn()
+    assert static_rust_trait_obj.trait_fn_return_int() == 12345
+    TestStruct.static_method_taking_trait_object(static_rust_trait_obj)
+
+
 if __name__ == "__main__":
     struct_tests()
     functions_tests()
@@ -728,4 +752,5 @@ if __name__ == "__main__":
     result_tests()
     option_tests()
     trait_tests()
+    method_trait_tests()
     print("All tests passed!")

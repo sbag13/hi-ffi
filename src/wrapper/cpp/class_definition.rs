@@ -197,8 +197,9 @@ public:
 
 pub fn gen_trait_methods_definitions(trait_wrapper: &TraitWrapper) -> ClassSourceParts {
     let class_name = &trait_wrapper.name;
-    let rust_impl_class_name = format!("{}RustImpl", &trait_wrapper.name);
+    let rust_impl_class_name = format!("{}RustImpl", trait_wrapper.name);
 
+    let mut source_includes = HashSet::new();
     let mut methods_definitions = trait_wrapper.functions.iter().fold(
         String::new(),
         |mut methods_definitions, method| {
@@ -211,6 +212,7 @@ pub fn gen_trait_methods_definitions(trait_wrapper: &TraitWrapper) -> ClassSourc
                 call_args,
                 wrapper_args,
                 from_rust_casts,
+                source_includes: method_source_includes,
                 ..
             } = map_args(method.args.iter());
 
@@ -271,7 +273,7 @@ return rust_option.leak();")
 "#,
             );
 
-            let extern_fn = format!("{}_BoxDyn", &method.extern_function_name);
+            let extern_fn = format!("{}_BoxDyn", method.extern_function_name);
             let MappedCppFunctionArgsTokens {
                 cpp_args,
                 call_args,
@@ -279,6 +281,9 @@ return rust_option.leak();")
                 ..
             } = map_args(method.args.iter());
             let return_types = map_return_type(&method.return_wrapper);
+            let return_type_includes = return_types.return_type_includes.clone();
+            source_includes.extend(method_source_includes);
+            source_includes.extend(return_type_includes);
             let rust_impl_method = method_definition(&method.name, extern_fn, false, &cpp_args, &call_args, &arg_casts, &return_types, &rust_impl_class_name);
 
             methods_definitions.push_str(&format!("{extern_fn_decl}
@@ -292,7 +297,7 @@ return rust_option.leak();")
     let rust_impl_constructor = pointer_constructor_definition(&rust_impl_class_name);
     let rust_impl_destructor = destructor(
         &rust_impl_class_name,
-        format!("{EXPORTED_SYMBOLS_PREFIX}{}_BoxDyn_drop", &class_name),
+        format!("{EXPORTED_SYMBOLS_PREFIX}{}_BoxDyn_drop", class_name),
     );
     let rust_impl_move_constructor = move_constructor_definition(&rust_impl_class_name);
     methods_definitions.extend([
@@ -301,8 +306,14 @@ return rust_option.leak();")
         rust_impl_move_constructor.as_str(),
     ]);
 
+    let source_includes = source_includes
+        .into_iter()
+        .collect::<Vec<_>>()
+        .join("\n");
+
     ClassSourceParts {
-        base: format!(r#"#include "{class_name}.h""#),
+        base: format!(r#"#include "{class_name}.h"
+{source_includes}"#),
         methods_definitions,
     }
 }
@@ -329,6 +340,7 @@ fn trait_bridge_fn_ret_type(ret_wrapper: &Option<FunctionReturnWrapper>) -> Stri
 }
 
 pub fn gen_class_source_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -> ClassSourceParts {
+    let mut source_includes = HashSet::new();
     let methods_definitions = impl_block_wrapper
         .methods
         .iter()
@@ -340,9 +352,13 @@ pub fn gen_class_source_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -
                 cpp_args,
                 call_args,
                 arg_casts,
+                source_includes: method_source_includes,
                 ..
             } = map_args(m.args.iter());
             let return_types = map_return_type(&m.return_wrapper);
+            let return_type_includes = return_types.return_type_includes.clone();
+            source_includes.extend(method_source_includes);
+            source_includes.extend(return_type_includes);
             Some(method_definition(
                 &m.name,
                 &m.extern_function_name,
@@ -355,8 +371,15 @@ pub fn gen_class_source_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -
             ))
         })
         .collect();
+    let source_includes = source_includes
+        .into_iter()
+        .collect::<Vec<_>>()
+        .join("\n");
+
     ClassSourceParts {
-        base: class_source_base(&impl_block_wrapper.struct_name),
+        base: format!(r#"{source_includes}
+
+{}"#, class_source_base(&impl_block_wrapper.struct_name)),
         methods_definitions,
     }
 }
@@ -507,6 +530,7 @@ fn method_definition(
 
 pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> ClassSourceParts {
     let class_name = &struct_wrapper.name;
+    let mut source_includes = HashSet::new();
 
     let pointer_constructor_definition = pointer_constructor_definition(class_name);
     let copy_constructor = copy_constructor_definition(struct_wrapper);
@@ -523,16 +547,27 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
         .iter()
         .map(|f| map_fields(f, &struct_wrapper.name))
         .fold(String::new(), |mut methods, Methods { getter, setter }| {
-            if let Some(Method { definition, .. }) = getter {
+            if let Some(Method { definition, include, .. }) = getter {
                 methods.push_str(&definition);
+                if !include.is_empty() {
+                    source_includes.insert(include);
+                }
             }
 
-            if let Some(Method { definition, .. }) = setter {
+            if let Some(Method { definition, include, .. }) = setter {
                 methods.push_str(&definition);
+                if !include.is_empty() {
+                    source_includes.insert(include);
+                }
             }
 
             methods
         });
+
+    let source_includes = source_includes
+        .into_iter()
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let definitions = format!(
         r#"
@@ -546,7 +581,9 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
     );
 
     ClassSourceParts {
-        base: class_source_base(class_name),
+        base: format!(r#"{source_includes}
+
+{}"#, class_source_base(class_name)),
         methods_definitions: definitions,
     }
 }
@@ -745,9 +782,8 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
             let mut getter = getter
                 .as_ref()
                 .map(|g| map_primitive_getter(g, &field_type, &class_name));
-            getter
-                .as_mut()
-                .map(|g| g.include.push_str(&format!("#include \"{field_type}.h\""))); // Enums are represented as their underlying integer type in C++
+            if let Some(g) = getter
+                .as_mut() { g.include.push_str(&format!("#include \"{field_type}.h\"")) } // Enums are represented as their underlying integer type in C++
             let setter = setter
                 .as_ref()
                 .map(|s| map_primitive_setter(s, &field_type, &class_name));

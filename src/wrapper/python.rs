@@ -37,7 +37,7 @@ pub fn gen_result_wrapper_python(inner: &WrapperType) -> String {
     let unwrap_val_cast = match inner {
         WrapperType::String => format!("result = RustString({unwrap_ext_call}).py_str();"),
         WrapperType::Struct(struct_name) => {
-            format!("result = {struct_name}({unwrap_ext_call});")
+            format!("result = {struct_name}.{struct_name}({unwrap_ext_call});")
         }
         WrapperType::Vec(vec_inner) => {
             let vec_inner_name = vec_inner.name();
@@ -45,7 +45,7 @@ pub fn gen_result_wrapper_python(inner: &WrapperType) -> String {
         }
         WrapperType::Bool => format!("result = ctypes.c_byte({unwrap_ext_call}).value != 0"),
         WrapperType::Enum(inner) => {
-            format!("result = {inner}.from_ffi({unwrap_ext_call})")
+            format!("result = {inner}.{inner}.from_ffi({unwrap_ext_call})")
         }
         _ => format!("result = {unwrap_ext_call}"),
     };
@@ -90,7 +90,7 @@ pub fn gen_option_wrapper_python(inner: &WrapperType) -> String {
     let unwrap_val_cast = match inner {
         WrapperType::String => format!("result = RustString({unwrap_ext_call}).py_str();"),
         WrapperType::Struct(struct_name) => {
-            format!("result = {struct_name}({unwrap_ext_call});")
+            format!("result = {struct_name}.{struct_name}({unwrap_ext_call});")
         }
         WrapperType::Vec(vec_inner) => {
             let vec_inner_name = vec_inner.name();
@@ -98,7 +98,7 @@ pub fn gen_option_wrapper_python(inner: &WrapperType) -> String {
         }
         WrapperType::Bool => format!("result = ctypes.c_byte({unwrap_ext_call}).value != 0"),
         WrapperType::Enum(inner) => {
-            format!("result = {inner}.from_ffi({unwrap_ext_call})")
+            format!("result = {inner}.{inner}.from_ffi({unwrap_ext_call})")
         }
         _ => format!("result = {unwrap_ext_call}"),
     };
@@ -290,11 +290,11 @@ fn gen_vec_get_result_cast(inner: &WrapperType, type_name: &str) -> String {
         WrapperType::Bool => "ctypes.c_byte(result).value != 0".to_string(),
         WrapperType::String => "RustString(result).py_str()".to_string(),
         WrapperType::Struct(_) => {
-            format!("{}(result)", type_name)
+            format!("{}.{}(result)", type_name, type_name)
         }
         WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
         WrapperType::Enum(_) => {
-            format!("{}.from_ffi(result)", type_name)
+            format!("{}.{}.from_ffi(result)", type_name, type_name)
         }
         WrapperType::Result(_) => {
             panic!("Result types are not supported in Vec wrappers for python");
@@ -341,9 +341,10 @@ fn gen_vec_get_restype(inner: &WrapperType, get_ext_fn_name: &str) -> String {
 
 fn inner_import(inner: &WrapperType) -> String {
     match inner {
-        WrapperType::Struct(name) => format!("from .{} import {}", name, name),
+        WrapperType::Struct(name) | WrapperType::Enum(name) => {
+            format!("from . import {name}")
+        }
         WrapperType::String => "from .global_state import RustString".to_string(),
-        WrapperType::Enum(name) => format!("from .{} import {}", name, name),
         WrapperType::Vec(inner) => {
             let inner_name = inner.name();
 
@@ -459,10 +460,10 @@ fn result_cast_and_return(wrapper: &WrapperType) -> String {
             format!(r#"return {inner_type_str}Vec(result).to_list()"#)
         }
         WrapperType::Enum(name) => {
-            format!("return {}.from_ffi(result)", name)
+            format!("return {}.{}.from_ffi(result)", name, name)
         }
         WrapperType::Struct(ty) => {
-            format!("return {}(result)", ty)
+            format!("return {}.{}(result)", ty, ty)
         }
         WrapperType::UnitExpr => "return None".to_string(),
         WrapperType::Result(inner) => {
@@ -480,7 +481,7 @@ else:
             format!("return {inner_name}Option(result).to_python()")
         }
         WrapperType::Trait(trait_name) => {
-            format!("return {trait_name}Impl(result)")
+            format!("return {trait_name}.{trait_name}Impl(result)")
         }
     }
 }

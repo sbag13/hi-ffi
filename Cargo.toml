@@ -1,6 +1,6 @@
 [package]
 name = "hi-ffi"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2024"
 license = "MIT"
 description = "Procedural macro that automatically generates FFI for C++, Python and Swift"

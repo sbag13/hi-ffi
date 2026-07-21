@@ -127,6 +127,12 @@ class {class_name}:"#
                         _ => (),
                     }
                 }
+                WrapperType::Trait(trait_name) => {
+                    imports.insert(
+                        format!("{trait_name}Impl"),
+                        format!("from . import {trait_name}"),
+                    );
+                }
                 _ => (),
             }
 
@@ -146,7 +152,12 @@ class {class_name}:"#
             };
 
             restype_set = set_extern_fn_resttype(&ret.wrapper_type, extern_fn_name);
-            ret_line = prepend_each_line_with_n_tabs(&result_cast_and_return(&ret.wrapper_type), 2);
+
+            ret_line = if class_name == ret.wrapper_type.name() {
+                prepend_each_line_with_n_tabs(&format!("return {}(result)", class_name), 2)
+            } else {
+                prepend_each_line_with_n_tabs(&result_cast_and_return(&ret.wrapper_type), 2)
+            };
         }
 
         let recv_and_args = if method.is_static {
@@ -163,19 +174,22 @@ class {class_name}:"#
             ""
         };
 
+        let pre_casts = pre_casts
+            .iter()
+            .map(|s| prepend_each_line_with_n_tabs(s, 2))
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        let call_args = call_args.join(", ");
+
         let body = format!(
             r#"
     {decorator}def {py_name}({recv_and_args}){ret_hint}:
         {restype_set}
-        {pre_casts}{local_imports}
+        {local_imports}
+{pre_casts}
         result = {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}({call_target}{call_args})
-{ret_line}"#,
-            pre_casts = if pre_casts.is_empty() {
-                "".into()
-            } else {
-                pre_casts.join("\n        ")
-            },
-            call_args = call_args.join(", "),
+{ret_line}"#
         );
 
         body_sections.push(body);
@@ -282,6 +296,26 @@ pub(crate) fn call_args_and_pre_casts(
                     "casted_{name} = {cast}",
                     name = arg_name,
                     cast = arg_cast(&arg.arg_type, &arg_name)
+                ));
+            }
+            WrapperType::Trait(trait_name) => {
+                imports.insert("Type".to_string(), "from typing import Type".to_string());
+                imports.insert("ctypes".to_string(), "import ctypes".to_string());
+                imports.insert(
+                    trait_name.to_string(),
+                    format!("from . import {trait_name}"),
+                );
+                pre_casts.push(format!(
+                    r#"if not isinstance({arg_name}, {trait_name}.{trait_name}):
+    raise TypeError(f"Object {{type({arg_name})}} does not implement {trait_name} protocol")
+data_ptr = ctypes.c_void_p(id({arg_name}))
+ctypes.pythonapi.Py_IncRef(data_ptr)
+casted_{arg_name} = {trait_name}.{trait_name}Bridge(
+    obj=data_ptr,
+    vtable=ctypes.pointer({trait_name}.global{trait_name}VTable),
+    deleter={trait_name}.global{trait_name}Deleter
+)
+"#,
                 ));
             }
             _ => {

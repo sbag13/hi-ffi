@@ -151,7 +151,7 @@ impl From<&TraitWrapper> for TokenStream2 {
         });
 
         let box_dyn_functions = functions.iter().map(|function| {
-            let ext_name = format!("{}_BoxDyn", &function.extern_function_name);
+            let ext_name = format!("{}_BoxDyn", function.extern_function_name);
             let fn_name = &function.name;
             let bridge_fn_name = format_ident!("{}_bridge", &function.name);
 

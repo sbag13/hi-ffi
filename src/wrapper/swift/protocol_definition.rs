@@ -62,7 +62,7 @@ pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
     // Generate BoxDyn extern function declarations
     let mut boxdyn_externs = String::new();
     for method in &trait_wrapper.functions {
-        let boxdyn_name = format!("{}_BoxDyn", &method.extern_function_name);
+        let boxdyn_name = format!("{}_BoxDyn", method.extern_function_name);
 
         let wrapper_args = method
             .args
@@ -108,7 +108,10 @@ pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
     let drop_fn = format!("void hiFfi__{class_name}_BoxDyn_drop(void* self);\n");
 
     format!(
-        r#"struct {class_name}VTable {{
+        r#"typedef struct {class_name}VTable {class_name}VTable;
+typedef struct {class_name}Bridge {class_name}Bridge;
+
+struct {class_name}VTable {{
 {vtable_functions}
 }};
 
@@ -354,7 +357,7 @@ pub(crate) fn gen_trait_box_dyn_impl_class(trait_wrapper: &TraitWrapper) -> Stri
 
     for method in &trait_wrapper.functions {
         let fn_name = &method.name;
-        let boxdyn_extern_name = format!("{}_BoxDyn", &method.extern_function_name);
+        let boxdyn_extern_name = format!("{}_BoxDyn", method.extern_function_name);
 
         let MappedSwiftFunctionArgsTokens {
             args_signatures, ..

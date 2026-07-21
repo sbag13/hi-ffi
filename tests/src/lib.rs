@@ -308,6 +308,22 @@ impl TestStruct {
             None
         }
     }
+
+    pub fn method_taking_trait_object(&self, obj: Box<dyn RustTrait>) {
+        function_taking_trait_object(obj);
+    }
+
+    pub fn method_returning_trait_object(&self) -> Box<dyn RustTrait> {
+        function_returning_trait_object()
+    }
+
+    pub fn static_method_taking_trait_object(obj: Box<dyn RustTrait>) {
+        function_taking_trait_object(obj);
+    }
+
+    pub fn static_method_returning_trait_object() -> Box<dyn RustTrait> {
+        function_returning_trait_object()
+    }
 }
 
 #[ffi]

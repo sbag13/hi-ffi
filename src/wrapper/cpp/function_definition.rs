@@ -11,6 +11,7 @@ pub struct MappedCppFunctionArgsTokens {
     pub arg_casts: String,
     pub from_rust_casts: String, // opposite of arg_casts, used for casting return values from Rust to C++
     pub includes: HashSet<String>,
+    pub source_includes: HashSet<String>,
 }
 pub fn map_args<'a>(
     args: impl Iterator<Item = &'a FunctionArgWrapper>,
@@ -22,12 +23,22 @@ pub fn map_args<'a>(
         mut arg_casts,
         mut from_rust_casts,
         mut includes,
-    ): (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, HashSet<String>) = (
+        mut source_includes,
+    ): (
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+        HashSet<String>,
+        HashSet<String>,
+    ) = (
         Vec::new(),
         Vec::new(),
         Vec::new(),
         Vec::new(),
         Vec::new(),
+        HashSet::new(),
         HashSet::new(),
     );
     args.for_each(|arg| match arg {
@@ -66,7 +77,8 @@ pub fn map_args<'a>(
             arg_casts.push(format!(
                 r#"auto casted_{arg_name} = {arg_name}.self_ptr();"#
             ));
-            includes.insert(format!("#include \"{struct_type}.h\""));
+            includes.insert(format!("class {struct_type};"));
+            source_includes.insert(format!("#include \"{struct_type}.h\""));
             from_rust_casts.push(format!(
                 r#"auto casted_{arg_name} = {struct_type}({arg_name});"#,
             ));
@@ -98,7 +110,8 @@ auto casted_{arg_name} = tmp_casted_{arg_name}.raw_ptr();"));
             cpp_args.push(format!("{} {}", enum_type, arg_name));
             wrapper_args.push(format!("{} {}", enum_type, arg_name));
             call_args.push(arg_name.to_string());
-            includes.insert(format!("#include \"{enum_type}.h\""));
+            includes.insert(format!("enum class {enum_type};"));
+            source_includes.insert(format!("#include \"{enum_type}.h\""));
         }
 
         FunctionArgWrapper {
@@ -137,7 +150,8 @@ auto casted_{arg_name} = tmp_casted_{arg_name}.raw_ptr();"));
             ..
         } => {
             cpp_args.push(format!("std::shared_ptr<{trait_name}>&& {arg_name}"));
-            includes.insert(format!("#include \"{trait_name}.h\""));
+            includes.insert(format!("class {trait_name};\nstruct {trait_name}Bridge;"));
+            source_includes.insert(format!("#include \"{trait_name}.h\""));
 
             let uppercase_trait_name = trait_name.to_string().to_uppercase();
             let vtable_instance_name = format!("{}_VTABLE_INST", uppercase_trait_name);
@@ -168,6 +182,7 @@ bridge.deleter = [](void* obj) {{
         call_args,
         arg_casts,
         includes,
+        source_includes,
         from_rust_casts,
     }
 }
@@ -213,6 +228,7 @@ pub fn gen_function_definition(function_wrapper: &FunctionWrapper) -> String {
         cpp_args,
         call_args: arg_names,
         arg_casts,
+        source_includes,
         ..
     } = map_args(function_wrapper.args.iter());
 
@@ -225,10 +241,12 @@ pub fn gen_function_definition(function_wrapper: &FunctionWrapper) -> String {
 
     let arg_casts = prepend_each_line_with_n_tabs(&arg_casts, 1);
     let return_casts = prepend_each_line_with_n_tabs(&return_cast, 1);
+    let source_includes = source_includes.into_iter().collect::<Vec<_>>().join("\n");
 
     format!(
         r#"
 #include "{fn_name}.h"
+{source_includes}
 
 {return_type} {fn_name}({cpp_args}) {{
 {arg_casts}

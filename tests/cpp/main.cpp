@@ -13,6 +13,7 @@ int main()
     assert_results();
     assert_options();
     assert_traits();
+    assert_method_trait_objects();
 
     std::cout << "All assertions passed!" << std::endl;
 

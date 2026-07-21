@@ -43,7 +43,7 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
         |mut acc: HashMap<String, String>, field_wrapper| {
             match &field_wrapper.wrapper_type {
                 WrapperType::Struct(s_name) => {
-                    acc.insert(s_name.clone(), format!("from .{s_name} import {s_name}"));
+                    acc.insert(s_name.clone(), format!("from . import {s_name}"));
                 }
                 WrapperType::String => {
                     acc.insert(
@@ -58,7 +58,7 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
                 }
                 WrapperType::Enum(e_name) => {
                     acc.insert("ctypes".to_string(), "import ctypes".to_string());
-                    acc.insert(e_name.clone(), format!("from .{e_name} import {e_name}"));
+                    acc.insert(e_name.clone(), format!("from . import {e_name}"));
                 }
                 WrapperType::Vec(inner) => {
                     let inner_type_name = inner.name();
@@ -75,13 +75,10 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
                     if let WrapperType::Struct(struct_name) = inner.deref() {
                         acc.insert(
                             struct_name.to_owned(),
-                            format!("from .{struct_name} import {struct_name}"),
+                            format!("from . import {struct_name}"),
                         );
                     } else if let WrapperType::Enum(enum_name) = inner.deref() {
-                        acc.insert(
-                            enum_name.to_owned(),
-                            format!("from .{enum_name} import {enum_name}"),
-                        );
+                        acc.insert(enum_name.to_owned(), format!("from . import {enum_name}"));
                     }
                 }
                 WrapperType::Option(inner) => {
@@ -102,13 +99,10 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
                     if let WrapperType::Struct(struct_name) = &**inner {
                         acc.insert(
                             struct_name.to_owned(),
-                            format!("from .{struct_name} import {struct_name}"),
+                            format!("from . import {struct_name}"),
                         );
                     } else if let WrapperType::Enum(enum_name) = &**inner {
-                        acc.insert(
-                            enum_name.to_owned(),
-                            format!("from .{enum_name} import {enum_name}"),
-                        );
+                        acc.insert(enum_name.to_owned(), format!("from . import {enum_name}"));
                     }
                 }
                 WrapperType::Result(_) => {
@@ -253,7 +247,12 @@ fn prop_result_cast(ty: &Type, result_var_name: &str) -> String {
                 "i32" | "i64" | "u32" | "u64" | "f32" | "f64" => result_var_name.to_string(),
                 "bool" => format!("ctypes.c_byte({result_var_name}).value != 0"),
                 "String" => format!("FfiSlice({result_var_name}).py_str()"),
-                _ => format!("{}({})", ty.to_token_stream(), result_var_name),
+                _ => format!(
+                    "{}.{}({})",
+                    ty.to_token_stream(),
+                    ty.to_token_stream(),
+                    result_var_name
+                ),
             }
         }
         _ => unimplemented!("Result cast not implemented for this type"),

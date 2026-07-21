@@ -808,3 +808,28 @@ void assert_traits()
 
     function_taking_trait_object(std::move(rust_trait_obj));
 }
+
+void assert_method_trait_objects()
+{
+    std::cout << "assert_method_trait_objects" << std::endl;
+
+    auto test_struct = TestStruct();
+    auto cpp_trait_obj = std::make_shared<MyStructWithTrait>();
+    test_struct.method_taking_trait_object(cpp_trait_obj);
+    assert(cpp_trait_obj->trait_fn_return_int() == 12345);
+
+    auto rust_trait_obj = test_struct.method_returning_trait_object();
+    rust_trait_obj->trait_simple_fn();
+    assert(rust_trait_obj->trait_fn_return_int() == 12345);
+    assert(rust_trait_obj->trait_fn_return_string() == "String from trait object");
+    test_struct.method_taking_trait_object(std::move(rust_trait_obj));
+
+    auto static_cpp_trait_obj = std::make_shared<MyStructWithTrait>();
+    TestStruct::static_method_taking_trait_object(static_cpp_trait_obj);
+    assert(static_cpp_trait_obj->trait_fn_return_int() == 12345);
+
+    auto static_rust_trait_obj = TestStruct::static_method_returning_trait_object();
+    static_rust_trait_obj->trait_simple_fn();
+    assert(static_rust_trait_obj->trait_fn_return_int() == 12345);
+    TestStruct::static_method_taking_trait_object(std::move(static_rust_trait_obj));
+}

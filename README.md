@@ -241,7 +241,7 @@ These examples demonstrate how to use the generated bindings in real application
 | vec types in methods       | ✅   | ✅     | ✅      |
 | option types in methods    | ✅   | ✅     | ✅      |
 | result types in methods    | ❌   | ❌     | ❌      |
-| trait objects in methods   | ❌   | ❌     | ❌      |
+| trait objects in methods   | ✅   | ✅     | ✅      |
 
 ## Architecture
 

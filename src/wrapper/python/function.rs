@@ -62,14 +62,14 @@ fn args(function: &FunctionWrapper) -> (Vec<String>, Vec<String>) {
             match &arg_wrapper.wrapper_type {
                 WrapperType::Trait(trait_name) => {
                     casts.push(format!(
-                        r#"if not isinstance(obj, {trait_name}):
+                        r#"if not isinstance(obj, {trait_name}.{trait_name}):
     raise TypeError(f"Object {{type(obj)}} does not implement {trait_name} protocol")
 data_ptr = ctypes.c_void_p(id(obj))
 ctypes.pythonapi.Py_IncRef(data_ptr)
-bridge = {trait_name}Bridge (
+bridge = {trait_name}.{trait_name}Bridge (
     obj=data_ptr,
-    vtable=ctypes.pointer(global{trait_name}VTable),
-    deleter=global{trait_name}Deleter
+    vtable=ctypes.pointer({trait_name}.global{trait_name}VTable),
+    deleter={trait_name}.global{trait_name}Deleter
 )
 "#
                     ));
@@ -144,18 +144,8 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
         |mut acc: HashMap<String, String>, arg_wrapper| {
             let type_name = arg_wrapper.arg_type.to_token_stream().to_string();
             match &arg_wrapper.wrapper_type {
-                WrapperType::Struct(_) => {
-                    acc.insert(
-                        type_name.clone(),
-                        format!("from .{type_name} import {type_name}"),
-                    );
-                }
-                WrapperType::Enum(_) => {
-                    let type_name = arg_wrapper.arg_type.to_token_stream().to_string();
-                    acc.insert(
-                        type_name.clone(),
-                        format!("from .{type_name} import {type_name}"),
-                    );
+                WrapperType::Struct(_) | WrapperType::Enum(_) => {
+                    acc.insert(type_name.clone(), format!("from . import {type_name}"));
                 }
                 WrapperType::String => {
                     acc.insert("ctypes".to_string(), "import ctypes".to_string());
@@ -183,7 +173,7 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                     acc.insert("Type".to_string(), "from typing import Type".to_string());
                     acc.insert(
                         trait_name.to_string(),
-                        format!("from .{trait_name} import {trait_name}Bridge, global{trait_name}VTable, global{trait_name}Deleter, RustTrait"),
+                        format!("from . import {trait_name}"),
                     );
                 }
                 _ => {}
@@ -224,8 +214,8 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
             }
             WrapperType::Trait(trait_name) => {
                 imports.insert(
-                    format!("{trait_name}Impl"),
-                    format!("from .{trait_name} import {trait_name}Impl"),
+                    trait_name.to_string(),
+                    format!("from . import {trait_name}"),
                 );
             }
             _ => {}

@@ -42,11 +42,11 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
             }
 
             FunctionArgWrapper {
-                wrapper_type: WrapperType::Trait(_),
+                wrapper_type: WrapperType::Trait(trait_name),
                 arg_name,
                 ..
             } => {
-                format!("struct RustTraitBridge {arg_name}")
+                format!("{trait_name}Bridge {arg_name}")
             }
 
             FunctionArgWrapper {

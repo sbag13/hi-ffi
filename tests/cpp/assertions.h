@@ -9,3 +9,4 @@ void assert_enums();
 void assert_results();
 void assert_options();
 void assert_traits();
+void assert_method_trait_objects();
