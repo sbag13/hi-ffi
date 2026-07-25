@@ -56,6 +56,8 @@
 #include "function_taking_trait_object.h"
 #include "function_returning_trait_object.h"
 #include "StructWithStatus.h"
+#include "TestStruct3.h"
+#include "TestStruct4.h"
 #include <iostream>
 #include <cassert>
 #include <cstring>
@@ -337,6 +339,24 @@ void assert_structs()
     assert(struct_with_status.get_status() == TestStatus::Inactive);
     struct_with_status.set_status(TestStatus::Active);
     assert(struct_with_status.get_status() == TestStatus::Active);
+}
+
+void assert_default_impl()
+{
+    std::cout << "assert_default_impl" << std::endl;
+
+    // TestStruct3 has a manual `impl Default` that sets i32_field to 42
+    auto test_struct3 = TestStruct3();
+    assert(test_struct3.get_i32_field() == 42);
+
+    // TestStruct2 has `#[derive(Default)]` which sets i32_field to 0
+    auto test_struct2 = TestStruct2();
+    assert(test_struct2.get_i32_field() == 0);
+
+    // TestStruct4 has `impl Default` appearing BEFORE the struct definition
+    // (tests the WAITING_FOR_WRAPPERS mechanism)
+    auto test_struct4 = TestStruct4();
+    assert(test_struct4.get_i32_field() == 99);
 }
 
 void assert_struct_impl_block()

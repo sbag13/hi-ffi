@@ -6,6 +6,7 @@ use quote::ToTokens;
 use crate::prepend_each_line_with_n_tabs;
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::impl_block_wrapper::ImplBlockWrapper;
+use crate::wrapper::python::struct_mod::gen_default_constructor;
 use crate::wrapper::python::{
     ClassCode, arg_cast, result_cast_and_return, set_extern_fn_resttype,
     type_hint_from_wrapper_type,
@@ -26,10 +27,14 @@ class {class_name}:"#
         format!("from .global_state import {PYTHON_LIB_GETTER_NAME}"),
     );
 
-    let mut body_sections: Vec<String> = vec![];
+    let mut body_section: Vec<String> = vec![];
 
-    // Ensure raw_ptr exists when only methods added (no struct translator ran)
-    body_sections.push("\n    def raw_ptr(self):\n        return self._self_ptr".to_string());
+    // If this impl block provides a Default implementation, generate the
+    // __init__ with default constructor.
+    if let Some(default_constructor) = &impl_block.default_constructor {
+        let dc = gen_default_constructor(default_constructor);
+        body_section.push(dc);
+    }
 
     for method in impl_block.methods.iter().filter(|m| m.public) {
         let py_name = method.name.to_string();
@@ -192,12 +197,12 @@ class {class_name}:"#
 {ret_line}"#
         );
 
-        body_sections.push(body);
+        body_section.push(body);
     }
 
     ClassCode {
         header,
-        body: body_sections.join("\n"),
+        body: body_section.join("\n"),
         name: class_name,
         imports,
     }

@@ -106,7 +106,7 @@ fn gen_clone(
     }
 }
 
-fn gen_default_constructor(
+pub(crate) fn gen_default_constructor(
     constructor_wrapper: &Option<DefaultConstructor>,
     class_name: impl ToTokens,
 ) -> TokenStream2 {

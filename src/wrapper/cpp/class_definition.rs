@@ -306,14 +306,13 @@ return rust_option.leak();")
         rust_impl_move_constructor.as_str(),
     ]);
 
-    let source_includes = source_includes
-        .into_iter()
-        .collect::<Vec<_>>()
-        .join("\n");
+    let source_includes = source_includes.into_iter().collect::<Vec<_>>().join("\n");
 
     ClassSourceParts {
-        base: format!(r#"#include "{class_name}.h"
-{source_includes}"#),
+        base: format!(
+            r#"#include "{class_name}.h"
+{source_includes}"#
+        ),
         methods_definitions,
     }
 }
@@ -341,7 +340,7 @@ fn trait_bridge_fn_ret_type(ret_wrapper: &Option<FunctionReturnWrapper>) -> Stri
 
 pub fn gen_class_source_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -> ClassSourceParts {
     let mut source_includes = HashSet::new();
-    let methods_definitions = impl_block_wrapper
+    let mut methods_definitions = impl_block_wrapper
         .methods
         .iter()
         .filter_map(|m| {
@@ -370,24 +369,34 @@ pub fn gen_class_source_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -
                 &impl_block_wrapper.struct_name.to_string(),
             ))
         })
-        .collect();
-    let source_includes = source_includes
-        .into_iter()
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect::<Vec<_>>();
+
+    // If this impl block provides a Default implementation, generate the
+    // default constructor definition.
+    if let Some(default_constructor) = &impl_block_wrapper.default_constructor {
+        let class_name = &impl_block_wrapper.struct_name;
+        let default_constructor_definition =
+            gen_default_constructor(class_name, &default_constructor);
+        methods_definitions.push(default_constructor_definition.definition);
+    }
+
+    let source_includes = source_includes.into_iter().collect::<Vec<_>>().join("\n");
 
     ClassSourceParts {
-        base: format!(r#"{source_includes}
+        base: format!(
+            r#"{source_includes}
 
-{}"#, class_source_base(&impl_block_wrapper.struct_name)),
-        methods_definitions,
+{}"#,
+            class_source_base(&impl_block_wrapper.struct_name)
+        ),
+        methods_definitions: methods_definitions.join("\n"),
     }
 }
 
-pub fn gen_class_definition_parts_from_impl_block(
+pub fn gen_class_declaration_parts_from_impl_block(
     impl_block_wrapper: &ImplBlockWrapper,
 ) -> ClassHeaderParts {
-    let (method_declarations, extern_fns, includes) = impl_block_wrapper
+    let (mut method_declarations, mut extern_fns, includes) = impl_block_wrapper
         .methods
         .iter()
         .filter(|method| method.public)
@@ -430,16 +439,29 @@ pub fn gen_class_definition_parts_from_impl_block(
             },
         );
 
-    ClassHeaderParts {
-        class_definition: gen_empty_class_definition(&impl_block_wrapper.struct_name),
-        includes,
-        extern_fns: format!(
-            r#"
+    // If this impl block provides a Default implementation, add the default
+    // constructor declaration and extern fn declaration to the header.
+    if let Some(default_constructor) = &impl_block_wrapper.default_constructor {
+        let class_name = &impl_block_wrapper.struct_name;
+        let dc = gen_default_constructor(class_name, default_constructor);
+        let dc_declaration = dc.declaration;
+        let dc_extern_fn = dc.extern_fn;
+        method_declarations.push_str(&dc_declaration);
+        extern_fns.push_str(&dc_extern_fn);
+    }
+
+    let extern_fns = format!(
+        r#"
 extern "C" {{
 {extern_fns}
 }}
 "#
-        ),
+    );
+
+    ClassHeaderParts {
+        class_definition: gen_empty_class_definition(&impl_block_wrapper.struct_name),
+        includes,
+        extern_fns,
         method_declarations,
     }
 }
@@ -536,8 +558,14 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
     let copy_constructor = copy_constructor_definition(struct_wrapper);
     let move_constructor = move_constructor_definition(&struct_wrapper.name);
 
-    let default_constructor = default_constructor(struct_wrapper);
-    let default_constructor_definition = default_constructor.definition;
+    let default_constructor = &&struct_wrapper
+        .default_constructor
+        .as_ref()
+        .map(|dc| gen_default_constructor(&struct_wrapper.name, &dc));
+    let default_constructor_definition = default_constructor
+        .as_ref()
+        .map(|dc| dc.definition.to_string())
+        .unwrap_or_else(|| String::new());
 
     let destructor = destructor(&struct_wrapper.name, &struct_wrapper.drop_ext_fn_name);
     let destructor_definition = destructor.definition;
@@ -547,14 +575,24 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
         .iter()
         .map(|f| map_fields(f, &struct_wrapper.name))
         .fold(String::new(), |mut methods, Methods { getter, setter }| {
-            if let Some(Method { definition, include, .. }) = getter {
+            if let Some(Method {
+                definition,
+                include,
+                ..
+            }) = getter
+            {
                 methods.push_str(&definition);
                 if !include.is_empty() {
                     source_includes.insert(include);
                 }
             }
 
-            if let Some(Method { definition, include, .. }) = setter {
+            if let Some(Method {
+                definition,
+                include,
+                ..
+            }) = setter
+            {
                 methods.push_str(&definition);
                 if !include.is_empty() {
                     source_includes.insert(include);
@@ -564,10 +602,7 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
             methods
         });
 
-    let source_includes = source_includes
-        .into_iter()
-        .collect::<Vec<_>>()
-        .join("\n");
+    let source_includes = source_includes.into_iter().collect::<Vec<_>>().join("\n");
 
     let definitions = format!(
         r#"
@@ -581,9 +616,12 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
     );
 
     ClassSourceParts {
-        base: format!(r#"{source_includes}
+        base: format!(
+            r#"{source_includes}
 
-{}"#, class_source_base(class_name)),
+{}"#,
+            class_source_base(class_name)
+        ),
         methods_definitions: definitions,
     }
 }
@@ -640,9 +678,18 @@ pub fn gen_class_definition_parts_from_struct(struct_wrapper: &StructWrapper) ->
                 (methods, externs, includes)
             },
         );
-    let default_constructor = default_constructor(struct_wrapper);
-    let default_constructor_declaration = default_constructor.declaration;
-    let default_constructor_extern_fn = default_constructor.extern_fn;
+    let default_constructor = struct_wrapper
+        .default_constructor
+        .as_ref()
+        .map(|dc| gen_default_constructor(&struct_wrapper.name, &dc));
+    let default_constructor_declaration = default_constructor
+        .as_ref()
+        .map(|dc| dc.declaration.to_string())
+        .unwrap_or_else(|| String::new());
+    let default_constructor_extern_fn = default_constructor
+        .as_ref()
+        .map(|dc| dc.extern_fn.to_string())
+        .unwrap_or_else(|| String::new());
 
     let destructor = destructor(&struct_wrapper.name, &struct_wrapper.drop_ext_fn_name);
     let destructor_declaration = destructor.declaration;
@@ -782,8 +829,9 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
             let mut getter = getter
                 .as_ref()
                 .map(|g| map_primitive_getter(g, &field_type, &class_name));
-            if let Some(g) = getter
-                .as_mut() { g.include.push_str(&format!("#include \"{field_type}.h\"")) } // Enums are represented as their underlying integer type in C++
+            if let Some(g) = getter.as_mut() {
+                g.include.push_str(&format!("#include \"{field_type}.h\""))
+            } // Enums are represented as their underlying integer type in C++
             let setter = setter
                 .as_ref()
                 .map(|s| map_primitive_setter(s, &field_type, &class_name));
@@ -1142,35 +1190,27 @@ void {class_name}::{name}({field_type} value) {{
     }
 }
 
-fn default_constructor(struct_wrapper: &StructWrapper) -> Method {
-    let class_name = &struct_wrapper.name;
+fn gen_default_constructor(
+    class_name: impl Display,
+    default_constructor: &DefaultConstructor,
+) -> Method {
+    let default_constructor_ext_fn_name = &default_constructor.extern_fn_name;
 
-    if let Some(default_constructor) = struct_wrapper.default_constructor.as_ref() {
-        let default_constructor_ext_fn_name = &default_constructor.extern_fn_name;
-
-        let definition = format!(
-            r#"
+    let definition = format!(
+        r#"
 {class_name}::{class_name}() {{
     this->self = {default_constructor_ext_fn_name}();
 }}
 "#,
-        );
+    );
 
-        let extern_fn = format!("    void* {default_constructor_ext_fn_name}();");
+    let extern_fn = format!("    void* {default_constructor_ext_fn_name}();");
 
-        Method {
-            declaration: format!("    {class_name}();"),
-            definition,
-            extern_fn,
-            include: String::new(),
-        }
-    } else {
-        Method {
-            declaration: String::new(),
-            definition: String::new(),
-            extern_fn: String::new(),
-            include: String::new(),
-        }
+    Method {
+        declaration: format!("    {class_name}();"),
+        definition,
+        extern_fn,
+        include: String::new(),
     }
 }
 

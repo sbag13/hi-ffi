@@ -11,6 +11,8 @@ from python_ffi import ffi_init
 from python_ffi import *
 from python_ffi.TestStruct import TestStruct
 from python_ffi.TestStruct2 import TestStruct2
+from python_ffi.TestStruct3 import TestStruct3
+from python_ffi.TestStruct4 import TestStruct4
 from python_ffi.TestStatus import TestStatus
 from python_ffi.vec_i32 import i32Vec
 from python_ffi.vec_String import StringVec
@@ -77,6 +79,23 @@ def methods_tests():
     assert s.public_method_returning_string() == "String returned from Rust method"
     assert s.public_method_returning_struct().i32_field == 99
     assert s.combo_method("str1", "str2", False) == "str2"
+
+
+def default_impl_tests():
+    print("default_impl_tests")
+
+    # TestStruct3 has a manual `impl Default` that sets i32_field to 42
+    test_struct3 = TestStruct3()
+    assert test_struct3.i32_field == 42
+
+    # TestStruct2 has `#[derive(Default)]` which sets i32_field to 0
+    test_struct2 = TestStruct2()
+    assert test_struct2.i32_field == 0
+
+    # TestStruct4 has `impl Default` appearing BEFORE the struct definition
+    # (tests the WAITING_FOR_WRAPPERS mechanism)
+    test_struct4 = TestStruct4()
+    assert test_struct4.i32_field == 99
 
 
 def struct_tests():
@@ -743,6 +762,7 @@ def method_trait_tests():
 
 if __name__ == "__main__":
     struct_tests()
+    default_impl_tests()
     functions_tests()
     methods_tests()
     static_methods_tests()

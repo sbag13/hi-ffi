@@ -1,6 +1,23 @@
 import FfiModule
 import Foundation
 
+func assert_default_impl() {
+    print("assert_default_impl")
+
+    // TestStruct3 has a manual `impl Default` that sets i32_field to 42
+    let test_struct3 = TestStruct3()
+    assert(test_struct3.i32_field == 42, "TestStruct3 default should have i32_field 42")
+
+    // TestStruct2 has `#[derive(Default)]` which sets i32_field to 0
+    let test_struct2 = TestStruct2()
+    assert(test_struct2.i32_field == 0, "TestStruct2 default should have i32_field 0")
+
+    // TestStruct4 has `impl Default` appearing BEFORE the struct definition
+    // (tests the WAITING_FOR_WRAPPERS mechanism)
+    let test_struct4 = TestStruct4()
+    assert(test_struct4.i32_field == 99, "TestStruct4 default should have i32_field 99")
+}
+
 func assert_struct_basics() {
     let s = TestStruct()
 
@@ -870,6 +887,7 @@ func assert_method_trait_objects() {
 
 func run() {
     assert_struct_basics()
+    assert_default_impl()
     assert_functions()
     assert_struct_methods()
     assert_struct_static_methods()

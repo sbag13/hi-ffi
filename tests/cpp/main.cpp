@@ -4,6 +4,7 @@
 int main()
 {
     assert_structs();
+    assert_default_impl();
     assert_struct_impl_block();
     assert_struct_methods_with_structs();
     assert_struct_methods_with_vectors();

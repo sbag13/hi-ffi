@@ -6,7 +6,7 @@ use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::python::{
     ClassCode, arg_cast, set_extern_fn_resttype_field, type_hint_from_field_wrapper_type,
 };
-use crate::wrapper::{FieldWrapper, StructWrapper, WrapperType};
+use crate::wrapper::{DefaultConstructor, FieldWrapper, StructWrapper, WrapperType};
 use quote::ToTokens;
 use syn::Type;
 
@@ -120,7 +120,11 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
 }
 
 fn gen_body(struct_wrapper: &StructWrapper) -> String {
-    let default_constructor = gen_default_constructor(struct_wrapper);
+    let default_constructor = &&struct_wrapper
+        .default_constructor
+        .as_ref()
+        .map(|dc| gen_default_constructor(&dc))
+        .unwrap_or_else(|| ptr_constructor());
     let destructor = gen_destructor(struct_wrapper);
     let properties = gen_properties(struct_wrapper);
     let raw_ptr_method = gen_raw_ptr_method();
@@ -156,25 +160,25 @@ fn gen_raw_ptr_method() -> String {
         .to_string()
 }
 
-fn gen_default_constructor(struct_wrapper: &StructWrapper) -> String {
-    if let Some(default_constructor) = &struct_wrapper.default_constructor {
-        let extern_fn_name = &default_constructor.extern_fn_name;
-        format!(
-            r#"
+pub(crate) fn gen_default_constructor(dc: &DefaultConstructor) -> String {
+    let extern_fn_name = &dc.extern_fn_name;
+    format!(
+        r#"
     def __init__(self, ptr = None):
         if not ptr:
             self._self_ptr = {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}()
         else:
             self._self_ptr = ptr
 "#
-        )
-    } else {
-        "
+    )
+}
+
+pub(crate) fn ptr_constructor() -> String {
+    "
     def __init__(self, ptr):
         self._self_ptr = ptr
 "
-        .to_string()
-    }
+    .to_string()
 }
 
 fn gen_properties(struct_wrapper: &StructWrapper) -> String {

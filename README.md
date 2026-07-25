@@ -63,6 +63,13 @@ impl Shape for Circle {
     }
 }
 
+// Default can be implemented manually for a struct, and then used in other languages as well
+impl Default for Circle {
+    fn default() -> Self {
+        Circle { radius: 1.0 }
+    }
+}
+
 // A Rust implementation of Shape can be returned to other language,
 // and then received in a function like take_shape, interchangeably
 // with other language implementations of Shape

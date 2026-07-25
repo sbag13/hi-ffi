@@ -2,12 +2,13 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::ops::Deref;
 
-use quote::ToTokens;
+use quote::{ToTokens, format_ident};
 use syn::ItemImpl;
 
 use crate::translator::{NoWrapperErr, map_arg, map_wrapper_to_reusable};
 use crate::wrapper::Wrapper;
 use crate::wrapper::impl_block_wrapper::MethodWrapper;
+use crate::wrapper::is_struct_type;
 use crate::{EXPORTED_SYMBOLS_PREFIX, ReusableWrapper};
 
 use super::impl_block_wrapper::ImplBlockWrapper;
@@ -23,6 +24,37 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
     } else {
         panic!("Self type is not a path")
     };
+
+    let is_default_trait_impl = item_impl
+        .trait_
+        .as_ref()
+        .map(|(_, path, _)| path.is_ident("Default"))
+        .unwrap_or(false);
+
+    if is_default_trait_impl {
+        // If the struct hasn't been registered yet, wait for it
+        if !is_struct_type(&struct_name.to_string()) {
+            return Err(NoWrapperErr(struct_name.to_string()));
+        }
+
+        let default_constructor = crate::wrapper::DefaultConstructor {
+            extern_fn_name: format!(
+                "{EXPORTED_SYMBOLS_PREFIX}__{struct_name}__default",
+                struct_name = struct_name
+            ),
+            constructor_name: format_ident!("{struct_name}__default"),
+        };
+
+        return Ok(Wrapper {
+            original_definition: item_impl.into_token_stream(),
+            parsed: ParsedWrapper::ImplBlock(ImplBlockWrapper {
+                struct_name,
+                methods: Vec::new(),
+                default_constructor: Some(default_constructor),
+            }),
+            reusable_wrappers: HashSet::new(),
+        });
+    }
 
     let mut reusable_wrappers = HashSet::new();
 
@@ -61,6 +93,7 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
         parsed: ParsedWrapper::ImplBlock(ImplBlockWrapper {
             struct_name,
             methods,
+            default_constructor: None,
         }),
         reusable_wrappers,
     })

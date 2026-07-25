@@ -6,7 +6,9 @@ use crate::wrapper::swift::function_definition::{
     ReturnTypes, compose_function_definition, map_args, map_header_declaration_args,
     map_return_type,
 };
-use crate::wrapper::{FieldWrapper, Getter, ImplBlockWrapper, Setter, StructWrapper, WrapperType};
+use crate::wrapper::{
+    DefaultConstructor, FieldWrapper, Getter, ImplBlockWrapper, Setter, StructWrapper, WrapperType,
+};
 use quote::ToTokens;
 
 use super::impl_block_wrapper::MethodWrapper;
@@ -16,7 +18,11 @@ pub const METHOD_DEFINITIONS_MARKER: &str = "// class method definitions";
 pub fn gen_method_declarations_from_struct(struct_wrapper: &StructWrapper) -> String {
     let destructor_extern_fn = &struct_wrapper.drop_ext_fn_name;
     let getters_and_setters = gen_getters_and_setters_externs(struct_wrapper);
-    let default_constructor = gen_default_constructor_ext(struct_wrapper);
+    let default_constructor = struct_wrapper
+        .default_constructor
+        .as_ref()
+        .map(gen_default_constructor_ext)
+        .unwrap_or_default();
 
     format!(
         r#"
@@ -28,13 +34,19 @@ void {destructor_extern_fn}(void*);
 }
 
 pub fn gen_method_declarations_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -> String {
-    impl_block_wrapper
+    let mut declarations: Vec<String> = impl_block_wrapper
         .methods
         .iter()
         .filter(|&method| method.public)
         .map(gen_method_header)
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect();
+
+    // If this impl block provides a Default implementation, add the extern fn declaration.
+    if let Some(dc) = &impl_block_wrapper.default_constructor {
+        declarations.push(gen_default_constructor_ext(dc));
+    }
+
+    declarations.join("\n")
 }
 
 pub fn gen_method_header(method: &MethodWrapper) -> String {
@@ -58,7 +70,7 @@ pub fn gen_method_header(method: &MethodWrapper) -> String {
 pub fn gen_class_methods_definition_from_impl_block(
     impl_block_wrapper: &ImplBlockWrapper,
 ) -> String {
-    impl_block_wrapper
+    let mut definitions: Vec<String> = impl_block_wrapper
         .methods
         .iter()
         .filter(|&method| method.public)
@@ -75,8 +87,14 @@ pub fn gen_class_methods_definition_from_impl_block(
                 .collect::<Vec<String>>()
                 .join("\n")
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect();
+
+    // If this impl block provides a Default implementation, add the convenience init.
+    if let Some(dc) = &impl_block_wrapper.default_constructor {
+        definitions.push(gen_default_constructor(dc));
+    }
+
+    definitions.join("\n")
 }
 
 fn gen_method_definition(method: &MethodWrapper) -> String {
@@ -100,18 +118,14 @@ fn gen_method_definition(method: &MethodWrapper) -> String {
     )
 }
 
-fn gen_default_constructor_ext(struct_wrapper: &StructWrapper) -> String {
-    if let Some(default_constructor) = struct_wrapper.default_constructor.as_ref() {
-        let default_constructor_ext_fn_name = &default_constructor.extern_fn_name;
+fn gen_default_constructor_ext(dc: &DefaultConstructor) -> String {
+    let default_constructor_ext_fn_name = &dc.extern_fn_name;
 
-        format!(
-            r#"
+    format!(
+        r#"
 void* {default_constructor_ext_fn_name}();
 "#
-        )
-    } else {
-        String::new()
-    }
+    )
 }
 
 fn gen_getters_and_setters_externs(struct_wrapper: &StructWrapper) -> String {
@@ -290,7 +304,11 @@ public class {class_name}: Opaque {{
 pub fn gen_class_methods_definition_from_struct(struct_wrapper: &StructWrapper) -> String {
     let destructor_extern_fn = &struct_wrapper.drop_ext_fn_name;
     let props = gen_props(struct_wrapper);
-    let default_constructor = gen_default_constructor(struct_wrapper);
+    let default_constructor = struct_wrapper
+        .default_constructor
+        .as_ref()
+        .map(gen_default_constructor)
+        .unwrap_or_default();
 
     format!(
         r#"
@@ -305,20 +323,16 @@ pub fn gen_class_methods_definition_from_struct(struct_wrapper: &StructWrapper) 
     )
 }
 
-fn gen_default_constructor(struct_wrapper: &StructWrapper) -> String {
-    if let Some(default_constructor) = struct_wrapper.default_constructor.as_ref() {
-        let default_constructor_ext_fn_name = &default_constructor.extern_fn_name;
+fn gen_default_constructor(dc: &DefaultConstructor) -> String {
+    let default_constructor_ext_fn_name = &dc.extern_fn_name;
 
-        format!(
-            r#"
+    format!(
+        r#"
     public convenience init() {{
         self.init({default_constructor_ext_fn_name}())
     }}
 "#
-        )
-    } else {
-        String::new()
-    }
+    )
 }
 
 fn gen_props(struct_wrapper: &StructWrapper) -> String {

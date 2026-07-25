@@ -508,7 +508,7 @@ impl Wrapper {
                 ))),
             },
             ParsedWrapper::ImplBlock(impl_block_wrapper) => CppFiles {
-                header: CppHeader::Class(gen_class_definition_parts_from_impl_block(
+                header: CppHeader::Class(gen_class_declaration_parts_from_impl_block(
                     impl_block_wrapper,
                 )),
                 source: Some(CppSource::Class(gen_class_source_from_impl_block(

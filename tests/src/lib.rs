@@ -333,6 +333,33 @@ pub struct TestStruct2 {
 }
 
 #[ffi]
+#[derive(Clone, Serialize, Debug, PartialEq)]
+pub struct TestStruct3 {
+    pub i32_field: i32,
+}
+
+#[ffi]
+impl Default for TestStruct3 {
+    fn default() -> Self {
+        TestStruct3 { i32_field: 42 }
+    }
+}
+
+// Test that `impl Default` works when it appears BEFORE the struct definition
+#[ffi]
+impl Default for TestStruct4 {
+    fn default() -> Self {
+        TestStruct4 { i32_field: 99 }
+    }
+}
+
+#[ffi]
+#[derive(Clone, Serialize, Debug, PartialEq)]
+pub struct TestStruct4 {
+    pub i32_field: i32,
+}
+
+#[ffi]
 fn simple_function() {}
 
 #[ffi]

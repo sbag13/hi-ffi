@@ -61,14 +61,17 @@ pub(crate) fn write_python_code(wrapper: &Wrapper) {
         }
 
         let mut locked_per_class_imports = PER_CLASS_IMPORTS.lock().expect("Mutex lock failed");
+
         let imports_for_class = locked_per_class_imports
             .entry(class_mod.name.clone())
             .or_default();
+
         let imports_to_add = class_mod
             .imports
             .into_iter()
             .filter(|(k, _)| !imports_for_class.contains_key(k))
             .collect::<HashMap<_, _>>();
+
         prepend_to_file(
             imports_to_add
                 .values()
@@ -80,6 +83,8 @@ pub(crate) fn write_python_code(wrapper: &Wrapper) {
         imports_for_class.extend(imports_to_add);
 
         append_to_file(class_mod.body, &class_mod_path);
+
+        remove_duplicated_init(&class_mod_path);
     }
 
     for reusable_wrapper in &wrapper.reusable_wrappers {
@@ -97,6 +102,27 @@ pub(crate) fn write_python_code(wrapper: &Wrapper) {
             create_file(reusable_wrapper.python(), &file_path);
         }
     }
+}
+
+fn remove_duplicated_init(file_path: &Path) {
+    let content = std::fs::read_to_string(file_path).expect("Unable to read file");
+    let mut lines: Vec<&str> = content.lines().collect();
+
+    let init_with_constructor = lines
+        .iter()
+        .position(|line| line.contains("def __init__(self, ptr = None)"));
+
+    let init_without_constructor = lines
+        .iter()
+        .position(|line| line.contains("def __init__(self, ptr)"));
+
+    if let (Some(_init_with), Some(init_without)) =
+        (init_with_constructor, init_without_constructor)
+    {
+        lines.drain(init_without..init_without + 2);
+    }
+
+    std::fs::write(file_path, lines.join("\n")).expect("Unable to write file");
 }
 
 fn global_state() -> String {
