@@ -2,8 +2,8 @@ use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 
 use crate::wrapper::{
-    DefaultConstructor, MappedFunctionArgsTokens, MappedReturnType, gen_default_constructor,
-    map_function_arg_wrappers, map_return_type,
+    DefaultConstructor, MappedFunctionArgsTokens, MappedReturnType, PartialEqImpl,
+    gen_default_constructor, gen_partial_eq_impl, map_function_arg_wrappers, map_return_type,
 };
 
 use super::{FunctionArgWrapper, FunctionReturnWrapper};
@@ -13,6 +13,7 @@ pub struct ImplBlockWrapper {
     pub(crate) struct_name: Ident,
     pub(crate) methods: Vec<MethodWrapper>,
     pub(crate) default_constructor: Option<DefaultConstructor>,
+    pub(crate) partial_eq: Option<PartialEqImpl>,
 }
 
 #[derive(Debug)]
@@ -75,9 +76,12 @@ impl From<&ImplBlockWrapper> for TokenStream2 {
         let default_constructor =
             gen_default_constructor(&impl_block_wrapper.default_constructor, struct_name);
 
+        let partial_eq = gen_partial_eq_impl(&impl_block_wrapper.partial_eq, struct_name);
+
         quote! {
             #(#methods)*
             #default_constructor
+            #partial_eq
         }
     }
 }

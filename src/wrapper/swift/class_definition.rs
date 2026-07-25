@@ -7,7 +7,8 @@ use crate::wrapper::swift::function_definition::{
     map_return_type,
 };
 use crate::wrapper::{
-    DefaultConstructor, FieldWrapper, Getter, ImplBlockWrapper, Setter, StructWrapper, WrapperType,
+    DefaultConstructor, FieldWrapper, Getter, ImplBlockWrapper, PartialEqImpl, Setter,
+    StructWrapper, WrapperType,
 };
 use quote::ToTokens;
 
@@ -23,12 +24,18 @@ pub fn gen_method_declarations_from_struct(struct_wrapper: &StructWrapper) -> St
         .as_ref()
         .map(gen_default_constructor_ext)
         .unwrap_or_default();
+    let partial_eq_ext = struct_wrapper
+        .partial_eq
+        .as_ref()
+        .map(gen_partial_eq_ext)
+        .unwrap_or_default();
 
     format!(
         r#"
 void {destructor_extern_fn}(void*);
 {getters_and_setters}
 {default_constructor}
+{partial_eq_ext}
 "#
     )
 }
@@ -44,6 +51,11 @@ pub fn gen_method_declarations_from_impl_block(impl_block_wrapper: &ImplBlockWra
     // If this impl block provides a Default implementation, add the extern fn declaration.
     if let Some(dc) = &impl_block_wrapper.default_constructor {
         declarations.push(gen_default_constructor_ext(dc));
+    }
+
+    // If this impl block provides a PartialEq implementation, add the extern fn declaration.
+    if let Some(partial_eq) = &impl_block_wrapper.partial_eq {
+        declarations.push(gen_partial_eq_ext(partial_eq));
     }
 
     declarations.join("\n")
@@ -94,6 +106,14 @@ pub fn gen_class_methods_definition_from_impl_block(
         definitions.push(gen_default_constructor(dc));
     }
 
+    // If this impl block provides a PartialEq implementation, add the equality operator.
+    if let Some(partial_eq) = &impl_block_wrapper.partial_eq {
+        definitions.push(gen_partial_eq_impl(
+            partial_eq,
+            &impl_block_wrapper.struct_name,
+        ));
+    }
+
     definitions.join("\n")
 }
 
@@ -124,6 +144,16 @@ fn gen_default_constructor_ext(dc: &DefaultConstructor) -> String {
     format!(
         r#"
 void* {default_constructor_ext_fn_name}();
+"#
+    )
+}
+
+fn gen_partial_eq_ext(partial_eq: &PartialEqImpl) -> String {
+    let extern_fn_name = &partial_eq.extern_fn_name;
+
+    format!(
+        r#"
+bool {extern_fn_name}(void* lhs, void* rhs);
 "#
     )
 }
@@ -309,6 +339,11 @@ pub fn gen_class_methods_definition_from_struct(struct_wrapper: &StructWrapper) 
         .as_ref()
         .map(gen_default_constructor)
         .unwrap_or_default();
+    let partial_eq_impl = struct_wrapper
+        .partial_eq
+        .as_ref()
+        .map(|partial_eq| gen_partial_eq_impl(partial_eq, &struct_wrapper.name))
+        .unwrap_or_default();
 
     format!(
         r#"
@@ -319,6 +354,7 @@ pub fn gen_class_methods_definition_from_struct(struct_wrapper: &StructWrapper) 
     }}
 {default_constructor}
 {props}
+{partial_eq_impl}
 "#
     )
 }
@@ -332,6 +368,21 @@ fn gen_default_constructor(dc: &DefaultConstructor) -> String {
         self.init({default_constructor_ext_fn_name}())
     }}
 "#
+    )
+}
+
+fn gen_partial_eq_impl(partial_eq: &PartialEqImpl, class_name: impl Display) -> String {
+    let extern_fn_name = &partial_eq.extern_fn_name;
+
+    format!(
+        r#"
+    public static func == (lhs: {class_name}, rhs: {class_name}) -> Bool {{
+        return {extern_fn_name}(lhs.rawPtr(), rhs.rawPtr())
+    }}
+    public static func != (lhs: {class_name}, rhs: {class_name}) -> Bool {{
+        return !{extern_fn_name}(lhs.rawPtr(), rhs.rawPtr())
+    }}
+"#,
     )
 }
 

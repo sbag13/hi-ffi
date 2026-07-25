@@ -10,6 +10,7 @@ pub struct StructWrapper {
     pub(crate) name: Ident,
     pub(crate) fields: Vec<FieldWrapper>,
     pub(crate) default_constructor: Option<DefaultConstructor>, // name of the default constructor if it exists
+    pub(crate) partial_eq: Option<PartialEqImpl>,
     pub(crate) drop_ext_fn_name: String,
     pub(crate) clone_ext_fn_name: String,
     pub(crate) original_item_struct: syn::ItemStruct,
@@ -54,6 +55,9 @@ impl From<&StructWrapper> for TokenStream2 {
 
         let default_constructor =
             gen_default_constructor(&struct_wrapper.default_constructor, class_name);
+
+        let partial_eq = gen_partial_eq_impl(&struct_wrapper.partial_eq, class_name);
+
         let drop = gen_drop(&struct_wrapper.drop_ext_fn_name, class_name);
         let clone = gen_clone(&struct_wrapper.clone_ext_fn_name, class_name);
 
@@ -69,6 +73,7 @@ impl From<&StructWrapper> for TokenStream2 {
             #default_constructor
             #drop
             #clone
+            #partial_eq
         }
     }
 }
@@ -121,6 +126,27 @@ pub(crate) fn gen_default_constructor(
                     let instance = Box::new(#class_name::default());
                     let ptr = Box::into_raw(instance);
                     ptr
+                }
+            }
+        }
+    } else {
+        quote! {}
+    }
+}
+
+pub(crate) fn gen_partial_eq_impl(
+    partial_eq_impl: &Option<PartialEqImpl>,
+    class_name: impl ToTokens + Display,
+) -> TokenStream2 {
+    if let Some(partial_eq_impl) = partial_eq_impl {
+        let extern_fn_name = &partial_eq_impl.extern_fn_name;
+        let wrapper_fn_name = &partial_eq_impl.eq_fn_name;
+        quote! {
+            #[doc(hidden)]
+            #[unsafe(export_name = #extern_fn_name)]
+            pub unsafe extern "C" fn #wrapper_fn_name(_self: *mut #class_name, other: *mut #class_name) -> bool {
+                unsafe {
+                    (&*_self).eq(&*other)
                 }
             }
         }
@@ -378,6 +404,12 @@ fn wrapper_fn_name(class_name: impl Display, fn_name: impl Display) -> Ident {
 pub struct DefaultConstructor {
     pub(crate) constructor_name: Ident,
     pub(crate) extern_fn_name: String,
+}
+
+#[derive(Debug)]
+pub struct PartialEqImpl {
+    pub(crate) extern_fn_name: String,
+    pub(crate) eq_fn_name: Ident,
 }
 
 pub struct FieldWrapper {

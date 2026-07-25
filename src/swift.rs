@@ -56,11 +56,7 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
     match &wrapper.parsed {
         ParsedWrapper::Trait(_) => {
             let trait_header = swift_code.header();
-            insert_after(
-                "typedef size_t usize;\n",
-                trait_header,
-                &swift_header_path,
-            );
+            insert_after("typedef size_t usize;\n", trait_header, &swift_header_path);
         }
         ParsedWrapper::Enum(_) => insert_after(
             ENUM_DEFINITIONS_MARKER,

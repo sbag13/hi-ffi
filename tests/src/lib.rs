@@ -354,6 +354,13 @@ impl Default for TestStruct4 {
 }
 
 #[ffi]
+impl TestStruct4 {
+    pub fn static_method_returning_self(i32_field: i32) -> TestStruct4 {
+        TestStruct4 { i32_field }
+    }
+}
+
+#[ffi]
 #[derive(Clone, Serialize, Debug, PartialEq)]
 pub struct TestStruct4 {
     pub i32_field: i32,

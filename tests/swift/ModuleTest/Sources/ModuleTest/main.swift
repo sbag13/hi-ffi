@@ -18,6 +18,20 @@ func assert_default_impl() {
     assert(test_struct4.i32_field == 99, "TestStruct4 default should have i32_field 99")
 }
 
+func assert_partial_eq_impl() {
+    print("assert_partial_eq_impl")
+
+    let s1 = TestStruct2()
+    s1.i32_field = 10
+    let s2 = TestStruct2()
+    s2.i32_field = 10
+    let s3 = TestStruct2()
+    s3.i32_field = 20
+
+    assert(s1 == s2, "s1 should be equal to s2")
+    assert(s1 != s3, "s1 should not be equal to s3")
+}
+
 func assert_struct_basics() {
     let s = TestStruct()
 
@@ -177,6 +191,10 @@ func assert_struct_static_methods() {
     assert(
         TestStruct.static_combo_method("Combo!", "Don't print me", true) == "Combo!",
         "static_combo_method should return correct string")
+
+    assert(
+        TestStruct4.static_method_returning_self(123).i32_field == 123,
+        "static_method_returning_self should return struct with i32_field 123")
 }
 
 func assert_vec_functions() {
@@ -888,6 +906,7 @@ func assert_method_trait_objects() {
 func run() {
     assert_struct_basics()
     assert_default_impl()
+    assert_partial_eq_impl()
     assert_functions()
     assert_struct_methods()
     assert_struct_static_methods()

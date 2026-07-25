@@ -496,7 +496,7 @@ impl Wrapper {
     pub fn cpp(&self) -> CppFiles {
         match &self.parsed {
             ParsedWrapper::Struct(struct_wrapper) => CppFiles {
-                header: CppHeader::Class(gen_class_definition_parts_from_struct(struct_wrapper)),
+                header: CppHeader::Class(gen_class_declarations_parts_from_struct(struct_wrapper)),
                 source: Some(CppSource::Class(gen_methods_definitions_from_struct(
                     struct_wrapper,
                 ))),

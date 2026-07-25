@@ -380,6 +380,14 @@ pub fn gen_class_source_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -
         methods_definitions.push(default_constructor_definition.definition);
     }
 
+    // If this impl block provides a PartialEq implementation, generate the
+    // partial_eq method definition.
+    if let Some(partial_eq) = &impl_block_wrapper.partial_eq {
+        let class_name = &impl_block_wrapper.struct_name;
+        let partial_eq_definition = gen_partial_eq_impl(class_name, &partial_eq);
+        methods_definitions.push(partial_eq_definition.definition);
+    }
+
     let source_includes = source_includes.into_iter().collect::<Vec<_>>().join("\n");
 
     ClassSourceParts {
@@ -448,6 +456,17 @@ pub fn gen_class_declaration_parts_from_impl_block(
         let dc_extern_fn = dc.extern_fn;
         method_declarations.push_str(&dc_declaration);
         extern_fns.push_str(&dc_extern_fn);
+    }
+
+    // If this impl block provides a PartialEq implementation, add the partial_eq
+    // method declaration and extern fn declaration to the header.
+    if let Some(partial_eq) = &impl_block_wrapper.partial_eq {
+        let class_name = &impl_block_wrapper.struct_name;
+        let pe = gen_partial_eq_impl(class_name, partial_eq);
+        let pe_declaration = pe.declaration;
+        let pe_extern_fn = pe.extern_fn;
+        method_declarations.push_str(&pe_declaration);
+        extern_fns.push_str(&pe_extern_fn);
     }
 
     let extern_fns = format!(
@@ -558,14 +577,25 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
     let copy_constructor = copy_constructor_definition(struct_wrapper);
     let move_constructor = move_constructor_definition(&struct_wrapper.name);
 
-    let default_constructor = &&struct_wrapper
+    let default_constructor = &struct_wrapper
         .default_constructor
         .as_ref()
         .map(|dc| gen_default_constructor(&struct_wrapper.name, &dc));
+
     let default_constructor_definition = default_constructor
         .as_ref()
         .map(|dc| dc.definition.to_string())
-        .unwrap_or_else(|| String::new());
+        .unwrap_or_default();
+
+    let partial_eq = &struct_wrapper
+        .partial_eq
+        .as_ref()
+        .map(|pe| gen_partial_eq_impl(&struct_wrapper.name, &pe));
+
+    let partial_eq_definition = partial_eq
+        .as_ref()
+        .map(|pe| pe.definition.to_string())
+        .unwrap_or_default();
 
     let destructor = destructor(&struct_wrapper.name, &struct_wrapper.drop_ext_fn_name);
     let destructor_definition = destructor.definition;
@@ -612,6 +642,7 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
 {default_constructor_definition}
 {destructor_definition}
 {method_definitions}
+{partial_eq_definition}
 "#
     );
 
@@ -642,7 +673,9 @@ void* {class_name}::leak() {{
     )
 }
 
-pub fn gen_class_definition_parts_from_struct(struct_wrapper: &StructWrapper) -> ClassHeaderParts {
+pub fn gen_class_declarations_parts_from_struct(
+    struct_wrapper: &StructWrapper,
+) -> ClassHeaderParts {
     let class_name = &struct_wrapper.name;
     let (method_declarations, extern_fns, includes) = struct_wrapper
         .fields
@@ -685,11 +718,24 @@ pub fn gen_class_definition_parts_from_struct(struct_wrapper: &StructWrapper) ->
     let default_constructor_declaration = default_constructor
         .as_ref()
         .map(|dc| dc.declaration.to_string())
-        .unwrap_or_else(|| String::new());
+        .unwrap_or_default();
     let default_constructor_extern_fn = default_constructor
         .as_ref()
         .map(|dc| dc.extern_fn.to_string())
-        .unwrap_or_else(|| String::new());
+        .unwrap_or_default();
+
+    let partial_eq = struct_wrapper
+        .partial_eq
+        .as_ref()
+        .map(|pe| gen_partial_eq_impl(&struct_wrapper.name, &pe));
+    let partial_eq_declaration = partial_eq
+        .as_ref()
+        .map(|pe| pe.declaration.to_string())
+        .unwrap_or_default();
+    let partial_eq_extern_fn = partial_eq
+        .as_ref()
+        .map(|pe| pe.extern_fn.to_string())
+        .unwrap_or_default();
 
     let destructor = destructor(&struct_wrapper.name, &struct_wrapper.drop_ext_fn_name);
     let destructor_declaration = destructor.declaration;
@@ -710,6 +756,7 @@ extern "C" {{
 {default_constructor_extern_fn}
 {destructor_extern_fn}
 {clone_extern_fn}
+{partial_eq_extern_fn}
 }}
 "#
         ),
@@ -721,6 +768,7 @@ extern "C" {{
 {default_constructor_declaration}
 {destructor_declaration}
 {method_declarations}
+{partial_eq_declaration}
 "#
         ),
     }
@@ -1208,6 +1256,35 @@ fn gen_default_constructor(
 
     Method {
         declaration: format!("    {class_name}();"),
+        definition,
+        extern_fn,
+        include: String::new(),
+    }
+}
+
+fn gen_partial_eq_impl(class_name: impl Display, partial_eq: &PartialEqImpl) -> Method {
+    let partial_eq_ext_fn_name = &partial_eq.extern_fn_name;
+
+    let definition = format!(
+        r#"
+bool {class_name}::operator==(const {class_name}& other) const {{
+    return {partial_eq_ext_fn_name}(this->self, other.self);
+}}
+bool {class_name}::operator!=(const {class_name}& other) const {{
+    return !(*this == other);
+}}
+"#
+    );
+
+    let extern_fn = format!("    bool {partial_eq_ext_fn_name}(void*, void*);");
+
+    let declaration = format!(
+        r#"    bool operator==(const {class_name}& other) const;
+    bool operator!=(const {class_name}& other) const;"#
+    );
+
+    Method {
+        declaration,
         definition,
         extern_fn,
         include: String::new(),

@@ -6,7 +6,7 @@ use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::python::{
     ClassCode, arg_cast, set_extern_fn_resttype_field, type_hint_from_field_wrapper_type,
 };
-use crate::wrapper::{DefaultConstructor, FieldWrapper, StructWrapper, WrapperType};
+use crate::wrapper::{DefaultConstructor, FieldWrapper, PartialEqImpl, StructWrapper, WrapperType};
 use quote::ToTokens;
 use syn::Type;
 
@@ -33,10 +33,14 @@ class {class_name}:"#
 }
 
 fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
-    let imports = HashMap::from([(
+    let mut imports = HashMap::from([(
         PYTHON_LIB_GETTER_NAME.to_string(),
         format!("from .global_state import {PYTHON_LIB_GETTER_NAME}"),
     )]);
+
+    if struct_wrapper.partial_eq.is_some() {
+        imports.insert("Self".to_string(), "from typing import Self".to_string());
+    }
 
     struct_wrapper.fields.iter().fold(
         imports,
@@ -120,11 +124,16 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
 }
 
 fn gen_body(struct_wrapper: &StructWrapper) -> String {
-    let default_constructor = &&struct_wrapper
+    let default_constructor = &struct_wrapper
         .default_constructor
         .as_ref()
-        .map(|dc| gen_default_constructor(&dc))
+        .map(gen_default_constructor)
         .unwrap_or_else(|| ptr_constructor());
+    let partial_eq = &struct_wrapper
+        .partial_eq
+        .as_ref()
+        .map(gen_partial_eq_impl)
+        .unwrap_or_else(|| "".to_string());
     let destructor = gen_destructor(struct_wrapper);
     let properties = gen_properties(struct_wrapper);
     let raw_ptr_method = gen_raw_ptr_method();
@@ -133,6 +142,7 @@ fn gen_body(struct_wrapper: &StructWrapper) -> String {
         r#"
 {properties}
 {default_constructor}
+{partial_eq}
     def leak(self) -> ctypes.c_void_p:
         ret = self._self_ptr
         self._self_ptr = None
@@ -169,6 +179,18 @@ pub(crate) fn gen_default_constructor(dc: &DefaultConstructor) -> String {
             self._self_ptr = {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}()
         else:
             self._self_ptr = ptr
+"#
+    )
+}
+
+pub(crate) fn gen_partial_eq_impl(partial_eq: &PartialEqImpl) -> String {
+    let extern_fn_name = &partial_eq.extern_fn_name;
+    format!(
+        r#"
+    def __eq__(self, other: Self) -> bool:
+        return {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}(self._self_ptr, other._self_ptr)
+    def __ne__(self, other: Self) -> bool:
+        return not self.__eq__(other)
 "#
     )
 }

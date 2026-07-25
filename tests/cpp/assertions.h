@@ -1,6 +1,7 @@
 #pragma once
 void assert_structs();
 void assert_default_impl();
+void assert_partial_eq_impl();
 void assert_struct_impl_block();
 void assert_struct_methods_with_structs();
 void assert_struct_methods_with_vectors();

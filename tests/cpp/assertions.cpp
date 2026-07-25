@@ -359,6 +359,21 @@ void assert_default_impl()
     assert(test_struct4.get_i32_field() == 99);
 }
 
+void assert_partial_eq_impl()
+{
+    std::cout << "assert_partial_eq_impl" << std::endl;
+
+    auto s1 = TestStruct2();
+    s1.set_i32_field(10);
+    auto s2 = TestStruct2();
+    s2.set_i32_field(10);
+    auto s3 = TestStruct2();
+    s3.set_i32_field(20);
+
+    assert(s1 == s2);
+    assert(s1 != s3);
+}
+
 void assert_struct_impl_block()
 {
     auto test_struct = TestStruct();
@@ -375,6 +390,8 @@ void assert_struct_impl_block()
     assert(TestStruct::static_method_returning_primitive() == 22);
     assert(TestStruct::static_method_returning_string() == "String returned from Rust static method");
     assert(test_struct.combo_method("first", "second", false) == "second");
+
+    assert(TestStruct4::static_method_returning_self(123).get_i32_field() == 123);
 }
 
 void assert_struct_methods_with_structs()

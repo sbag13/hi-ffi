@@ -20,7 +20,7 @@ Add `hi-ffi` to your `Cargo.toml`:
 
 ```toml,ignore
 [dependencies]
-hi_ffi = { version = "0.7", features = ["cpp", "swift", "python"] }
+hi_ffi = { version = "0.8", features = ["cpp", "swift", "python"] }
 ```
 
 **Note**: `hi-ffi` is a procedural macro crate. Enable the `cpp` and/or `swift`, `python` features based on your target languages.
@@ -70,6 +70,13 @@ impl Default for Circle {
     }
 }
 
+// PartialEq can be implemented manually for a struct, and then used in other languages as well
+impl PartialEq for Circle {
+    fn eq(&self, other: &Self) -> bool {
+        self.radius == other.radius
+    }
+}
+
 // A Rust implementation of Shape can be returned to other language,
 // and then received in a function like take_shape, interchangeably
 // with other language implementations of Shape
@@ -79,7 +86,7 @@ pub fn create_circle(radius: f64) -> Box<dyn Shape> {
 }
 
 #[ffi]
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 struct Person {
     // Generate both getter and setter
     #[ffi(setter, getter)]
@@ -151,7 +158,7 @@ These examples demonstrate how to use the generated bindings in real application
 | Vec getters/setters         | ✅   | ✅     | ✅      |
 | C-like Enum getters/setters | ✅   | ✅     | ✅      |
 | Default constructor         | ✅   | ✅     | ✅      |
-| PartialEq                   | ❌   | ❌     | ❌      |
+| PartialEq                   | ✅   | ✅     | ✅      |
 
 ### Methods
 

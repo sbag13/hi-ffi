@@ -334,7 +334,7 @@ class {trait_name}Impl:
                 arg_types.push(format!("ctypes.{}", c_type_from_wrapper_type(&arg.wrapper_type)));
             }
             let argtypes_str = format!("[{}]", arg_types.join(", "));
-            
+
             let set_argtypes = format!(
                 "{PYTHON_LIB_GETTER_NAME}().{boxdyn_func_name}.argtypes = {}",
                 argtypes_str

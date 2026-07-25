@@ -20,6 +20,7 @@ pub fn translate_struct(item_struct: ItemStruct) -> Result<Wrapper, NoWrapperErr
             name: class_name.clone(),
             fields: fields_wrappers(&item_struct)?,
             default_constructor: default_constructor(&item_struct),
+            partial_eq: partial_eq_impl(&item_struct),
             drop_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__drop"),
             clone_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__clone"),
             original_item_struct: item_struct,
@@ -128,7 +129,33 @@ fn extract_field_attributes(field: &syn::Field) -> FieldAttributes {
     }
 }
 
-fn default_constructor(item_struct: &ItemStruct) -> Option<DefaultConstructor> {
+pub fn partial_eq_impl(item_struct: &ItemStruct) -> Option<PartialEqImpl> {
+    let mut partial_eq_impl = None;
+
+    let class_name = &item_struct.ident;
+
+    for attr in &item_struct.attrs {
+        if attr.path().is_ident("derive") {
+            let _ = attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("PartialEq") {
+                    partial_eq_impl = Some(class_name_to_partial_eq_impl(class_name));
+                }
+                Ok(())
+            });
+        }
+    }
+
+    partial_eq_impl
+}
+
+pub(crate) fn class_name_to_partial_eq_impl(class_name: impl Display) -> PartialEqImpl {
+    PartialEqImpl {
+        extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__partial_eq"),
+        eq_fn_name: format_ident!("{class_name}__partial_eq"),
+    }
+}
+
+pub fn default_constructor(item_struct: &ItemStruct) -> Option<DefaultConstructor> {
     let mut default_constructor = None;
 
     let class_name = &item_struct.ident;
@@ -137,13 +164,7 @@ fn default_constructor(item_struct: &ItemStruct) -> Option<DefaultConstructor> {
         if attr.path().is_ident("derive") {
             let _ = attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("Default") {
-                    default_constructor = Some(DefaultConstructor {
-                        extern_fn_name: format!(
-                            "{EXPORTED_SYMBOLS_PREFIX}__{class_name}__default",
-                            class_name = class_name
-                        ),
-                        constructor_name: format_ident!("{class_name}__default"),
-                    });
+                    default_constructor = Some(class_name_to_default_constructor(class_name));
                 }
                 Ok(())
             });
@@ -151,4 +172,11 @@ fn default_constructor(item_struct: &ItemStruct) -> Option<DefaultConstructor> {
     }
 
     default_constructor
+}
+
+pub(crate) fn class_name_to_default_constructor(class_name: impl Display) -> DefaultConstructor {
+    DefaultConstructor {
+        extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__default"),
+        constructor_name: format_ident!("{class_name}__default"),
+    }
 }

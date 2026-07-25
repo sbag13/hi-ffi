@@ -2,13 +2,15 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::ops::Deref;
 
-use quote::{ToTokens, format_ident};
+use quote::ToTokens;
 use syn::ItemImpl;
 
+use crate::translator::struct_translator::{
+    class_name_to_default_constructor, class_name_to_partial_eq_impl,
+};
 use crate::translator::{NoWrapperErr, map_arg, map_wrapper_to_reusable};
-use crate::wrapper::Wrapper;
 use crate::wrapper::impl_block_wrapper::MethodWrapper;
-use crate::wrapper::is_struct_type;
+use crate::wrapper::{Wrapper, is_struct_type};
 use crate::{EXPORTED_SYMBOLS_PREFIX, ReusableWrapper};
 
 use super::impl_block_wrapper::ImplBlockWrapper;
@@ -25,6 +27,32 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
         panic!("Self type is not a path")
     };
 
+    let is_partial_eq_trait_impl = item_impl
+        .trait_
+        .as_ref()
+        .map(|(_, path, _)| path.is_ident("PartialEq"))
+        .unwrap_or(false);
+
+    if is_partial_eq_trait_impl {
+        // If the struct hasn't been registered yet, wait for it
+        if !is_struct_type(&struct_name.to_string()) {
+            return Err(NoWrapperErr(struct_name.to_string()));
+        }
+
+        let partial_eq_impl = class_name_to_partial_eq_impl(&struct_name);
+
+        return Ok(Wrapper {
+            original_definition: item_impl.into_token_stream(),
+            parsed: ParsedWrapper::ImplBlock(ImplBlockWrapper {
+                struct_name,
+                methods: Vec::new(),
+                default_constructor: None,
+                partial_eq: Some(partial_eq_impl),
+            }),
+            reusable_wrappers: HashSet::new(),
+        });
+    }
+
     let is_default_trait_impl = item_impl
         .trait_
         .as_ref()
@@ -37,13 +65,7 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
             return Err(NoWrapperErr(struct_name.to_string()));
         }
 
-        let default_constructor = crate::wrapper::DefaultConstructor {
-            extern_fn_name: format!(
-                "{EXPORTED_SYMBOLS_PREFIX}__{struct_name}__default",
-                struct_name = struct_name
-            ),
-            constructor_name: format_ident!("{struct_name}__default"),
-        };
+        let default_constructor = class_name_to_default_constructor(&struct_name);
 
         return Ok(Wrapper {
             original_definition: item_impl.into_token_stream(),
@@ -51,6 +73,7 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
                 struct_name,
                 methods: Vec::new(),
                 default_constructor: Some(default_constructor),
+                partial_eq: None,
             }),
             reusable_wrappers: HashSet::new(),
         });
@@ -94,6 +117,7 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
             struct_name,
             methods,
             default_constructor: None,
+            partial_eq: None,
         }),
         reusable_wrappers,
     })

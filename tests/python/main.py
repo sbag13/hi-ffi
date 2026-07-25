@@ -62,6 +62,8 @@ def static_methods_tests():
     combo_result = TestStruct.static_combo_struct_method(combo_arg1, combo_arg2)
     assert combo_result.i32_field == 300
 
+    assert TestStruct4.static_method_returning_self(123).i32_field == 123
+
 
 def methods_tests():
     s = TestStruct()
@@ -96,6 +98,23 @@ def default_impl_tests():
     # (tests the WAITING_FOR_WRAPPERS mechanism)
     test_struct4 = TestStruct4()
     assert test_struct4.i32_field == 99
+
+
+def partial_eq_tests():
+    print("partial_eq_tests")
+
+    s1 = TestStruct2()
+    s1.i32_field = 10
+
+    s2 = TestStruct2()
+    s2.i32_field = 10
+
+    s3 = TestStruct2()
+    s3.i32_field = 20
+
+    assert s1 == s2
+    assert not (s1 == s3)
+    assert not (s2 == s3)
 
 
 def struct_tests():
@@ -763,6 +782,7 @@ def method_trait_tests():
 if __name__ == "__main__":
     struct_tests()
     default_impl_tests()
+    partial_eq_tests()
     functions_tests()
     methods_tests()
     static_methods_tests()

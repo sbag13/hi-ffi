@@ -6,7 +6,7 @@ use quote::ToTokens;
 use crate::prepend_each_line_with_n_tabs;
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::impl_block_wrapper::ImplBlockWrapper;
-use crate::wrapper::python::struct_mod::gen_default_constructor;
+use crate::wrapper::python::struct_mod::{gen_default_constructor, gen_partial_eq_impl};
 use crate::wrapper::python::{
     ClassCode, arg_cast, result_cast_and_return, set_extern_fn_resttype,
     type_hint_from_wrapper_type,
@@ -34,6 +34,13 @@ class {class_name}:"#
     if let Some(default_constructor) = &impl_block.default_constructor {
         let dc = gen_default_constructor(default_constructor);
         body_section.push(dc);
+    }
+
+    // If this impl block provides a PartialEq implementation, generate the
+    // __eq__ method.
+    if let Some(partial_eq) = &impl_block.partial_eq {
+        let partial_eq_impl = gen_partial_eq_impl(partial_eq);
+        body_section.push(partial_eq_impl);
     }
 
     for method in impl_block.methods.iter().filter(|m| m.public) {
