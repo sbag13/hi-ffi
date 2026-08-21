@@ -771,6 +771,140 @@ public:
         }
     }
 
+    i32 trait_fn_returning_result_int(bool error) override
+    {
+        if (!error)
+        {
+            return 555;
+        }
+        else
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
+    bool trait_fn_returning_result_bool(bool error) override
+    {
+        if (!error)
+        {
+            return true;
+        }
+        else
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
+    std::string trait_fn_returning_result_string(bool error) override
+    {
+        if (!error)
+        {
+            return "Some string";
+        }
+        else
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
+    TestStruct2 trait_fn_returning_result_struct(bool error) override
+    {
+        if (!error)
+        {
+            TestStruct2 s;
+            s.set_i32_field(789);
+            return s;
+        }
+        else
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
+    TestStatus trait_fn_returning_result_enum(bool error) override
+    {
+        if (!error)
+        {
+            return TestStatus::Active;
+        }
+        else
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
+    std::vector<i32> trait_fn_returning_result_vec_of_ints(bool error) override
+    {
+        if (!error)
+        {
+            return {1, 2, 3};
+        }
+        else
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
+    std::vector<bool> trait_fn_returning_result_vec_of_bools(bool error) override
+    {
+        if (!error)
+        {
+            return {true, false, true};
+        }
+        else
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
+    std::vector<TestStatus> trait_fn_returning_result_vec_of_enums(bool error) override
+    {
+        if (!error)
+        {
+            return {TestStatus::Active, TestStatus::Inactive, TestStatus::Pending};
+        }
+        else
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
+    std::vector<std::string> trait_fn_returning_result_vec_of_strings(bool error) override
+    {
+        if (!error)
+        {
+            return {"Hello", "from", "trait", "object"};
+        }
+        else
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
+    std::vector<TestStruct2> trait_fn_returning_result_vec_of_structs(bool error) override
+    {
+        if (!error)
+        {
+            TestStruct2 s1;
+            s1.set_i32_field(111);
+            TestStruct2 s2;
+            s2.set_i32_field(222);
+            return {s1, s2};
+        }
+        else
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
+    void trait_fn_returning_result_with_unit_expression(bool error) override
+    {
+        if (error)
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+    }
+
     ~MyStructWithTrait() override
     {
         // std::cout << "MyStructWithTrait destructor called!" << std::endl;
@@ -843,12 +977,134 @@ void assert_traits()
     assert(opt_enum2.value() == TestStatus::Pending);
     assert(opt_struct2.value().get_i32_field() == 789);
 
+    assert(rust_trait_obj->trait_fn_returning_result_int(false) == 555);
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_int(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "StructError: EnumError: VariantTwo") == 0);
+    }
+
+    assert(rust_trait_obj->trait_fn_returning_result_bool(false) == true);
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_bool(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "SimpleError") == 0);
+    }
+
+    assert(rust_trait_obj->trait_fn_returning_result_string(false) == "Some string");
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_string(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "SimpleError") == 0);
+    }
+
+    assert(rust_trait_obj->trait_fn_returning_result_struct(false).get_i32_field() == 789);
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_struct(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+
+    assert(rust_trait_obj->trait_fn_returning_result_enum(false) == TestStatus::Active);
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_enum(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+
+    assert(rust_trait_obj->trait_fn_returning_result_vec_of_ints(false) == std::vector<i32>({1, 2, 3}));
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_vec_of_ints(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+
+    assert(rust_trait_obj->trait_fn_returning_result_vec_of_bools(false) == std::vector<bool>({true, false, true}));
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_vec_of_bools(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+
+    assert(rust_trait_obj->trait_fn_returning_result_vec_of_enums(false) == std::vector<TestStatus>({TestStatus::Active, TestStatus::Inactive, TestStatus::Pending}));
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_vec_of_enums(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+
+    assert(rust_trait_obj->trait_fn_returning_result_vec_of_strings(false) == std::vector<std::string>({"Hello", "from", "trait", "object"}));
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_vec_of_strings(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+
+    auto expected_vec_of_structs = std::vector<TestStruct2>({TestStruct2::new_ts2(111), TestStruct2::new_ts2(222)});
+    assert(rust_trait_obj->trait_fn_returning_result_vec_of_structs(false) == expected_vec_of_structs);
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_vec_of_structs(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+
+    rust_trait_obj->trait_fn_returning_result_with_unit_expression(false); // just no exception
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_with_unit_expression(true);
+        assert(false); // Should not reach here
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "SimpleError") == 0);
+    }
+
     function_taking_trait_object(std::move(rust_trait_obj));
 }
 
-void assert_method_trait_objects()
+void assert_method_taking_trait_objects()
 {
-    std::cout << "assert_method_trait_objects" << std::endl;
+    std::cout << "assert_method_taking_trait_objects" << std::endl;
 
     auto test_struct = TestStruct();
     auto cpp_trait_obj = std::make_shared<MyStructWithTrait>();

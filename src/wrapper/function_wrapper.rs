@@ -305,6 +305,24 @@ impl WrapperType {
             WrapperType::Option(inner) => format!("{}_option", inner.name()),
         }
     }
+
+    pub fn rust_type(&self) -> String {
+        match self {
+            WrapperType::IntegerNumber(inner)
+            | WrapperType::FloatingPointNumber(inner)
+            | WrapperType::Struct(inner)
+            | WrapperType::Trait(inner)
+            | WrapperType::Enum(inner) => inner.to_owned(),
+            WrapperType::Vec(inner) => format!("Vec<{}>", inner.rust_type()),
+            WrapperType::Bool => "bool".to_string(),
+            WrapperType::String => "String".to_string(),
+            WrapperType::Result(_) => {
+                unimplemented!("Result type is not supported in rust_type()")
+            }
+            WrapperType::UnitExpr => "()".to_string(),
+            WrapperType::Option(inner) => format!("Option<{}>", inner.rust_type()),
+        }
+    }
 }
 
 impl FromStr for WrapperType {

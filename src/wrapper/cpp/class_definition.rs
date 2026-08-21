@@ -252,6 +252,35 @@ return rust_option.leak();")
                             format!("return (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args}).leak();")
                         },
 
+                        WrapperType::Result(inner) => {
+                            let inner_name = inner.name();
+
+
+                            let inner_cpp_to_rust = match inner.deref() {
+                                WrapperType::String => "    auto rust_ok_arg = cpp_result.data();".to_string(),
+                                WrapperType::Struct(inner) => format!("    auto rust_struct = {inner}(cpp_result);
+    auto rust_ok_arg = rust_struct.self_ptr();"),
+                                WrapperType::Vec(inner) => format!("    auto rust_vec = Rust{inner}Vec::from_std(cpp_result);
+    auto rust_ok_arg = rust_vec.raw_ptr();", inner = inner.name()),
+                                _ => "    auto rust_ok_arg = cpp_result;".to_string(),
+                            };
+
+                            let ok_body = match inner.deref() {
+                                WrapperType::UnitExpr => format!(r#"    (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args});
+    return {EXPORTED_SYMBOLS_PREFIX}unit_str_error_result_ok();"#),
+                                _ =>format!(r#"    auto cpp_result = (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args});
+{inner_cpp_to_rust}
+    return {EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_ok(rust_ok_arg);"#)
+                            };
+
+                            format!(r#"try {{
+{ok_body}
+}} catch (const std::exception& e) {{
+    auto err_msg = e.what();
+    return {EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_err(err_msg);
+}}"#)
+                        }
+
                         _ => {
                             format!("return (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args});")
                         }
@@ -329,6 +358,7 @@ fn trait_bridge_fn_ret_type(ret_wrapper: &Option<FunctionReturnWrapper>) -> Stri
             | WrapperType::Vec(_)
             | WrapperType::Option(_)
             | WrapperType::Result(_) => "void*".to_string(),
+
             WrapperType::UnitExpr => "void".to_string(),
             WrapperType::Trait(_) => {
                 panic!("Trait return type is not supported in traits")
@@ -376,7 +406,7 @@ pub fn gen_class_source_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -
     if let Some(default_constructor) = &impl_block_wrapper.default_constructor {
         let class_name = &impl_block_wrapper.struct_name;
         let default_constructor_definition =
-            gen_default_constructor(class_name, &default_constructor);
+            gen_default_constructor(class_name, default_constructor);
         methods_definitions.push(default_constructor_definition.definition);
     }
 
@@ -384,7 +414,7 @@ pub fn gen_class_source_from_impl_block(impl_block_wrapper: &ImplBlockWrapper) -
     // partial_eq method definition.
     if let Some(partial_eq) = &impl_block_wrapper.partial_eq {
         let class_name = &impl_block_wrapper.struct_name;
-        let partial_eq_definition = gen_partial_eq_impl(class_name, &partial_eq);
+        let partial_eq_definition = gen_partial_eq_impl(class_name, partial_eq);
         methods_definitions.push(partial_eq_definition.definition);
     }
 
@@ -580,7 +610,7 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
     let default_constructor = &struct_wrapper
         .default_constructor
         .as_ref()
-        .map(|dc| gen_default_constructor(&struct_wrapper.name, &dc));
+        .map(|dc| gen_default_constructor(&struct_wrapper.name, dc));
 
     let default_constructor_definition = default_constructor
         .as_ref()
@@ -590,7 +620,7 @@ pub fn gen_methods_definitions_from_struct(struct_wrapper: &StructWrapper) -> Cl
     let partial_eq = &struct_wrapper
         .partial_eq
         .as_ref()
-        .map(|pe| gen_partial_eq_impl(&struct_wrapper.name, &pe));
+        .map(|pe| gen_partial_eq_impl(&struct_wrapper.name, pe));
 
     let partial_eq_definition = partial_eq
         .as_ref()
@@ -714,7 +744,7 @@ pub fn gen_class_declarations_parts_from_struct(
     let default_constructor = struct_wrapper
         .default_constructor
         .as_ref()
-        .map(|dc| gen_default_constructor(&struct_wrapper.name, &dc));
+        .map(|dc| gen_default_constructor(&struct_wrapper.name, dc));
     let default_constructor_declaration = default_constructor
         .as_ref()
         .map(|dc| dc.declaration.to_string())
@@ -727,7 +757,7 @@ pub fn gen_class_declarations_parts_from_struct(
     let partial_eq = struct_wrapper
         .partial_eq
         .as_ref()
-        .map(|pe| gen_partial_eq_impl(&struct_wrapper.name, &pe));
+        .map(|pe| gen_partial_eq_impl(&struct_wrapper.name, pe));
     let partial_eq_declaration = partial_eq
         .as_ref()
         .map(|pe| pe.declaration.to_string())

@@ -46,7 +46,7 @@ pub(crate) fn fn_wrapper_from_sig(sig: &syn::Signature) -> Result<FunctionWrappe
 
     Ok(FunctionWrapper {
         name: fn_name.clone(),
-        extern_function_name: format!("{EXPORTED_SYMBOLS_PREFIX}_{fn_name}"),
+        extern_function_name: format!("{EXPORTED_SYMBOLS_PREFIX}{fn_name}"),
         args: args_wrappers,
         return_wrapper,
     })

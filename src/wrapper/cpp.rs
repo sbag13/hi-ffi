@@ -43,9 +43,9 @@ fn gen_option_wrapper_cpp(inner: &WrapperType) -> CppFiles {
     let includes = inner_include(inner).unwrap_or_default();
     let forward_class_declaration = forward_class_declaration(inner);
 
-    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_option", inner_name);
-    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_option", inner_name);
-    let is_some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_some_{}_option", inner_name);
+    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{}_option", inner_name);
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_option", inner_name);
+    let is_some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_some_{}_option", inner_name);
 
     let inner_ext_ret_type = ext_type(inner);
     let inner_cpp_type = cpp_type(inner);
@@ -58,8 +58,8 @@ fn gen_option_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         _ => "return result;",
     };
 
-    let none_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__none_{}_option", inner_name);
-    let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__some_{}_option", inner_name);
+    let none_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}none_{}_option", inner_name);
+    let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}some_{}_option", inner_name);
     let inner_ext_arg_type = match inner {
         WrapperType::String => "const char*",
         _ => &ext_type(inner),
@@ -160,13 +160,10 @@ fn gen_result_wrapper_cpp(inner: &WrapperType) -> CppFiles {
     let wrapper_name = format!("Rust{}Result", inner.name());
     let inner_name = inner.name();
 
-    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_result", inner_name);
-    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_result", inner_name);
-    let unwrap_err_ext_name = format!(
-        "{EXPORTED_SYMBOLS_PREFIX}__unwrap_err_{}_result",
-        inner_name
-    );
-    let is_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_err_{}_result", inner_name);
+    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{}_result", inner_name);
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_result", inner_name);
+    let unwrap_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_err_{}_result", inner_name);
+    let is_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_err_{}_result", inner_name);
     let unwrap_return_type = cpp_type(inner);
     let unwrap_ext_ret_type = ext_type(inner);
 
@@ -182,6 +179,16 @@ fn gen_result_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         _ => "return result;",
     };
 
+    let inner_ext_arg_type = match inner {
+        WrapperType::String => "const char*",
+        WrapperType::UnitExpr => "",
+        _ => &ext_type(inner),
+    };
+    let str_err_result_ok_fn_ext_fn_name =
+        format!("{EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_ok");
+    let str_err_result_err_fn_ext_fn_name =
+        format!("{EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_err");
+
     let header = format!(
         r#"
 #ifndef {wrapper_name}__def
@@ -194,6 +201,9 @@ extern "C" {{
     void* {unwrap_err_ext_name}(void* self);
     {unwrap_ext_ret_type} {unwrap_ext_name}(void * self);
     bool {is_err_ext_name}(void* self);
+
+    void* {str_err_result_ok_fn_ext_fn_name}({inner_ext_arg_type});
+    void* {str_err_result_err_fn_ext_fn_name}(const char* err);
 }}
 
 class {wrapper_name} {{
@@ -269,14 +279,13 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         }
         WrapperType::Trait(_) => panic!("Trait objects in cpp vec not supported"),
     };
-    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_vec");
-    let with_capacity_ext_name =
-        format!("{EXPORTED_SYMBOLS_PREFIX}__with_capacity_{inner_name}_vec");
-    let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__push_{inner_name}_vec");
+    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{inner_name}_vec");
+    let with_capacity_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}with_capacity_{inner_name}_vec");
+    let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}push_{inner_name}_vec");
 
     // New externs for reading
-    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__len_{inner_name}_vec");
-    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__get_{inner_name}_vec");
+    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}len_{inner_name}_vec");
+    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}get_{inner_name}_vec");
 
     let loop_expressions = match inner {
         WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool => {

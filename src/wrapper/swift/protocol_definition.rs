@@ -1,7 +1,9 @@
 use crate::wrapper::base::RUST_STRING_FROM_C_PTR_FN_NAME;
 use crate::wrapper::{FunctionReturnWrapper, FunctionWrapper};
 use std::fmt::Display;
+use std::ops::Deref;
 
+use crate::EXPORTED_SYMBOLS_PREFIX;
 use crate::prepend_each_line_with_n_tabs;
 use crate::wrapper::WrapperType;
 use crate::wrapper::swift::function_definition::{
@@ -105,7 +107,7 @@ pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
         ));
     }
 
-    let drop_fn = format!("void hiFfi__{class_name}_BoxDyn_drop(void* self);\n");
+    let drop_fn = format!("void {EXPORTED_SYMBOLS_PREFIX}{class_name}_BoxDyn_drop(void* self);\n");
 
     format!(
         r#"typedef struct {class_name}VTable {class_name}VTable;
@@ -236,7 +238,7 @@ fn get_vtable_ret_sig(return_wrapper: &Option<FunctionReturnWrapper>) -> String 
             | WrapperType::Vec(_)
             | WrapperType::Option(_)
             | WrapperType::String => " -> UnsafeMutableRawPointer?".to_string(),
-            WrapperType::Result(_) => panic!("Unsupported return type in trait method"),
+            WrapperType::Result(_) => " -> UnsafeMutableRawPointer?".to_string(),
             WrapperType::UnitExpr => " -> Void".to_string(),
             WrapperType::Trait(_) => panic!("Trait cannot be used as return type in trait method"),
         })
@@ -333,8 +335,45 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
     }}"
                 )
             }
-            WrapperType::Result(_) => panic!("Unsupported return type in trait method"),
+            WrapperType::Result(inner) => {
+                let inner_name = inner.name();
 
+                let result_cast =  match inner.deref() {
+                                WrapperType::String => "        let rust_ok_arg = swift_result.utf8CString.withUnsafeBufferPointer({ ptr in return UnsafeMutableRawPointer(mutating: ptr.baseAddress!) })".to_string(),
+                                WrapperType::Struct(_) => "        let rust_ok_arg = swift_result.rawPtr()".to_string(),
+                                WrapperType::Vec(inner) => format!("        let rust_vec = Rust{inner}Vec.fromSwift(swift_result)
+        let rust_ok_arg = rust_vec.rawPtr()", inner = inner.name()),
+                                WrapperType::Enum(inner) => format!("        let rust_ok_arg = CFfiModule.{inner}(rawValue: UInt32(swift_result.rawValue))"),
+                                WrapperType::UnitExpr => "".to_string(),
+                                _ => "        let rust_ok_arg = swift_result".to_string(),
+                            };
+
+                let rust_ok_arg = match inner.deref() {
+                    WrapperType::UnitExpr => "".to_string(),
+                    _ => "rust_ok_arg".to_string(),
+                };
+
+                let swift_result_var_def = match inner.deref() {
+                    WrapperType::UnitExpr => "".to_string(),
+                    _ => "let swift_result = ".to_string(),
+                };
+
+                format!(
+                    r#"    do {{
+        {swift_result_var_def}try obj_ptr.{fn_name}({args_names})
+{result_cast}
+        return CFfiModule.{EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_ok({rust_ok_arg})
+    }} catch let error as RustError {{
+        let message: String = error.description()
+        let casted_msg = message.utf8CString.withUnsafeBufferPointer({{ ptr in return UnsafeMutableRawPointer(mutating: ptr.baseAddress!) }})
+        return CFfiModule.{EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_err(casted_msg)
+    }} catch {{
+        let message: String = error.localizedDescription
+        let casted_msg = message.utf8CString.withUnsafeBufferPointer({{ ptr in return UnsafeMutableRawPointer(mutating: ptr.baseAddress!) }})
+        return CFfiModule.{EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_err(casted_msg)
+    }}"#
+                )
+            }
             WrapperType::Trait(_) => panic!("Trait cannot be used as return type in trait method"),
         },
         None => format!("    obj_ptr.{fn_name}({args_names})"),
@@ -448,6 +487,23 @@ pub(crate) fn gen_trait_box_dyn_impl_class(trait_wrapper: &TraitWrapper) -> Stri
         // since BoxDyn returns primitives or void* directly
         let method_body = match &method.return_wrapper {
             Some(FunctionReturnWrapper {
+                wrapper_type: WrapperType::Result(inner),
+                ..
+            }) => {
+                // Result types: BoxDyn returns opaque result pointer, unwrap it
+                let inner_name = inner.name();
+                let result_class_name = format!("Rust{}Result", inner_name);
+                format!(
+                    "let result = CFfiModule.{boxdyn_extern_name}({args_for_call})\n        \
+                    let wrapped_rust_result = {result_class_name}(result!)\n        \
+                    if wrapped_rust_result.isErr() {{\n            \
+                        throw RustError(wrapped_rust_result.unwrapErr())\n        \
+                    }} else {{\n            \
+                        return wrapped_rust_result.unwrap()\n        \
+                    }}"
+                )
+            }
+            Some(FunctionReturnWrapper {
                 wrapper_type: WrapperType::Enum(enum_name),
                 ..
             }) => {
@@ -492,7 +548,7 @@ pub(crate) fn gen_trait_box_dyn_impl_class(trait_wrapper: &TraitWrapper) -> Stri
     }}
 
     deinit {{
-        CFfiModule.hiFfi__{trait_name}_BoxDyn_drop(self_ptr)
+        CFfiModule.{EXPORTED_SYMBOLS_PREFIX}{trait_name}_BoxDyn_drop(self_ptr)
     }}{methods}
 }}"#
     )

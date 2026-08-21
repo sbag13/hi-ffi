@@ -90,12 +90,20 @@ impl ReusableWrapper {
 
 pub fn gen_swift_result_declarations(inner: &WrapperType) -> String {
     let inner_name = inner.name();
-    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{inner_name}_result");
-    let unwrap_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_err_{inner_name}_result");
-    let drop_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_result");
-    let is_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_err_{inner_name}_result");
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{inner_name}_result");
+    let unwrap_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_err_{inner_name}_result");
+    let drop_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{inner_name}_result");
+    let is_err_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_err_{inner_name}_result");
+    let str_err_ok_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_ok");
+    let str_err_err_ext_name =
+        format!("{EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_err");
 
     let unwrap_return_type = get_c_type(inner);
+
+    let ok_arg_type = match inner {
+        WrapperType::Bool => "bool".to_string(),
+        _ => unwrap_return_type.clone(),
+    };
 
     format!(
         r#"
@@ -103,17 +111,19 @@ pub fn gen_swift_result_declarations(inner: &WrapperType) -> String {
 void* {unwrap_err_ext_name}(void* self);
 void {drop_err_ext_name}(void* self);
 u8 {is_err_ext_name}(void* self);
+void* {str_err_ok_ext_name}({ok_arg_type});
+void* {str_err_err_ext_name}(const char* err_msg);
 "#
     )
 }
 
 pub fn gen_swift_option_declarations(inner: &WrapperType) -> String {
     let inner_name = inner.name();
-    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_option");
-    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{inner_name}_option");
-    let is_some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_some_{inner_name}_option");
-    let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__some_{inner_name}_option");
-    let none_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__none_{inner_name}_option");
+    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{inner_name}_option");
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{inner_name}_option");
+    let is_some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_some_{inner_name}_option");
+    let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}some_{inner_name}_option");
+    let none_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}none_{inner_name}_option");
 
     let unwrap_return_type = get_c_type(inner);
 
@@ -138,7 +148,7 @@ pub fn gen_result_wrapper_swift(inner: &WrapperType) -> String {
 
     let unwrap_ret_type = get_swift_type_name(inner);
 
-    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_result", inner_name);
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_result", inner_name);
     let unwrap_ext_call = format!("{unwrap_ext_name}(self.rawPtr())");
     let unwrap_val_cast = generate_unwrap_cast(inner, &unwrap_ext_call);
 
@@ -147,7 +157,7 @@ pub fn gen_result_wrapper_swift(inner: &WrapperType) -> String {
         _ => "return result",
     };
 
-    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_result", inner_name);
+    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{}_result", inner_name);
 
     let unwrap_val_cast = prepend_each_line_with_n_tabs(&unwrap_val_cast, 2);
 
@@ -161,7 +171,7 @@ open class Rust{inner_name}Result: Opaque {{
     }}
 
     func isErr() -> Bool {{
-        return {EXPORTED_SYMBOLS_PREFIX}__is_err_{inner_name}_result(self.rawPtr()) != 0
+        return {EXPORTED_SYMBOLS_PREFIX}is_err_{inner_name}_result(self.rawPtr()) != 0
     }}
 
     func unwrap() -> {unwrap_ret_type} {{
@@ -170,7 +180,7 @@ open class Rust{inner_name}Result: Opaque {{
     }}
 
     func unwrapErr() -> UnsafeMutableRawPointer {{
-        return {EXPORTED_SYMBOLS_PREFIX}__unwrap_err_{inner_name}_result(self.rawPtr())
+        return {EXPORTED_SYMBOLS_PREFIX}unwrap_err_{inner_name}_result(self.rawPtr())
     }}
 
     deinit {{
@@ -185,12 +195,11 @@ open class Rust{inner_name}Result: Opaque {{
 
 pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
     let inner_name = inner.name();
-    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_vec");
-    let with_capacity_ext_name =
-        format!("{EXPORTED_SYMBOLS_PREFIX}__with_capacity_{inner_name}_vec");
-    let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__push_{inner_name}_vec");
-    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__len_{inner_name}_vec");
-    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__get_{inner_name}_vec");
+    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{inner_name}_vec");
+    let with_capacity_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}with_capacity_{inner_name}_vec");
+    let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}push_{inner_name}_vec");
+    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}len_{inner_name}_vec");
+    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}get_{inner_name}_vec");
 
     let push_args = match inner {
         WrapperType::IntegerNumber(inner) | WrapperType::FloatingPointNumber(inner) => {
@@ -235,12 +244,11 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
     let inner_name = inner.name();
     let inner_swift_name = get_swift_wrapper_type_name(inner);
 
-    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_vec");
-    let with_capacity_ext_name =
-        format!("{EXPORTED_SYMBOLS_PREFIX}__with_capacity_{inner_name}_vec");
-    let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__push_{inner_name}_vec");
-    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__len_{inner_name}_vec");
-    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__get_{inner_name}_vec");
+    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{inner_name}_vec");
+    let with_capacity_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}with_capacity_{inner_name}_vec");
+    let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}push_{inner_name}_vec");
+    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}len_{inner_name}_vec");
+    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}get_{inner_name}_vec");
 
     let loop_expressions = match inner {
         WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool => {
@@ -334,11 +342,11 @@ fn gen_option_wrapper_swift(inner: &WrapperType) -> String {
     let inner_name = inner.name();
     let inner_swift_name = get_swift_wrapper_type_name(inner);
 
-    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_option");
-    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{inner_name}_option");
-    let is_some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_some_{inner_name}_option");
-    let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__some_{inner_name}_option");
-    let none_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__none_{inner_name}_option");
+    let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{inner_name}_option");
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{inner_name}_option");
+    let is_some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_some_{inner_name}_option");
+    let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}some_{inner_name}_option");
+    let none_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}none_{inner_name}_option");
 
     let unwrap_ext_call = format!("{unwrap_ext_name}(self.rawPtr())");
     let unwrap_val_cast = generate_unwrap_cast(inner, &unwrap_ext_call);
@@ -416,10 +424,23 @@ open class {wrapper_name}: Opaque {{
 }
 
 pub enum SwiftCode {
-    Class { header: String, source: String },
-    Function { header: String, source: String },
-    Enum { header: String, source: String },
-    Protocol { header: String, source: String },
+    Class {
+        header: String,
+        source: String,
+        has_partial_eq: bool,
+    },
+    Function {
+        header: String,
+        source: String,
+    },
+    Enum {
+        header: String,
+        source: String,
+    },
+    Protocol {
+        header: String,
+        source: String,
+    },
 }
 
 impl SwiftCode {
@@ -439,6 +460,7 @@ impl Wrapper {
             ParsedWrapper::Struct(struct_wrapper) => SwiftCode::Class {
                 header: gen_method_declarations_from_struct(struct_wrapper),
                 source: gen_class_methods_definition_from_struct(struct_wrapper),
+                has_partial_eq: struct_wrapper.partial_eq.is_some(),
             },
             ParsedWrapper::Function(function_wrapper) => {
                 let function_definition = gen_function_definition(function_wrapper);
@@ -458,6 +480,7 @@ impl Wrapper {
             ParsedWrapper::ImplBlock(impl_block_wrapper) => SwiftCode::Class {
                 header: gen_method_declarations_from_impl_block(impl_block_wrapper),
                 source: gen_class_methods_definition_from_impl_block(impl_block_wrapper),
+                has_partial_eq: impl_block_wrapper.partial_eq.is_some(),
             },
             ParsedWrapper::Enum(enum_wrapper) => gen_enum_code(enum_wrapper),
             ParsedWrapper::Trait(trait_wrapper) => SwiftCode::Protocol {

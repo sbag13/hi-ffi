@@ -128,12 +128,12 @@ fn gen_body(struct_wrapper: &StructWrapper) -> String {
         .default_constructor
         .as_ref()
         .map(gen_default_constructor)
-        .unwrap_or_else(|| ptr_constructor());
+        .unwrap_or_else(ptr_constructor);
     let partial_eq = &struct_wrapper
         .partial_eq
         .as_ref()
         .map(gen_partial_eq_impl)
-        .unwrap_or_else(|| "".to_string());
+        .unwrap_or_default();
     let destructor = gen_destructor(struct_wrapper);
     let properties = gen_properties(struct_wrapper);
     let raw_ptr_method = gen_raw_ptr_method();

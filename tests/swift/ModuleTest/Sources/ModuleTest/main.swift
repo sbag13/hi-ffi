@@ -778,6 +778,92 @@ class SwiftTraitImpl: RustTrait {
         }
     }
 
+    func trait_fn_returning_result_int(_ error: Bool) throws -> i32 {
+        if error {
+            throw RustError("Error from trait object")
+        } else {
+            return 555
+        }
+    }
+
+    func trait_fn_returning_result_bool(_ error: Bool) throws -> bool {
+        if !error {
+            return true
+        } else {
+            throw RustError("Error from trait object")
+        }
+    }
+
+    func trait_fn_returning_result_string(_ error: Bool) throws -> String {
+        if !error {
+            return "Some string"
+        } else {
+            throw RustError("Error from trait object")
+        }
+    }
+
+    func trait_fn_returning_result_struct(_ error: bool) throws -> TestStruct2 {
+        if !error {
+            return TestStruct2.new_ts2(789)
+        } else {
+            throw RustError("Error from trait object")
+        }
+    }
+
+    func trait_fn_returning_result_enum(_ error: bool) throws -> TestStatus {
+        if !error {
+            return TestStatus.Active
+        } else {
+            throw RustError("Error from trait object")
+        }
+    }
+
+    func trait_fn_returning_result_vec_of_ints(_ error: bool) throws -> [i32] {
+        if !error {
+            return [1, 2, 3]
+        } else {
+            throw RustError("Error from trait object")
+        }
+    }
+
+    func trait_fn_returning_result_vec_of_bools(_ error: bool) throws -> [bool] {
+        if !error {
+            return [true, false, true]
+        } else {
+            throw RustError("Error from trait object")
+        }
+    }
+
+    func trait_fn_returning_result_vec_of_enums(_ error: bool) throws -> [TestStatus] {
+        if !error {
+            return [TestStatus.Active, TestStatus.Inactive, TestStatus.Pending]
+        } else {
+            throw RustError("Error from trait object")
+        }
+    }
+
+    func trait_fn_returning_result_vec_of_strings(_ error: bool) throws -> [String] {
+        if !error {
+            return ["Hello", "from", "trait", "object"]
+        } else {
+            throw RustError("Error from trait object")
+        }
+    }
+
+    func trait_fn_returning_result_vec_of_structs(_ error: bool) throws -> [TestStruct2] {
+        if !error {
+            return [TestStruct2.new_ts2(111), TestStruct2.new_ts2(222)]
+        } else {
+            throw RustError("Error from trait object")
+        }
+    }
+
+    func trait_fn_returning_result_with_unit_expression(_ error: bool) throws {
+        if error {
+            throw RustError("Error from trait object")
+        }
+    }
+
     deinit {
         print("Swift says bye!")
     }
@@ -871,6 +957,127 @@ func assert_traits() {
     assert(opt_bool == false, "Should return Some(false)")
     assert(opt_enum == TestStatus.Pending, "Should return Some(Pending)")
     assert(opt_struct!.i32_field == 789, "Should return Some with i32_field=789")
+
+    do {
+        let result = try rust_trait_object.trait_fn_returning_result_int(false)
+        assert(result == 555)
+        let _ = try rust_trait_object.trait_fn_returning_result_int(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "StructError: EnumError: VariantTwo")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let result = try rust_trait_object.trait_fn_returning_result_bool(false)
+        assert(result == true)
+        let _ = try rust_trait_object.trait_fn_returning_result_bool(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "SimpleError")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let result = try rust_trait_object.trait_fn_returning_result_string(false)
+        assert(result == "Some string")
+        let _ = try rust_trait_object.trait_fn_returning_result_string(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "SimpleError")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let result = try rust_trait_object.trait_fn_returning_result_struct(false)
+        assert(result.i32_field == 789)
+        let _ = try rust_trait_object.trait_fn_returning_result_struct(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let result = try rust_trait_object.trait_fn_returning_result_enum(false)
+        assert(result == TestStatus.Active)
+        let _ = try rust_trait_object.trait_fn_returning_result_enum(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let result = try rust_trait_object.trait_fn_returning_result_vec_of_ints(false)
+        assert(result == [1, 2, 3])
+        let _ = try rust_trait_object.trait_fn_returning_result_vec_of_ints(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let result = try rust_trait_object.trait_fn_returning_result_vec_of_bools(false)
+        assert(result == [true, false, true])
+        let _ = try rust_trait_object.trait_fn_returning_result_vec_of_bools(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let result = try rust_trait_object.trait_fn_returning_result_vec_of_enums(false)
+        assert(result == [TestStatus.Active, TestStatus.Inactive, TestStatus.Pending])
+        let _ = try rust_trait_object.trait_fn_returning_result_vec_of_enums(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let result = try rust_trait_object.trait_fn_returning_result_vec_of_strings(false)
+        assert(result == ["Hello", "from", "trait", "object"])
+        let _ = try rust_trait_object.trait_fn_returning_result_vec_of_strings(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let expected_vec_of_structs = [TestStruct2.new_ts2(111), TestStruct2.new_ts2(222)]
+        let result = try rust_trait_object.trait_fn_returning_result_vec_of_structs(false)
+        assert(result == expected_vec_of_structs)
+        let _ = try rust_trait_object.trait_fn_returning_result_vec_of_structs(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        try rust_trait_object.trait_fn_returning_result_with_unit_expression(false)  // just no exception
+        let _ = try rust_trait_object.trait_fn_returning_result_with_unit_expression(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "SimpleError")
+    } catch {
+        assert(false)  // Should not reach here
+    }
 
     function_taking_trait_object(rust_trait_object)
 }

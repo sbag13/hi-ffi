@@ -331,6 +331,10 @@ public class {class_name}: Opaque {{
     )
 }
 
+pub fn add_equatable_constraint(file_content: &str) -> String {
+    file_content.replace(": Opaque {", ": Opaque, Equatable {")
+}
+
 pub fn gen_class_methods_definition_from_struct(struct_wrapper: &StructWrapper) -> String {
     let destructor_extern_fn = &struct_wrapper.drop_ext_fn_name;
     let props = gen_props(struct_wrapper);

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::EXPORTED_SYMBOLS_PREFIX;
 use crate::prepend_each_line_with_n_tabs;
 use crate::wrapper::WrapperType;
 use crate::wrapper::base::RUST_STRING_FROM_C_PTR_FN_NAME;
@@ -8,6 +9,7 @@ use crate::wrapper::python::{
     ClassCode, PYTHON_LIB_GETTER_NAME, c_type_from_wrapper_type, type_hint_from_wrapper_type,
 };
 use crate::wrapper::trait_wrapper::TraitWrapper;
+use std::ops::Deref;
 
 pub(crate) fn gen_trait_class(trait_wrapper: &TraitWrapper) -> ClassCode {
     let trait_name = &trait_wrapper.name;
@@ -121,31 +123,78 @@ def {method_name}({recv_and_args}){ret_hint}:
                 1,
             );
 
-            let result_cast = prepend_each_line_with_n_tabs(
+
+            let return_result = prepend_each_line_with_n_tabs(
                 match &method.return_wrapper {
                     Some(return_type) => match &return_type.wrapper_type {
                         WrapperType::String => {
-                            format!(r#"result = {PYTHON_LIB_GETTER_NAME}().{RUST_STRING_FROM_C_PTR_FN_NAME}(ctypes.c_char_p(result.encode("utf-8")))"#)
+                            format!(r#"
+result = py_obj.{method_name}({arg_names})
+return {PYTHON_LIB_GETTER_NAME}().{RUST_STRING_FROM_C_PTR_FN_NAME}(ctypes.c_char_p(result.encode("utf-8")))
+"#)
                         },
                         WrapperType::Struct(struct_name) => {
                             imports.insert(struct_name.clone(), format!("from .{struct_name} import {struct_name}"));
-                            "result = result.leak()".to_string()
+                            format!(r#"
+result = py_obj.{method_name}({arg_names})
+return result.leak()
+"#)
                         }
                         WrapperType::Vec(inner) => {
                             let inner_name = inner.name();
                             imports.insert(format!("{inner_name}Vec"), format!("from .vec_{inner_name} import {inner_name}Vec"));
-                            format!("result = {inner_name}Vec.from_list(result).leak()")
+                            format!(r#"
+result = py_obj.{method_name}({arg_names})
+return {inner_name}Vec.from_list(result).leak()
+"#)
                         }
                         WrapperType::Option(inner) => {
                             let inner_name = inner.name();
                             imports.insert(format!("{inner_name}Option"), format!("from .option_{inner_name} import {inner_name}Option"));
-                            format!("result = {inner_name}Option.from_python(result).leak()")
+                            format!(r#"
+result = py_obj.{method_name}({arg_names})
+return {inner_name}Option.from_python(result).leak()"#
+)
                         }
                         WrapperType::Enum(enum_name) => {
                             imports.insert(enum_name.clone(), format!("from .{enum_name} import {enum_name}"));
-                            "".to_string()
+                            format!("return py_obj.{method_name}({arg_names})")
                         }
-                        _ => "".to_string(),
+                        WrapperType::Result(inner) => {
+                            let inner_name = inner.name();
+
+                            let result_cast =  match inner.deref() {
+                                WrapperType::String =>   r#"    rust_ok_arg = ctypes.c_char_p(python_result.encode("utf-8"))"#.to_string(),
+                                WrapperType::Struct(_) => "    rust_ok_arg = python_result.raw_ptr()".to_string(),
+                                WrapperType::Vec(inner) => format!("    rust_vec = {inner}Vec.from_list(python_result)
+    rust_ok_arg = rust_vec.raw_ptr()", inner = inner.name()),
+                                WrapperType::UnitExpr => "".to_string(),
+                                _ => "    rust_ok_arg = python_result".to_string(),
+                            };
+
+                let rust_ok_arg = match inner.deref() {
+                    WrapperType::UnitExpr => "".to_string(),
+                    _ => "rust_ok_arg".to_string(),
+                };
+
+                let python_result_var_def = match inner.deref() {
+                    WrapperType::UnitExpr => "".to_string(),
+                    _ => "python_result = ".to_string(),
+                };
+
+                format!(
+                    r#"try:
+    {python_result_var_def}py_obj.{method_name}({arg_names})
+{result_cast}
+    return {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_ok({rust_ok_arg})
+except Exception as error:
+    message = str(error)
+    casted_msg = ctypes.c_char_p(message.encode("utf-8"))
+    return {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}{inner_name}_str_error_result_err(casted_msg)
+"#
+                )
+                        }
+                        _ => format!("return py_obj.{method_name}({arg_names})"),
                     },
                     None => "".to_string(),
                 }
@@ -158,9 +207,7 @@ def {method_name}({recv_and_args}){ret_hint}:
 def py_{method_name}({args_signature}):
     py_obj = ctypes.cast(obj, ctypes.py_object).value
 {args_casts}
-    result = py_obj.{method_name}({arg_names})
-{result_cast}
-    return result
+{return_result}
 
 _{method_name}_func_type = ctypes.CFUNCTYPE({args})
 _{method_name}_func = ctypes.CFUNCTYPE({args})(py_{method_name})"#
@@ -230,7 +277,7 @@ class {trait_name}Impl:
 
     def __del__(self):
         if hasattr(self, '_trait_ptr'):
-            {PYTHON_LIB_GETTER_NAME}().hiFfi__{trait_name}_BoxDyn_drop(self._trait_ptr)
+            {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}{trait_name}_BoxDyn_drop(self._trait_ptr)
 "#
     );
 
@@ -351,32 +398,45 @@ class {trait_name}Impl:
             };
 
             let result_cast_str = if let Some(ret) = &method.return_wrapper {
-                let return_expr = match &ret.wrapper_type {
+                match &ret.wrapper_type {
                     WrapperType::String => {
                         imports.insert("RustString".to_string(), "from .global_state import RustString".to_string());
-                        "RustString(result).py_str()".to_string()
+                        "return RustString(result).py_str()".to_string()
                     }
                     WrapperType::Enum(name) => {
                         imports.insert(name.clone(), format!("from . import {name}"));
-                        format!("{}.{}.from_ffi(result)", name, name)
+                        format!("return {}.{}.from_ffi(result)", name, name)
                     }
                     WrapperType::Struct(name) => {
                         imports.insert(name.clone(), format!("from . import {name}"));
-                        format!("{}.{}(result)", name, name)
+                        format!("return {}.{}(result)", name, name)
                     }
                     WrapperType::Vec(inner) => {
                         let inner_name = inner.name();
                         imports.insert(format!("{inner_name}Vec"), format!("from .vec_{inner_name} import {inner_name}Vec"));
-                        format!("{}Vec(result).to_list()", inner_name)
+                        format!("return {}Vec(result).to_list()", inner_name)
                     }
                     WrapperType::Option(inner) => {
                         let inner_name = inner.name();
                         imports.insert(format!("{inner_name}Option"), format!("from .option_{inner_name} import {inner_name}Option"));
-                        format!("{}Option(result).to_python()", inner_name)
+                        format!("return {}Option(result).to_python()", inner_name)
                     }
-                    _ => "result".to_string(),
-                };
-                format!("        return {}", return_expr)
+                    WrapperType::Result(inner) => {
+                        let inner_name = inner.name();
+
+                        imports.insert(format!("{inner_name}Result"), format!("from .result_{inner_name} import {inner_name}Result"));
+                        imports.insert("RustException".to_string(), "from .global_state import RustException".to_string());
+
+                        format!(r#"
+result = {inner_name}Result(result)
+if result.is_err():
+    raise RustException(result.unwrap_err())
+else:
+    return result.unwrap()
+"#)
+                    }
+                    _ => "return result".to_string(),
+                }
             } else {
                 String::new()
             };
@@ -386,6 +446,8 @@ class {trait_name}Impl:
             } else {
                 format!("{}\n", arg_casts)
             };
+
+            let result_cast_str = prepend_each_line_with_n_tabs(&result_cast_str, 2);
 
             format!(
                 r#"

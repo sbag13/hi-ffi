@@ -1,5 +1,6 @@
 use crate::wrapper::ParsedWrapper;
 use crate::wrapper::base::*;
+use crate::wrapper::swift::class_definition::add_equatable_constraint;
 use crate::wrapper::swift::class_definition::gen_empty_class_definition;
 use crate::wrapper::swift::{
     SwiftCode, gen_swift_option_declarations, gen_swift_result_declarations,
@@ -80,10 +81,23 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
     let source_path = ffi_module_path.join(source_file_name);
 
     match swift_code {
-        SwiftCode::Class { source, .. } => {
+        SwiftCode::Class {
+            source,
+            has_partial_eq,
+            ..
+        } => {
             let mut locked_set = SWIFT_CLASS_GENERATED.lock().expect("Mutex lock failed");
             if locked_set.insert(source_path.clone()) {
                 create_file(gen_empty_class_definition(wrapper.name()), &source_path);
+            }
+
+            if has_partial_eq {
+                create_file(
+                    add_equatable_constraint(
+                        &std::fs::read_to_string(&source_path).expect("Unable to read file"),
+                    ),
+                    &source_path,
+                );
             }
 
             insert_after(
@@ -157,9 +171,15 @@ public class RustString: Opaque {{
 }}
 
 public class RustError: Error {{
-    private var rust_error: UnsafeMutableRawPointer
+    private var rust_error: UnsafeMutableRawPointer?
     private var source_error: UnsafeMutableRawPointer?
     private var desc: String
+
+    public init(_ description: String) {{
+        self.rust_error = nil
+        self.source_error = nil
+        self.desc = description
+    }}
 
     public init(_ rust_error: UnsafeMutableRawPointer) {{
         self.rust_error = rust_error
@@ -181,6 +201,11 @@ public class RustError: Error {{
 
     public func source() -> RustError? {{
         var source_dyn_err_ptr: UnsafeMutableRawPointer? = nil
+
+        if self.rust_error == nil && self.source_error == nil {{
+            return nil
+        }}
+
         if self.source_error == nil {{
             source_dyn_err_ptr = {RUST_ARC_DYN_ERR_SOURCE_FN_NAME}(self.rust_error);
         }} else {{
@@ -200,7 +225,9 @@ public class RustError: Error {{
         if self.source_error != nil {{
             {RUST_REF_DYN_ERR_DROP_FN_NAME}(self.source_error!)
         }}
-        {RUST_ARC_DYN_ERR_DROP_FN_NAME}(self.rust_error)
+        if self.rust_error != nil {{
+            {RUST_ARC_DYN_ERR_DROP_FN_NAME}(self.rust_error)
+        }}
     }}
 }}
 "#

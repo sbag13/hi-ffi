@@ -21,8 +21,8 @@ pub fn translate_struct(item_struct: ItemStruct) -> Result<Wrapper, NoWrapperErr
             fields: fields_wrappers(&item_struct)?,
             default_constructor: default_constructor(&item_struct),
             partial_eq: partial_eq_impl(&item_struct),
-            drop_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__drop"),
-            clone_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__clone"),
+            drop_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}{class_name}__drop"),
+            clone_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}{class_name}__clone"),
             original_item_struct: item_struct,
         }),
         reusable_wrappers: HashSet::new(),
@@ -67,7 +67,7 @@ fn generate_getter(
 ) -> Option<Getter> {
     if !attrs.skip_attr && (is_public || attrs.getter_attr) {
         Some(Getter {
-            extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__get_{field_name}",),
+            extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}{class_name}__get_{field_name}",),
             name: format_ident!("get_{field_name}"),
         })
     } else {
@@ -83,7 +83,7 @@ fn generate_setter(
 ) -> Option<Setter> {
     if !attrs.skip_attr && (is_public || attrs.setter_attr) {
         Some(Setter {
-            extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__set_{field_name}",),
+            extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}{class_name}__set_{field_name}",),
             name: format_ident!("set_{field_name}"),
         })
     } else {
@@ -150,7 +150,7 @@ pub fn partial_eq_impl(item_struct: &ItemStruct) -> Option<PartialEqImpl> {
 
 pub(crate) fn class_name_to_partial_eq_impl(class_name: impl Display) -> PartialEqImpl {
     PartialEqImpl {
-        extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__partial_eq"),
+        extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}{class_name}__partial_eq"),
         eq_fn_name: format_ident!("{class_name}__partial_eq"),
     }
 }
@@ -176,7 +176,7 @@ pub fn default_constructor(item_struct: &ItemStruct) -> Option<DefaultConstructo
 
 pub(crate) fn class_name_to_default_constructor(class_name: impl Display) -> DefaultConstructor {
     DefaultConstructor {
-        extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}__{class_name}__default"),
+        extern_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}{class_name}__default"),
         constructor_name: format_ident!("{class_name}__default"),
     }
 }

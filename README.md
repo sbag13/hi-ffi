@@ -20,7 +20,7 @@ Add `hi-ffi` to your `Cargo.toml`:
 
 ```toml,ignore
 [dependencies]
-hi_ffi = { version = "0.8", features = ["cpp", "swift", "python"] }
+hi_ffi = { version = "0.9", features = ["cpp", "swift", "python"] }
 ```
 
 **Note**: `hi-ffi` is a procedural macro crate. Enable the `cpp` and/or `swift`, `python` features based on your target languages.
@@ -254,7 +254,7 @@ These examples demonstrate how to use the generated bindings in real application
 | struct types in methods    | ✅   | ✅     | ✅      |
 | vec types in methods       | ✅   | ✅     | ✅      |
 | option types in methods    | ✅   | ✅     | ✅      |
-| result types in methods    | ❌   | ❌     | ❌      |
+| result types in methods    | ✅   | ✅     | ✅      |
 | trait objects in methods   | ✅   | ✅     | ✅      |
 
 ## Architecture

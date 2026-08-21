@@ -148,7 +148,7 @@ pub(crate) fn trait_method_wrapper_from_signature(
 
     Ok(MethodWrapper {
         name: sig.ident.clone(),
-        extern_function_name: format!("{EXPORTED_SYMBOLS_PREFIX}_{struct_name}_{}", sig.ident),
+        extern_function_name: format!("{EXPORTED_SYMBOLS_PREFIX}{struct_name}_{}", sig.ident),
         public,
         is_static: sig.receiver().is_none(),
         args,

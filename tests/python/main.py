@@ -662,6 +662,70 @@ class PythonTraitImpl:
             return s
         return None
 
+    def trait_fn_returning_result_int(self, error: bool) -> int:
+        if error:
+            raise Exception("Error from trait object")
+        else:
+            return 555
+
+    def trait_fn_returning_result_bool(self, error: bool) -> bool:
+        if not error:
+            return True
+        else:
+            raise Exception("Error from trait object")
+
+    def trait_fn_returning_result_string(self, error: bool) -> str:
+        if not error:
+            return "Some string"
+        else:
+            raise Exception("Error from trait object")
+
+    def trait_fn_returning_result_struct(self, error: bool) -> TestStruct2:
+        if not error:
+            return TestStruct2.new_ts2(789)
+        else:
+            raise Exception("Error from trait object")
+
+    def trait_fn_returning_result_enum(self, error: bool) -> TestStatus:
+        if not error:
+            return TestStatus.Active
+        else:
+            raise Exception("Error from trait object")
+
+    def trait_fn_returning_result_vec_of_ints(self, error: bool) -> [int]:
+        if not error:
+            return [1, 2, 3]
+        else:
+            raise Exception("Error from trait object")
+
+    def trait_fn_returning_result_vec_of_bools(self, error: bool) -> [bool]:
+        if not error:
+            return [True, False, True]
+        else:
+            raise Exception("Error from trait object")
+
+    def trait_fn_returning_result_vec_of_enums(self, error: bool) -> [TestStatus]:
+        if not error:
+            return [TestStatus.Active, TestStatus.Inactive, TestStatus.Pending]
+        else:
+            raise Exception("Error from trait object")
+
+    def trait_fn_returning_result_vec_of_strings(self, error: bool) -> [str]:
+        if not error:
+            return ["Hello", "from", "trait", "object"]
+        else:
+            raise Exception("Error from trait object")
+
+    def trait_fn_returning_result_vec_of_structs(self, error: bool) -> [TestStruct2]:
+        if not error:
+            return [TestStruct2.new_ts2(111), TestStruct2.new_ts2(222)]
+        else:
+            raise Exception("Error from trait object")
+
+    def trait_fn_returning_result_with_unit_expression(self, error: bool):
+        if error:
+            raise Exception("Error from trait object")
+
     def __del__(self):
         print("Python delete called for PythonTraitImpl")
 
@@ -746,6 +810,84 @@ def trait_tests():
     assert rust_trait_obj.trait_fn_returning_option_bool(False) is None
     assert rust_trait_obj.trait_fn_returning_option_enum(False) is None
     assert rust_trait_obj.trait_fn_returning_option_struct(False) is None
+
+    assert rust_trait_obj.trait_fn_returning_result_int(False) == 555
+    try:
+        rust_trait_obj.trait_fn_returning_result_int(True)
+        assert(False)
+    except RustException as e:
+        assert str(e) == "StructError: EnumError: VariantTwo"
+
+    
+    assert rust_trait_obj.trait_fn_returning_result_bool(False) == True
+    try:
+        rust_trait_obj.trait_fn_returning_result_bool(True)
+        assert(False) 
+    except RustException as e:
+        assert str(e) == "SimpleError"
+
+    assert rust_trait_obj.trait_fn_returning_result_string(False) == "Some string"
+    try:
+        rust_trait_obj.trait_fn_returning_result_string(True)
+        assert(False)
+    except RustException as e:
+        assert str(e) == "SimpleError"
+
+    rust_trait_obj.trait_fn_returning_result_struct(False) == TestStruct2.new_ts2(789)
+    try:
+        rust_trait_obj.trait_fn_returning_result_struct(True)
+        assert(False)
+    except RustException as e:
+        assert str(e) == "Error from trait object"
+
+    assert rust_trait_obj.trait_fn_returning_result_enum(False) == TestStatus.Active
+    try:
+        rust_trait_obj.trait_fn_returning_result_enum(True)
+        assert(False)
+    except RustException as e:
+        assert str(e) == "Error from trait object"
+
+    assert rust_trait_obj.trait_fn_returning_result_vec_of_ints(False) == [1, 2, 3]
+    try:
+        rust_trait_obj.trait_fn_returning_result_vec_of_ints(True)
+        assert(False)
+    except RustException as e:
+        assert str(e) == "Error from trait object"
+
+    assert rust_trait_obj.trait_fn_returning_result_vec_of_bools(False) == [True, False, True]
+    try:
+        rust_trait_obj.trait_fn_returning_result_vec_of_bools(True)
+        assert(False)
+    except RustException as e:
+        assert str(e) == "Error from trait object"
+
+    assert rust_trait_obj.trait_fn_returning_result_vec_of_enums(False) == [TestStatus.Active, TestStatus.Inactive, TestStatus.Pending]
+    try:
+        rust_trait_obj.trait_fn_returning_result_vec_of_enums(True)
+        assert(False)
+    except RustException as e:
+        assert str(e) == "Error from trait object"
+
+    assert rust_trait_obj.trait_fn_returning_result_vec_of_strings(False) == ["Hello", "from", "trait", "object"]
+    try: 
+        rust_trait_obj.trait_fn_returning_result_vec_of_strings(True)
+        assert(False)
+    except RustException as e:
+        assert str(e) == "Error from trait object"
+
+    assert rust_trait_obj.trait_fn_returning_result_vec_of_structs(False) == [TestStruct2.new_ts2(111), TestStruct2.new_ts2(222)]
+    try:
+        rust_trait_obj.trait_fn_returning_result_vec_of_structs(True)
+        assert(False)
+    except RustException as e:
+        assert str(e) == "Error from trait object"
+
+    assert rust_trait_obj.trait_fn_returning_result_with_unit_expression(False)
+    try:
+        rust_trait_obj.trait_fn_returning_result_with_unit_expression(True)
+        assert(False)
+    except RustException as e:
+        assert str(e) == "SimpleError"
 
     # Test that returned trait object can be passed to a function taking trait object
     function_taking_trait_object(rust_trait_obj)

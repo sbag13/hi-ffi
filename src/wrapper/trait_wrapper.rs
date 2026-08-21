@@ -108,7 +108,7 @@ impl From<&TraitWrapper> for TokenStream2 {
             match return_wrapper {
                 Some(ret) => {
                     let original_return_type = &ret.return_type;
-                    let return_conversion = match ret.wrapper_type {
+                    let return_conversion = match &ret.wrapper_type {
                         WrapperType::Bool
                         | WrapperType::IntegerNumber(_)
                         | WrapperType::FloatingPointNumber(_)
@@ -118,9 +118,19 @@ impl From<&TraitWrapper> for TokenStream2 {
                         WrapperType::String |
                         WrapperType::Struct(_) |
                         WrapperType::Vec(_) |
-                        WrapperType::Option(_) |
-                        WrapperType::Result(_) => {
+                        WrapperType::Option(_)
+                        => {
                               quote! { *Box::from_raw(result as *mut #original_return_type) }
+                        }
+                        WrapperType::Result(inner) => {
+                            let str_err_result: TokenStream2 = format!(
+                                "Result<{}, String>", inner.rust_type()
+                            ).parse().unwrap();
+                            quote! {
+                                let str_result = Box::from_raw(result as *mut #str_err_result);
+                                let target_result = str_result.map_err(|e| e.into());
+                                target_result
+                            }
                         }
                         _ => quote! { result },
                     };

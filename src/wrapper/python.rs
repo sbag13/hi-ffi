@@ -30,8 +30,8 @@ pub fn gen_result_wrapper_python(inner: &WrapperType) -> String {
     let inner_name = inner.name();
     let inner_type_hint = type_hint_from_wrapper_type(inner);
     let inner_import = inner_import(inner);
-    let is_err_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_err_{inner_name}_result");
-    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_result", inner_name);
+    let is_err_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_err_{inner_name}_result");
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_result", inner_name);
     let unwrap_ext_call = format!("{PYTHON_LIB_GETTER_NAME}().{unwrap_ext_name}(self._ptr)");
 
     let unwrap_val_cast = match inner {
@@ -69,10 +69,10 @@ class {inner_name}Result:
         return result
 
     def unwrap_err(self):
-        return {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}__unwrap_err_{inner_name}_result(self._ptr)
+        return {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}unwrap_err_{inner_name}_result(self._ptr)
     
     def __del__(self):
-        {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_result(self._ptr)
+        {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}drop_{inner_name}_result(self._ptr)
 "#
     )
 }
@@ -81,10 +81,10 @@ pub fn gen_option_wrapper_python(inner: &WrapperType) -> String {
     let inner_name = inner.name();
     let inner_type_hint = type_hint_from_wrapper_type(inner);
     let inner_import = inner_import(inner);
-    let is_some_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_some_{inner_name}_option");
-    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_option", inner_name);
-    let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__some_{}_option", inner_name);
-    let none_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}__none_{}_option", inner_name);
+    let is_some_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_some_{inner_name}_option");
+    let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_option", inner_name);
+    let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}some_{}_option", inner_name);
+    let none_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}none_{}_option", inner_name);
     let unwrap_ext_call = format!("{PYTHON_LIB_GETTER_NAME}().{unwrap_ext_name}(self._ptr)");
 
     let unwrap_val_cast = match inner {
@@ -156,7 +156,7 @@ class {inner_name}Option:
     
     def __del__(self):
         if self._ptr is not None:
-            {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}__drop_{inner_name}_option(self._ptr)
+            {PYTHON_LIB_GETTER_NAME}().{EXPORTED_SYMBOLS_PREFIX}drop_{inner_name}_option(self._ptr)
 "#
     )
 }
@@ -166,15 +166,12 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
     let inner_type_hint = type_hint_from_wrapper_type(inner);
 
     // Generate extern function names based on the pattern from wrapper.rs
-    let drop_ext_fn_name = format!("{}__drop_{}_vec", crate::EXPORTED_SYMBOLS_PREFIX, type_name);
-    let with_capacity_ext_fn_name = format!(
-        "{}__with_capacity_{}_vec",
-        crate::EXPORTED_SYMBOLS_PREFIX,
-        type_name
-    );
-    let push_ext_fn_name = format!("{}__push_{}_vec", crate::EXPORTED_SYMBOLS_PREFIX, type_name);
-    let len_ext_fn_name = format!("{}__len_{}_vec", crate::EXPORTED_SYMBOLS_PREFIX, type_name);
-    let get_ext_fn_name = format!("{}__get_{}_vec", crate::EXPORTED_SYMBOLS_PREFIX, type_name);
+    let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{type_name}_vec");
+    let with_capacity_ext_fn_name =
+        format!("{EXPORTED_SYMBOLS_PREFIX}with_capacity_{type_name}_vec",);
+    let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}push_{type_name}_vec");
+    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}len_{type_name}_vec");
+    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}get_{type_name}_vec");
 
     // Generate argument casting for push function
     let push_arg_cast = gen_vec_push_arg_cast(inner);

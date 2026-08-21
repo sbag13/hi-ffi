@@ -81,12 +81,14 @@ fn value_receiver(inner: &WrapperType) -> TokenStream2 {
         WrapperType::Bool => "value: bool".parse().unwrap(),
         WrapperType::String => "ptr: *const i8, _len: usize".parse().unwrap(),
         WrapperType::Struct(name) => format!("value: *mut {name}").parse().unwrap(),
-        WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Vec(inner) => format!("value: *mut Vec<{}>", inner.rust_type())
+            .parse()
+            .unwrap(),
         WrapperType::Result(_) => {
             panic!("Vec of Result type not supported yet!")
         }
         WrapperType::Enum(name) => format!("value: {name}").parse().unwrap(),
-        WrapperType::UnitExpr => panic!("UnitExpr as vec inner type is not supported"),
+        WrapperType::UnitExpr => "value: ()".parse().unwrap(),
         WrapperType::Option(_) => panic!("Option as vec inner type is not supported yet!"),
         WrapperType::Trait(_) => {
             panic!("[value_receiver]: Trait objects as vec inner type not supported")
@@ -126,6 +128,14 @@ fn received_value_cast(inner: &WrapperType) -> TokenStream2 {
                 let value = unsafe { (*value).clone() };
             }
         }
+        WrapperType::Vec(_) => {
+            quote! {
+                let mut new_value = Vec::new();
+                std::mem::swap(&mut new_value, unsafe { &mut (*value) });
+                let value = new_value;
+            }
+        }
+        // TODO option
         _ => quote! {},
     }
 }
@@ -141,7 +151,7 @@ impl From<&ReusableWrapper> for TokenStream2 {
 }
 
 fn generate_option_wrapper(inner: &WrapperType) -> TokenStream2 {
-    let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_option", inner.name());
+    let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{}_option", inner.name());
     let wrapper_fn_name_drop = match inner {
         WrapperType::Option(_) | WrapperType::Vec(_) | WrapperType::Result(_) => {
             panic!("nested Option types are not supported")
@@ -149,16 +159,16 @@ fn generate_option_wrapper(inner: &WrapperType) -> TokenStream2 {
         _ => format_ident!("drop_{}_option", inner.name()),
     };
 
-    let unwrap_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_option", inner.name());
+    let unwrap_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_option", inner.name());
     let wrapper_fn_name_unwrap = format_ident!("unwrap_{}_option", inner.name());
 
-    let is_some_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_some_{}_option", inner.name());
+    let is_some_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_some_{}_option", inner.name());
     let wrapper_fn_name_is_some = format_ident!("is_some_{}_option", inner.name());
 
-    let some_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__some_{}_option", inner.name());
+    let some_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}some_{}_option", inner.name());
     let wrapper_fn_name_some = format_ident!("some_{}_option", inner.name());
 
-    let none_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__none_{}_option", inner.name());
+    let none_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}none_{}_option", inner.name());
     let wrapper_fn_name_none = format_ident!("none_{}_option", inner.name());
 
     let inner_type = rust_type(inner);
@@ -226,27 +236,28 @@ fn generate_option_wrapper(inner: &WrapperType) -> TokenStream2 {
                 (* _self).is_some()
             }
         }
+
     }
 }
 
 fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
-    let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_result", inner.name());
+    let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{}_result", inner.name());
     let wrapper_fn_name_drop = match inner {
         WrapperType::Vec(vec_inner) => format_ident!("drop_{}_vec_result", vec_inner.name()),
         WrapperType::Option(_) => panic!("Nested Result types are not supported"),
         _ => format_ident!("drop_{}_result", inner.name()),
     };
 
-    let unwrap_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__unwrap_{}_result", inner.name());
+    let unwrap_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_result", inner.name());
     let wrapper_fn_name_unwrap = format_ident!("unwrap_{}_result", inner.name());
 
     let unwrap_err_ext_fn_name = format!(
-        "{EXPORTED_SYMBOLS_PREFIX}__unwrap_err_{}_result",
+        "{EXPORTED_SYMBOLS_PREFIX}unwrap_err_{}_result",
         inner.name()
     );
     let wrapper_fn_name_unwrap_err = format_ident!("unwrap_err_{}_result", inner.name());
 
-    let is_err_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__is_err_{}_result", inner.name());
+    let is_err_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_err_{}_result", inner.name());
     let wrapper_fn_name_is_err = format_ident!("is_err_{}_result", inner.name());
 
     let inner_type: TokenStream2 = rust_type(inner);
@@ -261,7 +272,42 @@ fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
         _ => quote! {#inner_type},
     };
 
+    let str_err_result_wrapper_name = format!("{}_str_error_result", inner.name());
+    let str_err_result_ok_fn_name = format_ident!("{str_err_result_wrapper_name}_ok");
+    let str_error_result_ok_fn_ext_fn_name =
+        format!("{EXPORTED_SYMBOLS_PREFIX}{str_err_result_ok_fn_name}");
+
+    let value_receiver = value_receiver(inner);
+    let value_cast = received_value_cast(inner);
+
+    let str_err_result_err_fn_name = format_ident!("{str_err_result_wrapper_name}_err");
+    let str_error_result_err_fn_ext_fn_name =
+        format!("{EXPORTED_SYMBOLS_PREFIX}{str_err_result_err_fn_name}");
+
     quote! {
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #str_error_result_ok_fn_ext_fn_name)]
+        pub unsafe extern "C" fn #str_err_result_ok_fn_name(#value_receiver) -> *mut std::result::Result<#inner_type, String> {
+            unsafe {
+                #value_cast
+                let result: std::result::Result<#inner_type, String> = Ok(value);
+                Box::into_raw(Box::new(result))
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #str_error_result_err_fn_ext_fn_name)]
+        pub unsafe extern "C" fn #str_err_result_err_fn_name(err: *const std::os::raw::c_char) -> *mut std::result::Result<#inner_type, String> {
+            unsafe {
+                let c_str = std::ffi::CStr::from_ptr(err);
+                let str_slice = c_str.to_str().unwrap();
+                let result: std::result::Result<#inner_type, String> = Err(str_slice.to_string());
+                Box::into_raw(Box::new(result))
+            }
+        }
+
         #[doc(hidden)]
         #[unsafe(no_mangle)]
         #[unsafe(export_name = #drop_ext_fn_name)]
@@ -316,29 +362,29 @@ fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
 }
 
 fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
-    let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__drop_{}_vec", inner.name());
+    let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{}_vec", inner.name());
     let wrapper_fn_name_drop = format_ident!("drop_{}_vec", inner.name());
 
     let with_capacity_ext_fn_name = format!(
-        "{EXPORTED_SYMBOLS_PREFIX}__with_capacity_{}_vec",
+        "{EXPORTED_SYMBOLS_PREFIX}with_capacity_{}_vec",
         inner.name()
     );
     let wrapper_fn_name_with_capacity = format_ident!("with_capacity_{}_vec", inner.name());
 
-    let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__push_{}_vec", inner.name());
+    let push_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}push_{}_vec", inner.name());
     let wrapper_fn_name_push = format_ident!("push_{}_vec", inner.name());
 
     // New externs for reading returned vectors
-    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__len_{}_vec", inner.name());
+    let len_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}len_{}_vec", inner.name());
     let wrapper_fn_name_len = format_ident!("len_{}_vec", inner.name());
 
-    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}__get_{}_vec", inner.name());
+    let get_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}get_{}_vec", inner.name());
     let wrapper_fn_name_get = format_ident!("get_{}_vec", inner.name());
 
     let value_receiver = value_receiver(inner);
     let value_cast = received_value_cast(inner);
 
-    let vec_type: TokenStream2 = format!("Vec<{}>", inner.name()).parse().unwrap();
+    let vec_type: TokenStream2 = format!("Vec<{}>", inner.rust_type()).parse().unwrap();
 
     // Return type for get() depending on inner type
     let get_return_type: TokenStream2 = match inner {
