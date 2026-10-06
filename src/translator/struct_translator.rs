@@ -1,12 +1,11 @@
 use core::panic;
-use std::collections::HashSet;
 use std::fmt::Display;
 
 use quote::{format_ident, quote};
 use syn::ItemStruct;
 
 use crate::EXPORTED_SYMBOLS_PREFIX;
-use crate::translator::{NoWrapperErr, path_to_wrapper_type};
+use crate::translator::{NoWrapperErr, map_wrapper_to_reusable, path_to_wrapper_type};
 use crate::wrapper::*;
 
 pub fn translate_struct(item_struct: ItemStruct) -> Result<Wrapper, NoWrapperErr> {
@@ -14,18 +13,24 @@ pub fn translate_struct(item_struct: ItemStruct) -> Result<Wrapper, NoWrapperErr
 
     register_struct_type(class_name.to_string());
 
+    let fields = fields_wrappers(&item_struct)?;
+    let reusable_wrappers = fields
+        .iter()
+        .flat_map(|field| map_wrapper_to_reusable(&field.wrapper_type))
+        .collect();
+
     Ok(Wrapper {
         original_definition: quote! {#item_struct},
         parsed: ParsedWrapper::Struct(StructWrapper {
             name: class_name.clone(),
-            fields: fields_wrappers(&item_struct)?,
+            fields,
             default_constructor: default_constructor(&item_struct),
             partial_eq: partial_eq_impl(&item_struct),
             drop_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}{class_name}__drop"),
             clone_ext_fn_name: format!("{EXPORTED_SYMBOLS_PREFIX}{class_name}__clone"),
             original_item_struct: item_struct,
         }),
-        reusable_wrappers: HashSet::new(),
+        reusable_wrappers,
     })
 }
 

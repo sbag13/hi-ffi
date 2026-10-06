@@ -3,13 +3,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 
-**hi-ffi** is a Rust procedural macro that automatically generates Foreign Function Interface (FFI) bindings for your Rust code, enabling seamless integration with C++, Swift and Python applications. With minimal annotations, you can expose Rust structs, functions, and methods to other languages without writing boilerplate FFI code.
+**hi-ffi** is a Rust procedural macro that automatically generates Foreign Function Interface (FFI) bindings for your Rust code, enabling seamless integration with C++, Swift, Python, and Java applications. With minimal annotations, you can expose Rust structs, functions, and methods to other languages without writing boilerplate FFI code.
 
 ## Features
 
 - 🚀 **Zero Boilerplate**: Generate FFI bindings with a single `#[ffi]` attribute
 - 🔧 **Flexible Configuration**: Control getter/setter generation with field-level attributes
-- 🌐 **Multi-Language Support**: Generate bindings for C++ and Swift
+- 🌐 **Multi-Language Support**: Generate bindings for C++, Swift, Python, and Java
 - 📦 **Type Safety**: Maintain type safety across language boundaries
 - 🎯 **Selective Export**: Choose which fields and methods to expose
 - 🔒 **Memory Safe**: Automatic memory management for cross-language calls
@@ -20,10 +20,10 @@ Add `hi-ffi` to your `Cargo.toml`:
 
 ```toml,ignore
 [dependencies]
-hi_ffi = { version = "0.9", features = ["cpp", "swift", "python"] }
+hi_ffi = { version = "0.10", features = ["cpp", "swift", "python", "java"] }
 ```
 
-**Note**: `hi-ffi` is a procedural macro crate. Enable the `cpp` and/or `swift`, `python` features based on your target languages.
+**Note**: `hi-ffi` is a procedural macro crate. Enable the feature or features for your target languages: `cpp`, `swift`, `python`, and/or `java`.
 
 ## Quick Start
 
@@ -134,7 +134,7 @@ fn greet(names: Vec<String>) -> Result<String, SimpleError> {
 }
 ```
 
-After building your Rust project, FFI bindings are generated in the `generated_code` directory, ready to be integrated into your C++, Swift or Python projects.
+After building your Rust project, FFI bindings are generated in the `generated_code` directory, ready to be integrated into your C++, Swift, Python, or Java projects.
 
 ## Language-Specific Examples
 
@@ -143,119 +143,21 @@ Complete working examples are available in the `tests` directory:
 - **C++**: See [tests/cpp/README.md](tests/cpp/README.md) and [tests/cpp/main.cpp](tests/cpp/main.cpp)
 - **Swift**: See [tests/swift/README.md](tests/swift/README.md) and [tests/swift/ModuleTest/Sources/ModuleTest/main.swift](tests/swift/ModuleTest/Sources/ModuleTest/main.swift)
 - **Python**: See [tests/python/README.md](tests/python/README.md) and [tests/python/main.py](tests/python/main.py)
+- **Java**: See [tests/java/Main.java](tests/java/Main.java) and [tests/java/test_java.sh](tests/java/test_java.sh)
 
 These examples demonstrate how to use the generated bindings in real applications.
 
 ## Supported Features
 
-### Structs
+hi-ffi generates bindings for Rust structs, free functions, and associated methods, including:
 
-| Feature                     | C++ | Swift | Python |
-| --------------------------- | --- | ----- | ------ |
-| Primitive getters/setters   | ✅   | ✅     | ✅      |
-| String getters/setters      | ✅   | ✅     | ✅      |
-| Struct getters/setters      | ✅   | ✅     | ✅      |
-| Vec getters/setters         | ✅   | ✅     | ✅      |
-| C-like Enum getters/setters | ✅   | ✅     | ✅      |
-| Default constructor         | ✅   | ✅     | ✅      |
-| PartialEq                   | ✅   | ✅     | ✅      |
+- Primitive and string values, structs, C-like enums, and vectors of supported values.
+- Struct field getters and setters, with controls for which accessors are generated.
+- Optional values (`Option<T>`) and fallible results (`Result<T, E>`) in supported function and method signatures; optional struct fields are supported as well.
+- Traits and trait objects that can cross the language boundary in either direction.
+- Default construction and equality support where provided by the Rust type.
 
-### Methods
-
-| Feature             | C++ | Swift | Python |
-| ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅   | ✅     | ✅      |
-| String arguments    | ✅   | ✅     | ✅      |
-| Primitive return    | ✅   | ✅     | ✅      |
-| String return       | ✅   | ✅     | ✅      |
-| Struct arguments    | ✅   | ✅     | ✅      |
-| Struct return       | ✅   | ✅     | ✅      |
-
-### Static Methods
-
-| Feature             | C++ | Swift | Python |
-| ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅   | ✅     | ✅      |
-| String arguments    | ✅   | ✅     | ✅      |
-| Primitive return    | ✅   | ✅     | ✅      |
-| String return       | ✅   | ✅     | ✅      |
-| Struct arguments    | ✅   | ✅     | ✅      |
-| Struct return       | ✅   | ✅     | ✅      |
-
-### Functions
-
-| Feature             | C++ | Swift | Python |
-| ------------------- | --- | ----- | ------ |
-| Primitive arguments | ✅   | ✅     | ✅      |
-| String arguments    | ✅   | ✅     | ✅      |
-| Primitive return    | ✅   | ✅     | ✅      |
-| String return       | ✅   | ✅     | ✅      |
-| Struct arguments    | ✅   | ✅     | ✅      |
-| Struct return       | ✅   | ✅     | ✅      |
-| Vec arguments       | ✅   | ✅     | ✅      |
-| Vec return          | ✅   | ✅     | ✅      |
-| Trait obj arg       | ✅   | ✅     | ✅      |
-| Trait obj return    | ✅   | ✅     | ✅      |
-| `&str` return       | ❌   | ❌     | ❌      |
-
-### Vectors
-
-| Feature      | C++ | Swift | Python |
-| ------------ | --- | ----- | ------ |
-| Primitive    | ✅   | ✅     | ✅      |
-| String       | ✅   | ✅     | ✅      |
-| Struct       | ✅   | ✅     | ✅      |
-| C-like enums | ✅   | ✅     | ✅      |
-| `&str`       | ❌   | ❌     | ❌      |
-| Traits       | ❌   | ❌     | ❌      |
-
-### Enums
-
-| Feature                 | C++ | Swift | Python |
-| ----------------------- | --- | ----- | ------ |
-| C-like enums            | ✅   | ✅     | ✅      |
-| Single element variants | ❌   | ❌     | ❌      |
-| Tuple variants          | ❌   | ❌     | ❌      |
-
-### Results
-
-| Feature                  | C++ | Swift | Python |
-| ------------------------ | --- | ----- | ------ |
-| Fn primitive Result      | ✅   | ✅     | ✅      |
-| Fn struct Result         | ✅   | ✅     | ✅      |
-| Fn string Result         | ✅   | ✅     | ✅      |
-| Fn vec results           | ✅   | ✅     | ✅      |
-| Fn enum Result           | ✅   | ✅     | ✅      |
-| Fn trait obj Result      | ❌   | ❌     | ❌      |
-| Methods primitive Result | ✅   | ✅     | ✅      |
-| Methods struct Result    | ✅   | ✅     | ✅      |
-| Methods string Result    | ✅   | ✅     | ✅      |
-| Methods vec results      | ✅   | ✅     | ✅      |
-| Methods enum Result      | ✅   | ✅     | ✅      |
-| Methods trait obj Result | ❌   | ❌     | ❌      |
-
-### Options
-
-| Feature         | C++ | Swift | Python |
-| --------------- | --- | ----- | ------ |
-| function args   | ✅   | ✅     | ✅      |
-| function return | ✅   | ✅     | ✅      |
-| method args     | ✅   | ✅     | ✅      |
-| method return   | ✅   | ✅     | ✅      |
-| struct fields   | ✅   | ✅     | ✅      |
-
-### Traits
-
-| Feature                    | C++ | Swift | Python |
-| -------------------------- | --- | ----- | ------ |
-| primitive types in methods | ✅   | ✅     | ✅      |
-| string types in methods    | ✅   | ✅     | ✅      |
-| enum types in methods      | ✅   | ✅     | ✅      |
-| struct types in methods    | ✅   | ✅     | ✅      |
-| vec types in methods       | ✅   | ✅     | ✅      |
-| option types in methods    | ✅   | ✅     | ✅      |
-| result types in methods    | ✅   | ✅     | ✅      |
-| trait objects in methods   | ✅   | ✅     | ✅      |
+Generated bindings expose idiomatic native types in the target language. For example, Java bindings use types such as `Optional` and `List`; conversions to and from Rust's FFI representations are handled by generated glue code.
 
 ## Architecture
 
@@ -264,14 +166,14 @@ These examples demonstrate how to use the generated bindings in real application
 - **`lib.rs`** - Main entry point that orchestrates code generation
 - **`translator`** - Parses Rust code into a language-agnostic intermediate representation
 - **`wrapper`** - Generates Rust glue code and target language bindings
-- **Language modules** (`cpp`, `swift`, `python`) - Generate language-specific code
+- **Language modules** (`cpp`, `swift`, `python`, `java`) - Generate language-specific code
 
 The translation process:
 
 1. Parse Rust code marked with `#[ffi]`
 2. Extract type information and method signatures
 3. Generate Rust FFI wrapper functions
-4. Generate target language bindings (C++ headers, Swift code, etc.)
+4. Generate target language bindings (C++, Swift, Python, and Java code)
 
 ## Generated Code Location
 
@@ -282,8 +184,11 @@ generated_code/
 ├── rust/          # Rust FFI wrapper functions
 ├── cpp/           # C++ headers and implementations
 ├── swift/         # Swift package structure
+├── java/          # Java package structure
 └── python_ffi/    # python package
 ```
+
+Java bindings load the native library using the Cargo package name by default, with hyphens normalized to underscores. To override it, set the `hi-ffi.library` system property to a native library name or an absolute library path.
 
 ## Contributing
 

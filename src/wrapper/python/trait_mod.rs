@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use crate::EXPORTED_SYMBOLS_PREFIX;
-use crate::prepend_each_line_with_n_tabs;
 use crate::wrapper::WrapperType;
 use crate::wrapper::base::RUST_STRING_FROM_C_PTR_FN_NAME;
 use crate::wrapper::python::impl_mod::call_args_and_pre_casts;
@@ -9,6 +7,7 @@ use crate::wrapper::python::{
     ClassCode, PYTHON_LIB_GETTER_NAME, c_type_from_wrapper_type, type_hint_from_wrapper_type,
 };
 use crate::wrapper::trait_wrapper::TraitWrapper;
+use crate::{EXPORTED_SYMBOLS_PREFIX, prepend_each_line_with_n_tabs};
 use std::ops::Deref;
 
 pub(crate) fn gen_trait_class(trait_wrapper: &TraitWrapper) -> ClassCode {

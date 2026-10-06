@@ -25,6 +25,9 @@ mod cpp;
 #[cfg(feature = "python")]
 mod python;
 
+#[cfg(feature = "java")]
+mod java;
+
 #[cfg(feature = "swift")]
 mod swift;
 
@@ -69,6 +72,21 @@ fn handle_ffi(input: TokenStream) -> TokenStream {
         }
     };
 
+    write_rust_code(&wrapper);
+    #[cfg(feature = "cpp")]
+    cpp::write_cpp_code(&wrapper);
+    #[cfg(feature = "swift")]
+    swift::write_swift_code(&wrapper);
+    #[cfg(feature = "python")]
+    python::write_python_code(&wrapper);
+    #[cfg(feature = "java")]
+    java::write_java_code(&wrapper);
+
+    // Process items that were waiting for this wrapper (e.g. impl blocks
+    // defined BEFORE the struct). This must happen AFTER the current
+    // wrapper's files are written, so that e.g. Java's `write_impl_code`
+    // finds the struct file already created instead of silently dropping
+    // the methods.
     let waiting_tokens = { WAITING_FOR_WRAPPERS.lock().unwrap().remove(&wrapper.name()) }.map(
         |waiting_definitions| {
             waiting_definitions
@@ -77,14 +95,6 @@ fn handle_ffi(input: TokenStream) -> TokenStream {
                 .collect::<TokenStream>()
         },
     );
-
-    write_rust_code(&wrapper);
-    #[cfg(feature = "cpp")]
-    cpp::write_cpp_code(&wrapper);
-    #[cfg(feature = "swift")]
-    swift::write_swift_code(&wrapper);
-    #[cfg(feature = "python")]
-    python::write_python_code(&wrapper);
 
     let mut tokens: TokenStream2 = (&wrapper).into();
 
@@ -189,7 +199,6 @@ fn append_to_file(content: impl Display, path: impl AsRef<Path>) {
     writeln!(file, "\n{}", content).expect("Unable to write data");
 }
 
-#[cfg(feature = "python")]
 fn prepend_to_file(content: impl Display, path: impl AsRef<Path>) {
     let file_content = std::fs::read_to_string(path.as_ref()).expect("Unable to read file");
     let trimmed_content = content.to_string().trim().to_string();

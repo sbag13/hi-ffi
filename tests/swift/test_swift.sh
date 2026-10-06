@@ -1,3 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$script_dir"
+
 rm -rf CFfiModule
 rm -rf FfiModule
 rm -rf ModuleTest/.build
@@ -6,11 +12,13 @@ cp -r ../generated_code/swift/CFfiModule/ ./ && \
 cp -r ../generated_code/swift/FfiModule/ ./ && \
 cp ../target/debug/libtests.a . && \
 cd ModuleTest && \
-rm -rf ./build && \
-swift build -v -Xswiftc -L../ && \
+swift build -v -Xswiftc -L../
 
-if [ "$1" = "--valgrind" ]; then
-    valgrind --error-exitcode=1 --leak-check=full --show-leak-kinds=all ./.build/x86_64-unknown-linux-gnu/debug/ModuleTest
+bin_path="$(swift build --show-bin-path)"
+executable="$bin_path/ModuleTest"
+
+if [ "${1:-}" = "--valgrind" ]; then
+    valgrind --error-exitcode=1 --leak-check=full --show-leak-kinds=all "$executable"
 else
-    ./.build/x86_64-unknown-linux-gnu/debug/ModuleTest
+    "$executable"
 fi

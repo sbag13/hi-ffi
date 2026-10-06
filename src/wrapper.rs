@@ -35,6 +35,8 @@ pub mod cpp;
 pub mod enum_wrapper;
 pub mod function_wrapper;
 pub mod impl_block_wrapper;
+#[cfg(feature = "java")]
+pub mod java;
 pub mod struct_wrapper;
 #[cfg(feature = "swift")]
 pub mod swift;

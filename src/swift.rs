@@ -1,7 +1,8 @@
 use crate::wrapper::ParsedWrapper;
 use crate::wrapper::base::*;
-use crate::wrapper::swift::class_definition::add_equatable_constraint;
-use crate::wrapper::swift::class_definition::gen_empty_class_definition;
+use crate::wrapper::swift::class_definition::{
+    add_equatable_constraint, gen_empty_class_definition,
+};
 use crate::wrapper::swift::{
     SwiftCode, gen_swift_option_declarations, gen_swift_result_declarations,
     gen_swift_vec_declarations,

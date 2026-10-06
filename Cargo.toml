@@ -1,12 +1,11 @@
 [package]
 name = "hi-ffi"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 license = "MIT"
-description = "Procedural macro that automatically generates FFI for C++, Python and Swift"
+description = "Procedural macro that automatically generates FFI for C++, Python, Swift and Java"
 repository = "https://github.com/sbag13/hi-ffi"
-homepage = "https://github.com/sbag13/hi-ffi"
-keywords = ["ffi", "c++", "python", "swift", "bindings"]
+keywords = ["ffi", "c++", "python", "swift", "java", "bindings"]
 
 [lib]
 proc-macro = true
@@ -16,6 +15,7 @@ default = []
 cpp = []
 swift = []
 python = []
+java = []
 
 [dependencies]
 syn = { version = "2.0", features = ["full"] }

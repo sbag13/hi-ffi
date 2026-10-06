@@ -3,13 +3,12 @@ use crate::wrapper::{FunctionReturnWrapper, FunctionWrapper};
 use std::fmt::Display;
 use std::ops::Deref;
 
-use crate::EXPORTED_SYMBOLS_PREFIX;
-use crate::prepend_each_line_with_n_tabs;
 use crate::wrapper::WrapperType;
 use crate::wrapper::swift::function_definition::{
     MappedSwiftFunctionArgsTokens, ReturnTypes, map_args, map_return_type,
 };
 use crate::wrapper::trait_wrapper::TraitWrapper;
+use crate::{EXPORTED_SYMBOLS_PREFIX, prepend_each_line_with_n_tabs};
 
 pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
     let mut vtable_functions = trait_wrapper

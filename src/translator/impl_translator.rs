@@ -33,12 +33,28 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
         .map(|(_, path, _)| path.is_ident("PartialEq"))
         .unwrap_or(false);
 
-    if is_partial_eq_trait_impl {
-        // If the struct hasn't been registered yet, wait for it
-        if !is_struct_type(&struct_name.to_string()) {
-            return Err(NoWrapperErr(struct_name.to_string()));
-        }
+    let is_default_trait_impl = item_impl
+        .trait_
+        .as_ref()
+        .map(|(_, path, _)| path.is_ident("Default"))
+        .unwrap_or(false);
 
+    let is_inherent_impl = item_impl.trait_.is_none();
+
+    // If the struct hasn't been registered yet, wait for it.
+    // This covers inherent impl blocks (`impl Foo { ... }`) as well as
+    // `impl Default` / `impl PartialEq` trait impls when they appear
+    // BEFORE the struct definition. Without this, the impl would be
+    // translated immediately (or only fail if one of its methods happens
+    // to reference the struct type) and its generated code would run
+    // before the struct file exists (notably Java drops it).
+    if (is_partial_eq_trait_impl || is_default_trait_impl || is_inherent_impl)
+        && !is_struct_type(&struct_name.to_string())
+    {
+        return Err(NoWrapperErr(struct_name.to_string()));
+    }
+
+    if is_partial_eq_trait_impl {
         let partial_eq_impl = class_name_to_partial_eq_impl(&struct_name);
 
         return Ok(Wrapper {
@@ -53,18 +69,7 @@ pub fn translate_impl(item_impl: ItemImpl) -> Result<Wrapper, NoWrapperErr> {
         });
     }
 
-    let is_default_trait_impl = item_impl
-        .trait_
-        .as_ref()
-        .map(|(_, path, _)| path.is_ident("Default"))
-        .unwrap_or(false);
-
     if is_default_trait_impl {
-        // If the struct hasn't been registered yet, wait for it
-        if !is_struct_type(&struct_name.to_string()) {
-            return Err(NoWrapperErr(struct_name.to_string()));
-        }
-
         let default_constructor = class_name_to_default_constructor(&struct_name);
 
         return Ok(Wrapper {
