@@ -5,7 +5,7 @@ edition = "2024"
 license = "MIT"
 description = "Procedural macro that automatically generates FFI for C++, Python, Swift and Java"
 repository = "https://github.com/sbag13/hi-ffi"
-keywords = ["ffi", "c++", "python", "swift", "java", "bindings"]
+keywords = ["ffi", "c++", "python", "java", "bindings"]
 
 [lib]
 proc-macro = true
