@@ -52,6 +52,14 @@
 #include "function_returning_opt_enum.h"
 #include "function_returning_opt_struct.h"
 #include "StructWithOptions.h"
+#include "StructWithNestedContainers.h"
+#include "function_taking_vec_of_options.h"
+#include "function_returning_vec_of_options.h"
+#include "function_taking_option_of_vec.h"
+#include "function_returning_option_of_vec.h"
+#include "function_returning_result_of_nested_containers.h"
+#include "function_taking_deep_nested_containers.h"
+#include "function_returning_deep_nested_containers.h"
 #include "RustTrait.h"
 #include "function_taking_trait_object.h"
 #include "function_returning_trait_object.h"
@@ -897,6 +905,53 @@ public:
         }
     }
 
+    std::optional<i32> trait_fn_returning_result_with_option_int(bool error) override
+    {
+        if (error)
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+        return 555;
+    }
+
+    std::optional<bool> trait_fn_returning_result_with_option_bool(bool error) override
+    {
+        if (error)
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+        return false;
+    }
+
+    std::optional<std::string> trait_fn_returning_result_with_option_string(bool error) override
+    {
+        if (error)
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+        return "Some string";
+    }
+
+    std::optional<TestStatus> trait_fn_returning_result_with_option_enum(bool error) override
+    {
+        if (error)
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+        return TestStatus::Pending;
+    }
+
+    std::optional<TestStruct2> trait_fn_returning_result_with_option_struct(bool error) override
+    {
+        if (error)
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+        TestStruct2 value;
+        value.set_i32_field(789);
+        return value;
+    }
+
     void trait_fn_returning_result_with_unit_expression(bool error) override
     {
         if (error)
@@ -1088,6 +1143,57 @@ void assert_traits()
         assert(strcmp(e.what(), "Error from trait object") == 0);
     }
 
+    assert(rust_trait_obj->trait_fn_returning_result_with_option_int(false) == 555);
+    assert(rust_trait_obj->trait_fn_returning_result_with_option_bool(false) == false);
+    assert(rust_trait_obj->trait_fn_returning_result_with_option_string(false) == "Some string");
+    assert(rust_trait_obj->trait_fn_returning_result_with_option_enum(false) == TestStatus::Pending);
+    assert(rust_trait_obj->trait_fn_returning_result_with_option_struct(false)->get_i32_field() == 789);
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_with_option_int(true);
+        assert(false);
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_with_option_bool(true);
+        assert(false);
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_with_option_string(true);
+        assert(false);
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_with_option_enum(true);
+        assert(false);
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+    try
+    {
+        rust_trait_obj->trait_fn_returning_result_with_option_struct(true);
+        assert(false);
+    }
+    catch (const RustException &e)
+    {
+        assert(strcmp(e.what(), "Error from trait object") == 0);
+    }
+
     rust_trait_obj->trait_fn_returning_result_with_unit_expression(false); // just no exception
     try
     {
@@ -1125,4 +1231,44 @@ void assert_method_taking_trait_objects()
     static_rust_trait_obj->trait_simple_fn();
     assert(static_rust_trait_obj->trait_fn_return_int() == 12345);
     TestStruct::static_method_taking_trait_object(std::move(static_rust_trait_obj));
+}
+
+void assert_nested_containers()
+{
+    std::vector<std::optional<i32>> vector_of_options = {1, std::nullopt, 3};
+    function_taking_vec_of_options(vector_of_options);
+    assert(function_returning_vec_of_options() ==
+           std::vector<std::optional<i32>>({2, std::nullopt, 4}));
+
+    std::optional<std::vector<std::optional<i32>>> option_of_vector =
+        std::vector<std::optional<i32>>{5, std::nullopt, 6};
+    function_taking_option_of_vec(option_of_vector);
+    assert(function_returning_option_of_vec() ==
+           std::optional<std::vector<std::optional<i32>>>(
+               std::vector<std::optional<i32>>{8, std::nullopt, 10}));
+
+    assert(function_returning_result_of_nested_containers() ==
+           std::optional<std::vector<std::optional<i32>>>(
+               std::vector<std::optional<i32>>{12, std::nullopt, 14}));
+
+    std::vector<std::optional<std::vector<std::optional<i32>>>> deep = {
+        std::vector<std::optional<i32>>{15, std::nullopt}, std::nullopt};
+    function_taking_deep_nested_containers(deep);
+    const std::vector<std::optional<std::vector<std::optional<i32>>>> expected_deep = {
+        std::vector<std::optional<i32>>{16, std::nullopt}, std::nullopt};
+    assert(function_returning_deep_nested_containers() == expected_deep);
+
+    StructWithNestedContainers nested;
+    nested.set_vec_option(vector_of_options);
+    assert(nested.get_vec_option() == vector_of_options);
+    nested.set_option_vec(option_of_vector);
+    assert(nested.get_option_vec() == option_of_vector);
+    nested.set_deep(deep);
+    assert(nested.get_deep() == deep);
+
+    std::vector<std::optional<i32>> method_arg = {7, std::nullopt, 9};
+    nested.take_nested(method_arg);
+    assert(nested.return_nested() ==
+           std::optional<std::vector<std::optional<i32>>>(
+               std::vector<std::optional<i32>>{11, std::nullopt, 13}));
 }

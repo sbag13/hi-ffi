@@ -175,7 +175,7 @@ fn wrapper_contains_vec(wrapper_type: &WrapperType) -> bool {
 fn wrapper_contains_option(wrapper_type: &WrapperType) -> bool {
     match wrapper_type {
         WrapperType::Option(_) => true,
-        WrapperType::Result(inner) => wrapper_contains_option(inner),
+        WrapperType::Vec(inner) | WrapperType::Result(inner) => wrapper_contains_option(inner),
         _ => false,
     }
 }
@@ -323,6 +323,10 @@ fn trait_result_ok_call(method_name: &str, inner: &WrapperType, value: &str) -> 
         WrapperType::Vec(vec_inner) => format!(
             "try (var resultVec = {}.fromList({value})) {{\n    return (MemorySegment) {handle}.invokeExact(resultVec.rawPtr());\n}}",
             java_vec_class_name(vec_inner)
+        ),
+        WrapperType::Option(option_inner) => format!(
+            "return (MemorySegment) {handle}.invokeExact({}.fromOptional({value}));",
+            java_option_class_name(option_inner)
         ),
         WrapperType::Struct(_) => {
             format!("return (MemorySegment) {handle}.invokeExact({value}.rawPtr());")
@@ -1141,11 +1145,11 @@ fn write_struct_code(struct_wrapper: &StructWrapper) {
     let has_vector_field = struct_wrapper
         .fields
         .iter()
-        .any(|field| matches!(field.wrapper_type, WrapperType::Vec(_)));
+        .any(|field| wrapper_contains_vec(&field.wrapper_type));
     let has_optional_field = struct_wrapper
         .fields
         .iter()
-        .any(|field| matches!(field.wrapper_type, WrapperType::Option(_)));
+        .any(|field| wrapper_contains_option(&field.wrapper_type));
     let Some(fields) = struct_wrapper
         .fields
         .iter()
@@ -1540,24 +1544,20 @@ fn write_function_code(function_wrapper: &crate::wrapper::FunctionWrapper) {
     let has_collections = function_wrapper
         .args
         .iter()
-        .any(|argument| matches!(argument.wrapper_type, WrapperType::Vec(_)))
+        .any(|argument| wrapper_contains_vec(&argument.wrapper_type))
         || function_wrapper
             .return_wrapper
             .as_ref()
-            .is_some_and(|return_wrapper| {
-                matches!(return_wrapper.wrapper_type, WrapperType::Vec(_))
-            });
+            .is_some_and(|return_wrapper| wrapper_contains_vec(&return_wrapper.wrapper_type));
 
     let has_optional = function_wrapper
         .args
         .iter()
-        .any(|argument| matches!(argument.wrapper_type, WrapperType::Option(_)))
+        .any(|argument| wrapper_contains_option(&argument.wrapper_type))
         || function_wrapper
             .return_wrapper
             .as_ref()
-            .is_some_and(|return_wrapper| {
-                matches!(return_wrapper.wrapper_type, WrapperType::Option(_))
-            });
+            .is_some_and(|return_wrapper| wrapper_contains_option(&return_wrapper.wrapper_type));
 
     JAVA_MODULE_CREATED
         .call_once(|| create_file(java_module_header(has_arena, has_collections), &module_path));

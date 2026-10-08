@@ -262,6 +262,8 @@ return rust_option.leak();")
     auto rust_ok_arg = rust_struct.self_ptr();"),
                                 WrapperType::Vec(inner) => format!("    auto rust_vec = Rust{inner}Vec::from_std(cpp_result);
     auto rust_ok_arg = rust_vec.raw_ptr();", inner = inner.name()),
+                                WrapperType::Option(inner) => format!("    auto rust_option = Rust{inner}Option::from_std(cpp_result);
+    auto rust_ok_arg = rust_option.raw_ptr();", inner = inner.name()),
                                 _ => "    auto rust_ok_arg = cpp_result;".to_string(),
                             };
 
@@ -1008,10 +1010,7 @@ fn map_vec_getter(
     class_name: impl Display,
 ) -> Method {
     let inner_name = inner.name();
-    let cpp_inner_name = match inner {
-        WrapperType::String => "std::string",
-        _ => inner_name.as_str(),
-    };
+    let cpp_inner_name = cpp_type(inner);
     let cpp_vec_file_name = format!("vec_{inner_name}");
     let cpp_vec_class_name = format!("Rust{inner_name}Vec");
 
@@ -1043,10 +1042,7 @@ fn map_vec_setter(
     class_name: impl Display,
 ) -> Method {
     let inner_name = inner.name();
-    let cpp_inner_name = match inner {
-        WrapperType::String => "std::string",
-        _ => inner_name.as_str(),
-    };
+    let cpp_inner_name = cpp_type(inner);
 
     let cpp_vec_file_name = format!("vec_{inner_name}");
     let cpp_vec_class_name = format!("Rust{inner_name}Vec");

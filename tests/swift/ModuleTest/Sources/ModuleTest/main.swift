@@ -858,7 +858,42 @@ class SwiftTraitImpl: RustTrait {
         }
     }
 
-    func trait_fn_returning_result_with_unit_expression(_ error: bool) throws {
+    func trait_fn_returning_result_with_option_int(_ error: Bool) throws -> i32? {
+        if error {
+            throw RustError("Error from trait object")
+        }
+        return 555
+    }
+
+    func trait_fn_returning_result_with_option_bool(_ error: Bool) throws -> Bool? {
+        if error {
+            throw RustError("Error from trait object")
+        }
+        return false
+    }
+
+    func trait_fn_returning_result_with_option_string(_ error: Bool) throws -> String? {
+        if error {
+            throw RustError("Error from trait object")
+        }
+        return "Some string"
+    }
+
+    func trait_fn_returning_result_with_option_enum(_ error: Bool) throws -> TestStatus? {
+        if error {
+            throw RustError("Error from trait object")
+        }
+        return TestStatus.Pending
+    }
+
+    func trait_fn_returning_result_with_option_struct(_ error: Bool) throws -> TestStruct2? {
+        if error {
+            throw RustError("Error from trait object")
+        }
+        return TestStruct2.new_ts2(789)
+    }
+
+    func trait_fn_returning_result_with_unit_expression(_ error: Bool) throws {
         if error {
             throw RustError("Error from trait object")
         }
@@ -1070,6 +1105,61 @@ func assert_traits() {
     }
 
     do {
+        let intResult = try rust_trait_object.trait_fn_returning_result_with_option_int(false)
+        let boolResult = try rust_trait_object.trait_fn_returning_result_with_option_bool(false)
+        let stringResult = try rust_trait_object.trait_fn_returning_result_with_option_string(false)
+        let enumResult = try rust_trait_object.trait_fn_returning_result_with_option_enum(false)
+        let structResult = try rust_trait_object.trait_fn_returning_result_with_option_struct(false)
+        assert(intResult == 555)
+        assert(boolResult == false)
+        assert(stringResult == "Some string")
+        assert(enumResult == TestStatus.Pending)
+        assert(structResult?.i32_field == 789)
+        let _ = try rust_trait_object.trait_fn_returning_result_with_option_int(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let _ = try rust_trait_object.trait_fn_returning_result_with_option_bool(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let _ = try rust_trait_object.trait_fn_returning_result_with_option_string(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let _ = try rust_trait_object.trait_fn_returning_result_with_option_enum(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
+        let _ = try rust_trait_object.trait_fn_returning_result_with_option_struct(true)
+        assert(false)  // Should not reach here
+    } catch let e as RustError {
+        assert(e.description() == "Error from trait object")
+    } catch {
+        assert(false)  // Should not reach here
+    }
+
+    do {
         try rust_trait_object.trait_fn_returning_result_with_unit_expression(false)  // just no exception
         let _ = try rust_trait_object.trait_fn_returning_result_with_unit_expression(true)
         assert(false)  // Should not reach here
@@ -1110,6 +1200,31 @@ func assert_method_trait_objects() {
     TestStruct.static_method_taking_trait_object(staticRustTraitObj)
 }
 
+func assert_nested_containers() {
+    let vecOfOptions: [i32?] = [1, nil, 3]
+    function_taking_vec_of_options(vecOfOptions)
+    assert(function_returning_vec_of_options() == [2, nil, 4])
+
+    let optionOfVec: [i32?]? = [5, nil, 6]
+    function_taking_option_of_vec(optionOfVec)
+    assert(function_returning_option_of_vec() == [8, nil, 10])
+    assert((try? function_returning_result_of_nested_containers()) == [12, nil, 14])
+
+    let deep: [[i32?]?] = [[15, nil], nil]
+    function_taking_deep_nested_containers(deep)
+    assert(function_returning_deep_nested_containers() == [[16, nil], nil])
+
+    let nested = StructWithNestedContainers()
+    nested.vec_option = vecOfOptions
+    assert(nested.vec_option == vecOfOptions)
+    nested.option_vec = optionOfVec
+    assert(nested.option_vec == optionOfVec)
+    nested.deep = deep
+    assert(nested.deep == deep)
+    nested.take_nested([7, nil, 9])
+    assert(nested.return_nested() == [11, nil, 13])
+}
+
 func run() {
     assert_struct_basics()
     assert_default_impl()
@@ -1125,6 +1240,7 @@ func run() {
     assert_options()
     assert_traits()
     assert_method_trait_objects()
+    assert_nested_containers()
     print("All assertions passed.")
 }
 

@@ -141,19 +141,7 @@ let bridge = {trait_name}Bridge(
                 wrapper_type: WrapperType::Vec(inner_type),
                 ..
             } => {
-                let swift_type = match &**inner_type {
-                    WrapperType::IntegerNumber(_) | WrapperType::FloatingPointNumber(_) | WrapperType::Bool => {
-                        format!("[{}]", inner_type.name())
-                    }
-                    WrapperType::String => "[String]".to_string(),
-                    WrapperType::Struct(name) => format!("[{}]", name),
-                    WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
-                    WrapperType::Result(_) => panic!("Vec of results not supported"),
-                    WrapperType::Option(_) => panic!("Vec of options not supported"),
-                    WrapperType::Enum(name) => format!("[{}]", name),
-                    WrapperType::UnitExpr => panic!("Empty expression is not supported as vec inner type"),
-                    WrapperType::Trait(_) => panic!("Trait not supported as vec inner type"),
-                };
+                let swift_type = format!("[{}]", super::get_swift_type_name(inner_type));
                 args_signatures.push(format!("_ {arg_name}: {swift_type}"));
                 args_names.push(format!("casted_{arg_name}.rawPtr()"));
                 args_casts.push(format!(
@@ -177,18 +165,7 @@ let bridge = {trait_name}Bridge(
                 wrapper_type: WrapperType::Option(inner_type),
                 ..
             } => {
-                let swift_inner_type = match &**inner_type {
-                    WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
-                    WrapperType::Bool => "Bool".to_string(),
-                    WrapperType::String => "String".to_string(),
-                    WrapperType::Struct(name) => name.to_string(),
-                    WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
-                    WrapperType::Enum(name) => name.to_string(),
-                    WrapperType::Result(_) => panic!("Result in option not supported"),
-                    WrapperType::Option(_) => panic!("Option of options not supported"),
-                    WrapperType::UnitExpr => "Void".to_string(),
-                    WrapperType::Trait(_) => panic!("Trait not supported in option"),
-                };
+                let swift_inner_type = super::get_swift_type_name(inner_type);
                 let wrapper_name = format!("Rust{}Option", inner_type.name());
                 args_signatures.push(format!("_ {arg_name}: {swift_inner_type}?"));
                 args_names.push(format!("casted_{arg_name}.rawPtr()"));
@@ -332,23 +309,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
             wrapper_type: WrapperType::Vec(inner_type),
             ..
         }) => {
-            let swift_type = match &**inner_type {
-                WrapperType::IntegerNumber(_)
-                | WrapperType::FloatingPointNumber(_)
-                | WrapperType::Bool => {
-                    format!("[{}]", inner_type.name())
-                }
-                WrapperType::String => "[String]".to_string(),
-                WrapperType::Struct(name) => format!("[{}]", name),
-                WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
-                WrapperType::Result(_) => panic!("Vec of results not supported"),
-                WrapperType::Option(_) => panic!("Vec of options not supported"),
-                WrapperType::Enum(name) => format!("[{}]", name),
-                WrapperType::UnitExpr => {
-                    panic!("Empty expression is not supported as vec inner type")
-                }
-                WrapperType::Trait(_) => panic!("Trait not supported as vec inner type"),
-            };
+            let swift_type = format!("[{}]", super::get_swift_type_name(inner_type));
             ReturnTypes {
                 return_type_sig: Some(format!(" -> {}", swift_type)),
                 cpp_return_type: "void*".to_string(),
@@ -376,19 +337,7 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Return
             ..
         }) => {
             let inner_name = inner.name();
-            let swift_type = match &**inner {
-                WrapperType::IntegerNumber(_)
-                | WrapperType::FloatingPointNumber(_)
-                | WrapperType::Bool => inner.name().to_string(),
-                WrapperType::String => "String".to_string(),
-                WrapperType::Struct(name) => name.to_string(),
-                WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
-                WrapperType::Enum(name) => name.to_string(),
-                WrapperType::Result(_) => panic!("Nested Results not supported"),
-                WrapperType::Option(_) => panic!("Option in result not supported"),
-                WrapperType::UnitExpr => "Void".to_string(),
-                WrapperType::Trait(_) => panic!("Trait not supported in result"),
-            };
+            let swift_type = super::get_swift_type_name(inner);
             ReturnTypes {
                 return_type_sig: Some(format!(" throws -> {swift_type}")),
                 cpp_return_type: match &**inner {
@@ -415,19 +364,7 @@ if wrapped_rust_result.isErr() {{
         }) => {
             let inner_name = inner.name();
             let wrapper_name = format!("Rust{}Option", inner_name);
-            let swift_type = match &**inner {
-                WrapperType::IntegerNumber(_)
-                | WrapperType::FloatingPointNumber(_)
-                | WrapperType::Bool => inner.name().to_string(),
-                WrapperType::String => "String".to_string(),
-                WrapperType::Struct(name) => name.to_string(),
-                WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
-                WrapperType::Enum(name) => name.to_string(),
-                WrapperType::Result(_) => panic!("Result in option not supported"),
-                WrapperType::Option(_) => panic!("Option of options not supported"),
-                WrapperType::UnitExpr => "Void".to_string(),
-                WrapperType::Trait(_) => panic!("Trait not supported in option"),
-            };
+            let swift_type = super::get_swift_type_name(inner);
             ReturnTypes {
                 return_type_sig: Some(format!(" -> {swift_type}?")),
                 cpp_return_type: "void*".to_string(),

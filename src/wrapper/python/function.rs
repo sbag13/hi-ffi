@@ -76,10 +76,15 @@ bridge = {trait_name}.{trait_name}Bridge (
                     call_list.push("bridge".to_string());
                 }
 
-                WrapperType::IntegerNumber(_)
-                | WrapperType::Bool
-                | WrapperType::FloatingPointNumber(_) => {
+                WrapperType::IntegerNumber(_) | WrapperType::Bool => {
                     call_list.push(arg_wrapper.arg_name.to_string())
+                }
+
+                WrapperType::FloatingPointNumber(name) => {
+                    let arg_name = &arg_wrapper.arg_name;
+                    let c_type = if name == "f32" { "c_float" } else { "c_double" };
+                    casts.push(format!("casted_{arg_name} = ctypes.{c_type}({arg_name})"));
+                    call_list.push(format!("casted_{arg_name}"));
                 }
 
                 WrapperType::String => {
@@ -147,7 +152,7 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                 WrapperType::Struct(_) | WrapperType::Enum(_) => {
                     acc.insert(type_name.clone(), format!("from . import {type_name}"));
                 }
-                WrapperType::String => {
+                WrapperType::String | WrapperType::FloatingPointNumber(_) => {
                     acc.insert("ctypes".to_string(), "import ctypes".to_string());
                 }
                 WrapperType::Vec(inner_type) => {

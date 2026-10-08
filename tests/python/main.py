@@ -25,6 +25,7 @@ from python_ffi.option_String import StringOption
 from python_ffi.option_TestStatus import TestStatusOption
 from python_ffi.option_TestStruct2 import TestStruct2Option
 from python_ffi.StructWithOptions import StructWithOptions
+from python_ffi.StructWithNestedContainers import StructWithNestedContainers
 from python_ffi.RustTrait import RustTrait
 from python_ffi.StructWithStatus import StructWithStatus
 from typing import Protocol, runtime_checkable
@@ -552,6 +553,26 @@ def option_tests():
     assert struct_with_options.opt_struct.i32_field == 321
 
 
+def nested_container_tests():
+    function_taking_vec_of_options([1, None, 3])
+    assert function_returning_vec_of_options() == [2, None, 4]
+    function_taking_option_of_vec([5, None, 6])
+    assert function_returning_option_of_vec() == [8, None, 10]
+    function_taking_deep_nested_containers([[15, None], None])
+    assert function_returning_deep_nested_containers() == [[16, None], None]
+    assert function_returning_result_of_nested_containers() == [12, None, 14]
+
+    nested = StructWithNestedContainers()
+    nested.vec_option = [17, None, 19]
+    assert nested.vec_option == [17, None, 19]
+    nested.option_vec = [20, None, 22]
+    assert nested.option_vec == [20, None, 22]
+    nested.deep = [[23, None], None]
+    assert nested.deep == [[23, None], None]
+    nested.take_nested([7, None, 9])
+    assert nested.return_nested() == [11, None, 13]
+
+
 class PythonTraitImpl:
     def trait_simple_fn(self):
         print("Hello from python")
@@ -722,6 +743,31 @@ class PythonTraitImpl:
         else:
             raise Exception("Error from trait object")
 
+    def trait_fn_returning_result_with_option_int(self, error: bool) -> Optional[int]:
+        if error:
+            raise Exception("Error from trait object")
+        return 555
+
+    def trait_fn_returning_result_with_option_bool(self, error: bool) -> Optional[bool]:
+        if error:
+            raise Exception("Error from trait object")
+        return False
+
+    def trait_fn_returning_result_with_option_string(self, error: bool) -> Optional[str]:
+        if error:
+            raise Exception("Error from trait object")
+        return "Some string"
+
+    def trait_fn_returning_result_with_option_enum(self, error: bool) -> Optional[TestStatus]:
+        if error:
+            raise Exception("Error from trait object")
+        return TestStatus.Pending
+
+    def trait_fn_returning_result_with_option_struct(self, error: bool) -> Optional[TestStruct2]:
+        if error:
+            raise Exception("Error from trait object")
+        return TestStruct2.new_ts2(789)
+
     def trait_fn_returning_result_with_unit_expression(self, error: bool):
         if error:
             raise Exception("Error from trait object")
@@ -882,7 +928,25 @@ def trait_tests():
     except RustException as e:
         assert str(e) == "Error from trait object"
 
-    assert rust_trait_obj.trait_fn_returning_result_with_unit_expression(False)
+    assert rust_trait_obj.trait_fn_returning_result_with_option_int(False) == 555
+    assert rust_trait_obj.trait_fn_returning_result_with_option_bool(False) is False
+    assert rust_trait_obj.trait_fn_returning_result_with_option_string(False) == "Some string"
+    assert rust_trait_obj.trait_fn_returning_result_with_option_enum(False) == TestStatus.Pending
+    assert rust_trait_obj.trait_fn_returning_result_with_option_struct(False).i32_field == 789
+    for method in (
+        rust_trait_obj.trait_fn_returning_result_with_option_int,
+        rust_trait_obj.trait_fn_returning_result_with_option_bool,
+        rust_trait_obj.trait_fn_returning_result_with_option_string,
+        rust_trait_obj.trait_fn_returning_result_with_option_enum,
+        rust_trait_obj.trait_fn_returning_result_with_option_struct,
+    ):
+        try:
+            method(True)
+            assert False
+        except RustException as error:
+            assert str(error) == "Error from trait object"
+
+    rust_trait_obj.trait_fn_returning_result_with_unit_expression(False)
     try:
         rust_trait_obj.trait_fn_returning_result_with_unit_expression(True)
         assert(False)
@@ -933,6 +997,7 @@ if __name__ == "__main__":
     enum_tests()
     result_tests()
     option_tests()
+    nested_container_tests()
     trait_tests()
     method_trait_tests()
     print("All tests passed!")

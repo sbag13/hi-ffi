@@ -822,6 +822,61 @@ pub(crate) struct StructWithOptions {
 }
 
 #[ffi]
+#[derive(Clone, Default)]
+pub(crate) struct StructWithNestedContainers {
+    pub vec_option: Vec<Option<i32>>,
+    pub option_vec: Option<Vec<Option<i32>>>,
+    pub deep: Vec<Option<Vec<Option<i32>>>>,
+}
+
+#[ffi]
+impl StructWithNestedContainers {
+    pub fn take_nested(&self, value: Vec<Option<i32>>) {
+        assert_eq!(value, vec![Some(7), None, Some(9)]);
+    }
+
+    pub fn return_nested(&self) -> Option<Vec<Option<i32>>> {
+        Some(vec![Some(11), None, Some(13)])
+    }
+}
+
+#[ffi]
+pub fn function_taking_vec_of_options(value: Vec<Option<i32>>) {
+    assert_eq!(value, vec![Some(1), None, Some(3)]);
+}
+
+#[ffi]
+pub fn function_returning_vec_of_options() -> Vec<Option<i32>> {
+    vec![Some(2), None, Some(4)]
+}
+
+#[ffi]
+pub fn function_taking_option_of_vec(value: Option<Vec<Option<i32>>>) {
+    assert_eq!(value, Some(vec![Some(5), None, Some(6)]));
+}
+
+#[ffi]
+pub fn function_returning_option_of_vec() -> Option<Vec<Option<i32>>> {
+    Some(vec![Some(8), None, Some(10)])
+}
+
+#[ffi]
+pub fn function_returning_result_of_nested_containers()
+-> Result<Option<Vec<Option<i32>>>, SimpleError> {
+    Ok(Some(vec![Some(12), None, Some(14)]))
+}
+
+#[ffi]
+pub fn function_taking_deep_nested_containers(value: Vec<Option<Vec<Option<i32>>>>) {
+    assert_eq!(value, vec![Some(vec![Some(15), None]), None]);
+}
+
+#[ffi]
+pub fn function_returning_deep_nested_containers() -> Vec<Option<Vec<Option<i32>>>> {
+    vec![Some(vec![Some(16), None]), None]
+}
+
+#[ffi]
 pub trait RustTrait {
     fn trait_simple_fn(&self);
     fn trait_fn_with_simple_args(&self, i: i32, f: f64, e: TestStatus, b: bool);
@@ -883,26 +938,26 @@ pub trait RustTrait {
         error: bool,
     ) -> Result<Vec<TestStruct2>, StringError>;
 
-    // fn trait_fn_returning_result_with_option_int(
-    //     &self,
-    //     error: bool,
-    // ) -> Result<Option<i32>, StringError>;
-    // fn trait_fn_returning_result_with_option_bool(
-    //     &self,
-    //     error: bool,
-    // ) -> Result<Option<bool>, StringError>;
-    // fn trait_fn_returning_result_with_option_string(
-    //     &self,
-    //     error: bool,
-    // ) -> Result<Option<String>, StringError>;
-    // fn trait_fn_returning_result_with_option_enum(
-    //     &self,
-    //     error: bool,
-    // ) -> Result<Option<TestStatus>, StringError>;
-    // fn trait_fn_returning_result_with_option_struct(
-    //     &self,
-    //     error: bool,
-    // ) -> Result<Option<TestStruct2>, StringError>;
+    fn trait_fn_returning_result_with_option_int(
+        &self,
+        error: bool,
+    ) -> Result<Option<i32>, StringError>;
+    fn trait_fn_returning_result_with_option_bool(
+        &self,
+        error: bool,
+    ) -> Result<Option<bool>, StringError>;
+    fn trait_fn_returning_result_with_option_string(
+        &self,
+        error: bool,
+    ) -> Result<Option<String>, StringError>;
+    fn trait_fn_returning_result_with_option_enum(
+        &self,
+        error: bool,
+    ) -> Result<Option<TestStatus>, StringError>;
+    fn trait_fn_returning_result_with_option_struct(
+        &self,
+        error: bool,
+    ) -> Result<Option<TestStruct2>, StringError>;
 
     fn trait_fn_returning_result_with_unit_expression(
         &self,
@@ -1086,46 +1141,46 @@ pub fn function_taking_trait_object(obj: Box<dyn RustTrait>) {
         Err(StringError("Error from trait object".to_string()))
     );
 
-    // assert_eq!(
-    //     obj.trait_fn_returning_result_with_option_int(false),
-    //     Ok(Some(555))
-    // );
-    // assert_eq!(
-    //     obj.trait_fn_returning_result_with_option_int(true),
-    //     Err(StringError("Error from trait object".to_string()))
-    // );
-    // assert_eq!(
-    //     obj.trait_fn_returning_result_with_option_bool(false),
-    //     Ok(Some(false))
-    // );
-    // assert_eq!(
-    //     obj.trait_fn_returning_result_with_option_bool(true),
-    //     Err(StringError("Error from trait object".to_string()))
-    // );
-    // assert_eq!(
-    //     obj.trait_fn_returning_result_with_option_string(false),
-    //     Ok(Some("Some string".to_string()))
-    // );
-    // assert_eq!(
-    //     obj.trait_fn_returning_result_with_option_string(true),
-    //     Err(StringError("Error from trait object".to_string()))
-    // );
-    // assert_eq!(
-    //     obj.trait_fn_returning_result_with_option_enum(false),
-    //     Ok(Some(TestStatus::Pending))
-    // );
-    // assert_eq!(
-    //     obj.trait_fn_returning_result_with_option_enum(true),
-    //     Err(StringError("Error from trait object".to_string()))
-    // );
-    // assert_eq!(
-    //     obj.trait_fn_returning_result_with_option_struct(false),
-    //     Ok(Some(TestStruct2 { i32_field: 789 }))
-    // );
-    // assert_eq!(
-    //     obj.trait_fn_returning_result_with_option_struct(true),
-    //     Err(StringError("Error from trait object".to_string()))
-    // );
+    assert_eq!(
+        obj.trait_fn_returning_result_with_option_int(false),
+        Ok(Some(555))
+    );
+    assert_eq!(
+        obj.trait_fn_returning_result_with_option_int(true),
+        Err(StringError("Error from trait object".to_string()))
+    );
+    assert_eq!(
+        obj.trait_fn_returning_result_with_option_bool(false),
+        Ok(Some(false))
+    );
+    assert_eq!(
+        obj.trait_fn_returning_result_with_option_bool(true),
+        Err(StringError("Error from trait object".to_string()))
+    );
+    assert_eq!(
+        obj.trait_fn_returning_result_with_option_string(false),
+        Ok(Some("Some string".to_string()))
+    );
+    assert_eq!(
+        obj.trait_fn_returning_result_with_option_string(true),
+        Err(StringError("Error from trait object".to_string()))
+    );
+    assert_eq!(
+        obj.trait_fn_returning_result_with_option_enum(false),
+        Ok(Some(TestStatus::Pending))
+    );
+    assert_eq!(
+        obj.trait_fn_returning_result_with_option_enum(true),
+        Err(StringError("Error from trait object".to_string()))
+    );
+    assert_eq!(
+        obj.trait_fn_returning_result_with_option_struct(false),
+        Ok(Some(TestStruct2 { i32_field: 789 }))
+    );
+    assert_eq!(
+        obj.trait_fn_returning_result_with_option_struct(true),
+        Err(StringError("Error from trait object".to_string()))
+    );
 
     assert_eq!(
         obj.trait_fn_returning_result_with_unit_expression(false),
@@ -1371,57 +1426,56 @@ impl RustTrait for TestTraitObject {
         }
     }
 
-    // TODO
-    // fn trait_fn_returning_result_with_option_int(
-    //     &self,
-    //     error: bool,
-    // ) -> Result<Option<i32>, StringError> {
-    //     if error {
-    //         Err(StringError("Error from trait object".to_string()))
-    //     } else {
-    //         Ok(Some(555))
-    //     }
-    // }
-    // fn trait_fn_returning_result_with_option_bool(
-    //     &self,
-    //     error: bool,
-    // ) -> Result<Option<bool>, StringError> {
-    //     if error {
-    //         Err(StringError("Error from trait object".to_string()))
-    //     } else {
-    //         Ok(Some(false))
-    //     }
-    // }
-    // fn trait_fn_returning_result_with_option_string(
-    //     &self,
-    //     error: bool,
-    // ) -> Result<Option<String>, StringError> {
-    //     if error {
-    //         Err(StringError("Error from trait object".to_string()))
-    //     } else {
-    //         Ok(Some("Some string".to_string()))
-    //     }
-    // }
-    // fn trait_fn_returning_result_with_option_enum(
-    //     &self,
-    //     error: bool,
-    // ) -> Result<Option<TestStatus>, StringError> {
-    //     if error {
-    //         Err(StringError("Error from trait object".to_string()))
-    //     } else {
-    //         Ok(Some(TestStatus::Pending))
-    //     }
-    // }
-    // fn trait_fn_returning_result_with_option_struct(
-    //     &self,
-    //     error: bool,
-    // ) -> Result<Option<TestStruct2>, StringError> {
-    //     if error {
-    //         Err(StringError("Error from trait object".to_string()))
-    //     } else {
-    //         Ok(Some(TestStruct2 { i32_field: 789 }))
-    //     }
-    // }
+    fn trait_fn_returning_result_with_option_int(
+        &self,
+        error: bool,
+    ) -> Result<Option<i32>, StringError> {
+        if error {
+            Err(StringError("Error from trait object".to_string()))
+        } else {
+            Ok(Some(555))
+        }
+    }
+    fn trait_fn_returning_result_with_option_bool(
+        &self,
+        error: bool,
+    ) -> Result<Option<bool>, StringError> {
+        if error {
+            Err(StringError("Error from trait object".to_string()))
+        } else {
+            Ok(Some(false))
+        }
+    }
+    fn trait_fn_returning_result_with_option_string(
+        &self,
+        error: bool,
+    ) -> Result<Option<String>, StringError> {
+        if error {
+            Err(StringError("Error from trait object".to_string()))
+        } else {
+            Ok(Some("Some string".to_string()))
+        }
+    }
+    fn trait_fn_returning_result_with_option_enum(
+        &self,
+        error: bool,
+    ) -> Result<Option<TestStatus>, StringError> {
+        if error {
+            Err(StringError("Error from trait object".to_string()))
+        } else {
+            Ok(Some(TestStatus::Pending))
+        }
+    }
+    fn trait_fn_returning_result_with_option_struct(
+        &self,
+        error: bool,
+    ) -> Result<Option<TestStruct2>, StringError> {
+        if error {
+            Err(StringError("Error from trait object".to_string()))
+        } else {
+            Ok(Some(TestStruct2 { i32_field: 789 }))
+        }
+    }
 
     fn trait_fn_returning_result_with_unit_expression(
         &self,

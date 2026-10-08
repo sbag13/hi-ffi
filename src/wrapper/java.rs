@@ -272,11 +272,7 @@ fn gen_result_wrapper_java(inner: &WrapperType) -> String {
     } else {
         ""
     };
-    let collections_import = if matches!(inner, WrapperType::Vec(_)) {
-        "import java.util.List;\n"
-    } else {
-        ""
-    };
+    let collections_import = java_container_imports(inner);
 
     format!(
         r#"import java.lang.foreign.FunctionDescriptor;
@@ -379,6 +375,7 @@ fn gen_option_wrapper_java(inner: &WrapperType) -> String {
     } else {
         ""
     };
+    let container_imports = java_container_imports(inner);
     let string_handles = if matches!(inner, WrapperType::String) {
         "    private static final MethodHandle STRING_DATA;\n    private static final MethodHandle STRING_LENGTH;\n    private static final MethodHandle STRING_DROP;\n"
     } else {
@@ -417,6 +414,7 @@ fn gen_option_wrapper_java(inner: &WrapperType) -> String {
         WrapperType::String => String::new(),
         WrapperType::Struct(_) => "value.orElseThrow().rawPtr()".to_string(),
         WrapperType::Enum(_) => "value.orElseThrow().toNative()".to_string(),
+        WrapperType::Vec(_) | WrapperType::Option(_) => String::new(),
         _ => unreachable!("unsupported option inner type"),
     };
     let some_call = if matches!(inner, WrapperType::String) {
@@ -427,6 +425,17 @@ fn gen_option_wrapper_java(inner: &WrapperType) -> String {
                     (long) text.getBytes(StandardCharsets.UTF_8).length);
             }"#
         .to_string()
+    } else if let WrapperType::Vec(vec_inner) = inner {
+        format!(
+            "try (var nested = {}.fromList(value.orElseThrow())) {{\n                return (MemorySegment) SOME.invokeExact(nested.rawPtr());\n            }}",
+            java_vec_class_name(vec_inner)
+        )
+    } else if let WrapperType::Option(option_inner) = inner {
+        format!(
+            "try (var nested = {}.fromRaw({}.fromOptional(value.orElseThrow()))) {{\n                return (MemorySegment) SOME.invokeExact(nested.rawPtr());\n            }}",
+            java_option_class_name(option_inner),
+            java_option_class_name(option_inner)
+        )
     } else {
         format!("return (MemorySegment) SOME.invokeExact({from_value});")
     };
@@ -453,6 +462,14 @@ fn gen_option_wrapper_java(inner: &WrapperType) -> String {
         WrapperType::Enum(name) => {
             format!("{name}.fromNative((int) UNWRAP.invokeExact(self))")
         }
+        WrapperType::Vec(vec_inner) => format!(
+            "{}.toList((MemorySegment) UNWRAP.invokeExact(self))",
+            java_vec_class_name(vec_inner)
+        ),
+        WrapperType::Option(option_inner) => format!(
+            "{}.toOptionalAndClose((MemorySegment) UNWRAP.invokeExact(self))",
+            java_option_class_name(option_inner)
+        ),
         _ => format!(
             "({}) UNWRAP.invokeExact(self)",
             java_argument_type(inner).expect("supported option inner type")
@@ -460,7 +477,7 @@ fn gen_option_wrapper_java(inner: &WrapperType) -> String {
     };
 
     format!(
-        r#"{string_support}import java.lang.foreign.FunctionDescriptor;
+        r#"        {string_support}{container_imports}import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
@@ -537,6 +554,12 @@ final class {wrapper_name} implements AutoCloseable {{
         }}
     }}
 
+    static Optional<{java_type}> toOptionalAndClose(MemorySegment self) {{
+        try (var wrapper = fromRaw(self)) {{
+            return wrapper.toOptional();
+        }}
+    }}
+
 {read_string}
     @Override
     public void close() {{
@@ -568,13 +591,44 @@ fn java_result_unwrap_body(inner: &WrapperType) -> String {
             "try {{\n    return {name}.fromNative((int) UNWRAP.invokeExact(self));\n}} catch (Throwable error) {{\n    throw new RuntimeException(error);\n}}"
         ),
         WrapperType::Vec(vec_inner) => format!(
-            "try (var rustVec = {}.fromRaw((MemorySegment) UNWRAP.invokeExact(self))) {{\n    return rustVec.toList();\n}} catch (Throwable error) {{\n    throw new RuntimeException(error);\n}}",
+            "try {{\n    return {}.toList((MemorySegment) UNWRAP.invokeExact(self));\n}} catch (Throwable error) {{\n    throw new RuntimeException(error);\n}}",
             java_vec_class_name(vec_inner)
+        ),
+        WrapperType::Option(option_inner) => format!(
+            "try {{\n    return {}.toOptionalAndClose((MemorySegment) UNWRAP.invokeExact(self));\n}} catch (Throwable error) {{\n    throw new RuntimeException(error);\n}}",
+            java_option_class_name(option_inner)
         ),
         _ => format!(
             "try {{\n    return ({native_type}) UNWRAP.invokeExact(self);\n}} catch (Throwable error) {{\n    throw new RuntimeException(error);\n}}"
         ),
     }
+}
+
+fn java_container_imports(wrapper_type: &WrapperType) -> String {
+    fn contains_vec(wrapper_type: &WrapperType) -> bool {
+        match wrapper_type {
+            WrapperType::Vec(_) => true,
+            WrapperType::Option(inner) | WrapperType::Result(inner) => contains_vec(inner),
+            _ => false,
+        }
+    }
+
+    fn contains_option(wrapper_type: &WrapperType) -> bool {
+        match wrapper_type {
+            WrapperType::Option(_) => true,
+            WrapperType::Vec(inner) | WrapperType::Result(inner) => contains_option(inner),
+            _ => false,
+        }
+    }
+
+    let mut imports = String::new();
+    if contains_vec(wrapper_type) {
+        imports.push_str("import java.util.List;\n");
+    }
+    if contains_option(wrapper_type) {
+        imports.push_str("import java.util.Optional;\n");
+    }
+    imports
 }
 
 fn gen_vec_wrapper_java(inner: &WrapperType) -> String {
@@ -594,6 +648,7 @@ fn gen_vec_wrapper_java(inner: &WrapperType) -> String {
     } else {
         ""
     };
+    let container_imports = java_container_imports(inner);
     let string_handles = if matches!(inner, WrapperType::String) {
         r#"    private static final MethodHandle STRING_DATA;
     private static final MethodHandle STRING_LENGTH;
@@ -642,6 +697,14 @@ fn gen_vec_wrapper_java(inner: &WrapperType) -> String {
         WrapperType::Enum(enum_name) => {
             format!("{enum_name}.fromNative((int) GET.invokeExact(self, index))")
         }
+        WrapperType::Vec(vec_inner) => format!(
+            "{}.toList((MemorySegment) GET.invokeExact(self, index))",
+            java_vec_class_name(vec_inner)
+        ),
+        WrapperType::Option(option_inner) => format!(
+            "{}.toOptionalAndClose((MemorySegment) GET.invokeExact(self, index))",
+            java_option_class_name(option_inner)
+        ),
         _ => format!("({native_type}) GET.invokeExact(self, index)"),
     };
     let push_value = match inner {
@@ -670,22 +733,40 @@ fn gen_vec_wrapper_java(inner: &WrapperType) -> String {
     } else {
         format!("self, {push_value}")
     };
-    let push_loop = if matches!(inner, WrapperType::String) {
-        format!(
+    let push_loop = match inner {
+        WrapperType::String => format!(
             r#"            try (var arena = Arena.ofConfined()) {{
                 for (var value : values) {{
                     PUSH.invokeExact({push_args});
                 }}
             }}
 "#
-        )
-    } else {
-        format!(
+        ),
+        WrapperType::Vec(vec_inner) => format!(
+            r#"            for (var value : values) {{
+                try (var nested = {}.fromList(value)) {{
+                    PUSH.invokeExact(self, nested.rawPtr());
+                }}
+            }}
+"#,
+            java_vec_class_name(vec_inner)
+        ),
+        WrapperType::Option(option_inner) => format!(
+            r#"            for (var value : values) {{
+                try (var nested = {}.fromRaw({}.fromOptional(value))) {{
+                    PUSH.invokeExact(self, nested.rawPtr());
+                }}
+            }}
+"#,
+            java_option_class_name(option_inner),
+            java_option_class_name(option_inner)
+        ),
+        _ => format!(
             r#"            for (var value : values) {{
                 PUSH.invokeExact({push_args});
             }}
 "#
-        )
+        ),
     };
 
     format!(
@@ -695,7 +776,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
-{charset_import}import java.util.ArrayList;
+{charset_import}{container_imports}import java.util.ArrayList;
 import java.util.List;
 
 final class {wrapper_name} implements AutoCloseable {{
@@ -735,6 +816,12 @@ final class {wrapper_name} implements AutoCloseable {{
 
     static {wrapper_name} fromRaw(MemorySegment self) {{
         return new {wrapper_name}(self);
+    }}
+
+    static List<{element_type}> toList(MemorySegment self) {{
+        try (var wrapper = fromRaw(self)) {{
+            return wrapper.toList();
+        }}
     }}
 
     static {wrapper_name} fromList(List<{element_type}> values) {{
@@ -849,6 +936,8 @@ pub(crate) fn java_boxed_type(wrapper_type: &WrapperType) -> Option<String> {
         WrapperType::String => Some("String".to_string()),
         WrapperType::Struct(name) => Some(name.clone()),
         WrapperType::Enum(name) => Some(name.clone()),
+        WrapperType::Vec(inner) => Some(format!("List<{}>", java_boxed_type(inner)?)),
+        WrapperType::Option(inner) => Some(format!("Optional<{}>", java_boxed_type(inner)?)),
         _ => None,
     }
 }

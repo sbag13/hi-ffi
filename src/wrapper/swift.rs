@@ -26,33 +26,33 @@ fn get_c_type(wrapper_type: &WrapperType) -> String {
         WrapperType::Struct(_) => "void*".to_string(),
         WrapperType::Vec(_) => "void*".to_string(),
         WrapperType::Result(_) => panic!("Result of results not supported"),
-        WrapperType::Option(_) => panic!("Option in result not supported"),
+        WrapperType::Option(_) => "void*".to_string(),
         WrapperType::Enum(name) => format!("enum {}", name),
         WrapperType::UnitExpr => "void".to_string(),
         WrapperType::Trait(_) => panic!("Trait not supported as return type"),
     }
 }
 
-fn get_swift_type_name(wrapper_type: &WrapperType) -> String {
+pub(super) fn get_swift_type_name(wrapper_type: &WrapperType) -> String {
     match wrapper_type {
         WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
         WrapperType::Bool => "bool".to_string(),
         WrapperType::String => "String".to_string(),
         WrapperType::Struct(name) => name.to_string(),
-        WrapperType::Vec(vec_inner) => format!("[{}]", vec_inner.name()),
+        WrapperType::Vec(vec_inner) => format!("[{}]", get_swift_type_name(vec_inner)),
         WrapperType::Result(_) => panic!("Result of results not supported"),
-        WrapperType::Option(_) => panic!("Option in result not supported"),
+        WrapperType::Option(inner) => format!("{}?", get_swift_type_name(inner)),
         WrapperType::Enum(name) => name.to_string(),
         WrapperType::UnitExpr => "Void".to_string(),
         WrapperType::Trait(name) => name.to_string(),
     }
 }
 
-fn get_swift_wrapper_type_name(wrapper_type: &WrapperType) -> String {
+fn swift_container_class_name(wrapper_type: &WrapperType) -> String {
     match wrapper_type {
-        WrapperType::String => "String".to_string(),
-        WrapperType::Struct(name) => name.to_string(),
-        _ => wrapper_type.name(),
+        WrapperType::Vec(inner) => format!("Rust{}Vec", inner.name()),
+        WrapperType::Option(inner) => format!("Rust{}Option", inner.name()),
+        _ => unreachable!("Only container types have reusable Swift wrapper classes"),
     }
 }
 
@@ -65,6 +65,10 @@ fn generate_unwrap_cast(wrapper_type: &WrapperType, ext_call: &str) -> String {
         WrapperType::Vec(vec_inner) => {
             let vec_inner_name = vec_inner.name();
             format!("let result = Rust{vec_inner_name}Vec({ext_call}).toSwift();")
+        }
+        WrapperType::Option(opt_inner) => {
+            let opt_inner_name = opt_inner.name();
+            format!("let result = Rust{opt_inner_name}Option({ext_call}).toSwift();")
         }
         WrapperType::Bool => format!("let result = {ext_call} != 0;"),
         WrapperType::Enum(inner) => {
@@ -208,9 +212,8 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::Bool => "bool value".to_string(),
         WrapperType::String => "const char* value, unsigned int len".to_string(),
         WrapperType::Struct(_) => "void* value".to_string(),
-        WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+        WrapperType::Vec(_) | WrapperType::Option(_) => "void* value".to_string(),
         WrapperType::Result(_) => panic!("Vec of results not supported"),
-        WrapperType::Option(_) => panic!("Vec of options not supported"),
         WrapperType::Enum(name) => format!("enum {} value", name),
         WrapperType::UnitExpr => unreachable!(),
         WrapperType::Trait(_) => panic!("Trait not supported as vec element type"),
@@ -221,9 +224,8 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::Bool => "u8".to_string(),
         WrapperType::String => "void*".to_string(),
         WrapperType::Struct(_) => "void*".to_string(),
-        WrapperType::Vec(_) => panic!("Vec of vecs not supported"),
+        WrapperType::Vec(_) | WrapperType::Option(_) => "void*".to_string(),
         WrapperType::Result(_) => panic!("Vec of results not supported"),
-        WrapperType::Option(_) => panic!("Vec of options not supported"),
         WrapperType::Enum(name) => format!("enum {}", name),
         WrapperType::UnitExpr => unreachable!(),
         WrapperType::Trait(_) => panic!("Trait not supported as vec element type"),
@@ -242,7 +244,7 @@ size_t {len_ext_fn_name}(void* self);
 fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
     let wrapper_name = format!("Rust{}Vec", inner.name());
     let inner_name = inner.name();
-    let inner_swift_name = get_swift_wrapper_type_name(inner);
+    let inner_swift_name = get_swift_type_name(inner);
 
     let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{inner_name}_vec");
     let with_capacity_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}with_capacity_{inner_name}_vec");
@@ -265,6 +267,12 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
         WrapperType::Enum(_) => {
             format!(
                 "            {push_ext_fn_name}(rust_vec_ptr, CFfiModule.{inner_swift_name}(rawValue: UInt32(elem.rawValue)))"
+            )
+        }
+        WrapperType::Vec(_) | WrapperType::Option(_) => {
+            let class_name = swift_container_class_name(inner);
+            format!(
+                "            let inner_wrapper = {class_name}.fromSwift(elem)\n            {push_ext_fn_name}(rust_vec_ptr, inner_wrapper.rawPtr())"
             )
         }
         _ => panic!("Pushing to vec not supported"),
@@ -292,9 +300,13 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
                 "            let c_elem = {get_ext_fn_name}(self.rawPtr(), i)\n            let elem = {inner_swift_name}(rawValue: Int32(c_elem.rawValue))!"
             )
         }
-        WrapperType::Vec(_) => unreachable!(),
+        WrapperType::Vec(_) | WrapperType::Option(_) => {
+            let class_name = swift_container_class_name(inner);
+            format!(
+                "            let elem_ptr = {get_ext_fn_name}(self.rawPtr(), i)\n            let elem = {class_name}(elem_ptr!).toSwift()"
+            )
+        }
         WrapperType::Result(_) => panic!("Vec of results not supported"),
-        WrapperType::Option(_) => panic!("Vec of options not supported"),
         WrapperType::UnitExpr => panic!("Vec of unit expressions not supported"),
         WrapperType::Trait(_) => panic!("Trait not supported as vec element type"),
     };
@@ -340,7 +352,7 @@ open class {wrapper_name}: Opaque {{
 fn gen_option_wrapper_swift(inner: &WrapperType) -> String {
     let wrapper_name = format!("Rust{}Option", inner.name());
     let inner_name = inner.name();
-    let inner_swift_name = get_swift_wrapper_type_name(inner);
+    let inner_swift_name = get_swift_type_name(inner);
 
     let drop_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{inner_name}_option");
     let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{inner_name}_option");
@@ -371,6 +383,12 @@ fn gen_option_wrapper_swift(inner: &WrapperType) -> String {
         WrapperType::Enum(_) => {
             format!(
                 "return {wrapper_name}({some_ext_name}(CFfiModule.{inner_swift_name}(rawValue: UInt32(some_val.rawValue))))"
+            )
+        }
+        WrapperType::Vec(_) | WrapperType::Option(_) => {
+            let class_name = swift_container_class_name(inner);
+            format!(
+                "let inner_wrapper = {class_name}.fromSwift(some_val)\n            return {wrapper_name}({some_ext_name}(inner_wrapper.rawPtr()))"
             )
         }
         _ => format!("return {wrapper_name}({some_ext_name}(some_val))"),

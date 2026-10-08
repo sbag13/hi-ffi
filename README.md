@@ -20,7 +20,7 @@ Add `hi-ffi` to your `Cargo.toml`:
 
 ```toml,ignore
 [dependencies]
-hi_ffi = { version = "0.10", features = ["cpp", "swift", "python", "java"] }
+hi_ffi = { version = "0.11", features = ["cpp", "swift", "python", "java"] }
 ```
 
 **Note**: `hi-ffi` is a procedural macro crate. Enable the feature or features for your target languages: `cpp`, `swift`, `python`, and/or `java`.

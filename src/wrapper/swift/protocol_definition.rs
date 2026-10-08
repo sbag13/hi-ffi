@@ -342,6 +342,8 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
                                 WrapperType::Struct(_) => "        let rust_ok_arg = swift_result.rawPtr()".to_string(),
                                 WrapperType::Vec(inner) => format!("        let rust_vec = Rust{inner}Vec.fromSwift(swift_result)
         let rust_ok_arg = rust_vec.rawPtr()", inner = inner.name()),
+                                WrapperType::Option(inner) => format!("        let rust_option = Rust{inner}Option.fromSwift(swift_result)
+        let rust_ok_arg = rust_option.rawPtr()", inner = inner.name()),
                                 WrapperType::Enum(inner) => format!("        let rust_ok_arg = CFfiModule.{inner}(rawValue: UInt32(swift_result.rawValue))"),
                                 WrapperType::UnitExpr => "".to_string(),
                                 _ => "        let rust_ok_arg = swift_result".to_string(),

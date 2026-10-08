@@ -12,3 +12,4 @@ void assert_results();
 void assert_options();
 void assert_traits();
 void assert_method_taking_trait_objects();
+void assert_nested_containers();

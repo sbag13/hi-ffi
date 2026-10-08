@@ -212,7 +212,6 @@ fn gen_properties(struct_wrapper: &StructWrapper) -> String {
 }
 
 fn gen_property(field_wrapper: &FieldWrapper) -> String {
-    let field_type = &field_wrapper.field_type;
     let field_name = &field_wrapper.field_name;
 
     // Handle Vec fields specially
@@ -246,7 +245,7 @@ fn gen_property(field_wrapper: &FieldWrapper) -> String {
 
     let setter = if let Some(setter) = &field_wrapper.setter {
         let extern_fn_name = &setter.extern_fn_name;
-        let arg_cast = arg_cast(field_type, "value");
+        let arg_cast = arg_cast(&field_wrapper.wrapper_type, "value");
 
         format!(
             r#"

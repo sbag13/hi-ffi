@@ -91,7 +91,9 @@ fn value_receiver(inner: &WrapperType) -> TokenStream2 {
         }
         WrapperType::Enum(name) => format!("value: {name}").parse().unwrap(),
         WrapperType::UnitExpr => "value: ()".parse().unwrap(),
-        WrapperType::Option(_) => panic!("Option as vec inner type is not supported yet!"),
+        WrapperType::Option(inner) => format!("value: *mut Option<{}>", inner.rust_type())
+            .parse()
+            .unwrap(),
         WrapperType::Trait(_) => {
             panic!("[value_receiver]: Trait objects as vec inner type not supported")
         }
@@ -137,7 +139,13 @@ fn received_value_cast(inner: &WrapperType) -> TokenStream2 {
                 let value = new_value;
             }
         }
-        // TODO option
+        WrapperType::Option(_) => {
+            quote! {
+                let mut new_value = None;
+                std::mem::swap(&mut new_value, unsafe { &mut (*value) });
+                let value = new_value;
+            }
+        }
         _ => quote! {},
     }
 }
@@ -154,12 +162,7 @@ impl From<&ReusableWrapper> for TokenStream2 {
 
 fn generate_option_wrapper(inner: &WrapperType) -> TokenStream2 {
     let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{}_option", inner.name());
-    let wrapper_fn_name_drop = match inner {
-        WrapperType::Option(_) | WrapperType::Vec(_) | WrapperType::Result(_) => {
-            panic!("nested Option types are not supported")
-        }
-        _ => format_ident!("drop_{}_option", inner.name()),
-    };
+    let wrapper_fn_name_drop = format_ident!("drop_{}_option", inner.name());
 
     let unwrap_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_option", inner.name());
     let wrapper_fn_name_unwrap = format_ident!("unwrap_{}_option", inner.name());
@@ -176,7 +179,10 @@ fn generate_option_wrapper(inner: &WrapperType) -> TokenStream2 {
     let inner_type = rust_type(inner);
 
     let cloned_unwrap_ret_type: TokenStream2 = match &inner {
-        WrapperType::String | WrapperType::Struct(_) | WrapperType::Vec(_) => {
+        WrapperType::String
+        | WrapperType::Struct(_)
+        | WrapperType::Vec(_)
+        | WrapperType::Option(_) => {
             quote! {*mut #inner_type}
         }
         WrapperType::UnitExpr => quote! {()},
@@ -244,11 +250,7 @@ fn generate_option_wrapper(inner: &WrapperType) -> TokenStream2 {
 
 fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
     let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{}_result", inner.name());
-    let wrapper_fn_name_drop = match inner {
-        WrapperType::Vec(vec_inner) => format_ident!("drop_{}_vec_result", vec_inner.name()),
-        WrapperType::Option(_) => panic!("Nested Result types are not supported"),
-        _ => format_ident!("drop_{}_result", inner.name()),
-    };
+    let wrapper_fn_name_drop = format_ident!("drop_{}_result", inner.name());
 
     let unwrap_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_result", inner.name());
     let wrapper_fn_name_unwrap = format_ident!("unwrap_{}_result", inner.name());
@@ -267,7 +269,10 @@ fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
     let unwrap_clone_expr = unwrap_clone_expr(inner);
 
     let cloned_unwrap_ret_type: TokenStream2 = match &inner {
-        WrapperType::String | WrapperType::Struct(_) | WrapperType::Vec(_) => {
+        WrapperType::String
+        | WrapperType::Struct(_)
+        | WrapperType::Vec(_)
+        | WrapperType::Option(_) => {
             quote! {*mut #inner_type}
         }
         WrapperType::UnitExpr => quote! {()},
@@ -396,13 +401,15 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::Bool => "bool".parse().unwrap(),
         WrapperType::String => "*mut std::string::String".parse().unwrap(),
         WrapperType::Struct(name) => format!("*mut {name}").parse().unwrap(),
-        WrapperType::Vec(_) => panic!("Vec of vecs not supported yet!"),
+        WrapperType::Vec(_) | WrapperType::Option(_) => {
+            let inner_type = rust_type(inner);
+            quote! {*mut #inner_type}
+        }
         WrapperType::Enum(name) => name.parse().unwrap(),
         WrapperType::Result(_) => {
             panic!("Vec of Result type not supported yet!")
         }
         WrapperType::UnitExpr => panic!("UnitExpr not supported yet as get return type!"),
-        WrapperType::Option(_) => panic!("Option not supported yet as get return type!"),
         WrapperType::Trait(_) => panic!("Trait objects not supported yet as get return type!"),
     };
 
@@ -416,7 +423,10 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
             let v = (&*_self)[index].clone();
             Box::into_raw(Box::new(v))
         }},
-        WrapperType::Vec(_) => unreachable!(),
+        WrapperType::Vec(_) | WrapperType::Option(_) => quote! {{
+            let v = (&*_self)[index].clone();
+            Box::into_raw(Box::new(v))
+        }},
         WrapperType::Enum(_) => quote! {
             (&*_self)[index]
         },
@@ -425,9 +435,6 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         }
         WrapperType::UnitExpr => {
             panic!("UnitExpr not supported yet as get return type!")
-        }
-        WrapperType::Option(_) => {
-            panic!("Option not supported yet as get return type!")
         }
         WrapperType::Trait(_) => {
             panic!("Trait objects not supported yet as get return type!")

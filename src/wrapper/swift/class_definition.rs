@@ -1,5 +1,4 @@
 use std::fmt::Display;
-use std::ops::Deref;
 
 use crate::wrapper::base::{SLICE_DROP_FN_NAME, SLICE_GET_LEN_FN_NAME, SLICE_GET_PTR_FN_NAME};
 use crate::wrapper::swift::function_definition::{
@@ -450,19 +449,7 @@ fn gen_property(field: &FieldWrapper) -> String {
             getter,
             ..
         } => {
-            let swift_inner_type = match inner.deref() {
-                WrapperType::IntegerNumber(name)
-                | WrapperType::FloatingPointNumber(name)
-                | WrapperType::Struct(name)
-                | WrapperType::Enum(name) => name.clone(),
-                WrapperType::Bool => "bool".to_string(),
-                WrapperType::String => "String".to_string(),
-                WrapperType::Vec(_) => "Array".to_string(), // Nested vectors not supported yet
-                WrapperType::Result(_) => panic!("Vec of results not supported as property"),
-                WrapperType::Option(_) => panic!("Option in vec not supported as property"),
-                WrapperType::UnitExpr => panic!("Empty expression cannot be a swift property"),
-                WrapperType::Trait(_) => panic!("Trait not supported as property"),
-            };
+            let swift_inner_type = super::get_swift_type_name(inner);
             (
                 getter
                     .as_ref()
@@ -480,19 +467,7 @@ fn gen_property(field: &FieldWrapper) -> String {
             getter,
             ..
         } => {
-            let swift_inner_type = match inner.deref() {
-                WrapperType::IntegerNumber(name)
-                | WrapperType::FloatingPointNumber(name)
-                | WrapperType::Struct(name)
-                | WrapperType::Enum(name) => name.clone(),
-                WrapperType::Bool => "Bool".to_string(),
-                WrapperType::String => "String".to_string(),
-                WrapperType::Vec(_) => panic!("Vec in option not supported as property"),
-                WrapperType::Result(_) => panic!("Result in option not supported as property"),
-                WrapperType::Option(_) => panic!("Nested options not supported as property"),
-                WrapperType::UnitExpr => panic!("Empty expression cannot be a swift property"),
-                WrapperType::Trait(_) => panic!("Trait not supported as property"),
-            };
+            let swift_inner_type = super::get_swift_type_name(inner);
             (
                 getter
                     .as_ref()

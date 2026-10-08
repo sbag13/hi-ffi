@@ -4,7 +4,10 @@ use std::ops::Deref;
 use syn::{FnArg, ItemFn};
 
 use crate::EXPORTED_SYMBOLS_PREFIX;
-use crate::translator::{NoWrapperErr, map_wrapper_to_reusable, path_to_wrapper_type};
+use crate::translator::{
+    NoWrapperErr, map_wrapper_to_reusable, path_to_wrapper_type,
+    path_to_wrapper_type_without_result,
+};
 use crate::wrapper::*;
 
 impl FunctionWrapper {
@@ -83,7 +86,7 @@ pub fn map_arg(arg: &FnArg) -> Result<Option<FunctionArgWrapper>, NoWrapperErr> 
                 _ => panic!("Only simple argument names are supported"),
             };
             let wrapper_type = if let syn::Type::Path(path) = ty.deref() {
-                path_to_wrapper_type(&path.path)?
+                path_to_wrapper_type_without_result(&path.path)?
             } else {
                 panic!("No path found in function argument type")
             };

@@ -428,6 +428,73 @@ public class Main {
             FfiModule.functionTakingVecOfStructs(java.util.List.of(first, second));
         }
 
+            var one = java.util.Optional.of(1);
+            var three = java.util.Optional.of(3);
+            FfiModule.functionTakingVecOfOptions(java.util.List.of(one, java.util.Optional.empty(), three));
+            if (!FfiModule.functionReturningVecOfOptions().equals(
+                    java.util.List.of(java.util.Optional.of(2), java.util.Optional.empty(),
+                            java.util.Optional.of(4)))) {
+                throw new AssertionError("Vec<Option<i32>> function return was incorrect");
+            }
+
+            var optionValue = java.util.Optional.of(java.util.List.of(
+                    java.util.Optional.of(5), java.util.Optional.<Integer>empty(), java.util.Optional.of(6)));
+            FfiModule.functionTakingOptionOfVec(optionValue);
+            if (!FfiModule.functionReturningOptionOfVec().equals(java.util.Optional.of(java.util.List.of(
+                    java.util.Optional.of(8), java.util.Optional.empty(), java.util.Optional.of(10))))) {
+                throw new AssertionError("Option<Vec<Option<i32>>> function return was incorrect");
+            }
+
+            var deepValue = java.util.List.of(
+                    java.util.Optional.of(java.util.List.of(
+                            java.util.Optional.of(15), java.util.Optional.<Integer>empty())),
+                    java.util.Optional.<java.util.List<java.util.Optional<Integer>>>empty());
+            FfiModule.functionTakingDeepNestedContainers(deepValue);
+            if (!FfiModule.functionReturningDeepNestedContainers().equals(java.util.List.of(
+                    java.util.Optional.of(java.util.List.of(java.util.Optional.of(16), java.util.Optional.empty())),
+                    java.util.Optional.empty()))) {
+                throw new AssertionError("Deeply nested function return was incorrect");
+            }
+
+            if (!FfiModule.functionReturningResultOfNestedContainers().equals(
+                    java.util.Optional.of(java.util.List.of(java.util.Optional.of(12),
+                            java.util.Optional.empty(), java.util.Optional.of(14))))) {
+                throw new AssertionError("Nested Result return was incorrect");
+            }
+
+            try (var nested = new StructWithNestedContainers()) {
+                nested.setVecOption(java.util.List.of(
+                        java.util.Optional.of(17), java.util.Optional.empty(), java.util.Optional.of(19)));
+                if (!nested.getVecOption().equals(java.util.List.of(
+                        java.util.Optional.of(17), java.util.Optional.empty(), java.util.Optional.of(19)))) {
+                    throw new AssertionError("Vec<Option<i32>> field round-trip was incorrect");
+                }
+
+                nested.setOptionVec(java.util.Optional.of(java.util.List.of(
+                        java.util.Optional.of(20), java.util.Optional.empty(), java.util.Optional.of(22))));
+                if (!nested.getOptionVec().equals(java.util.Optional.of(java.util.List.of(
+                        java.util.Optional.of(20), java.util.Optional.empty(), java.util.Optional.of(22))))) {
+                    throw new AssertionError("Option<Vec<Option<i32>>> field round-trip was incorrect");
+                }
+
+                nested.setDeep(java.util.List.of(
+                        java.util.Optional.of(java.util.List.of(java.util.Optional.of(23),
+                                java.util.Optional.empty())),
+                        java.util.Optional.empty()));
+                if (!nested.getDeep().equals(java.util.List.of(
+                        java.util.Optional.of(java.util.List.of(java.util.Optional.of(23),
+                                java.util.Optional.empty())),
+                        java.util.Optional.empty()))) {
+                    throw new AssertionError("Deeply nested field round-trip was incorrect");
+                }
+
+                nested.takeNested(java.util.List.of(
+                        java.util.Optional.of(7), java.util.Optional.empty(), java.util.Optional.of(9)));
+                if (!nested.returnNested().equals(java.util.Optional.of(java.util.List.of(
+                        java.util.Optional.of(11), java.util.Optional.empty(), java.util.Optional.of(13))))) {
+                    throw new AssertionError("Nested container method return was incorrect");
+                }
+            }
         if (!FfiModule.functionReturningVecOfInt().equals(java.util.List.of(3, 2, 7, 8))) {
             throw new AssertionError("function_returning_vec_of_int returned the wrong value");
         }
@@ -727,6 +794,26 @@ public class Main {
                     failIfRequested((boolean) values[0]);
                     yield java.util.List.of(struct(111), struct(222));
                 }
+                case "traitFnReturningResultWithOptionInt" -> {
+                    failIfRequested((boolean) values[0]);
+                    yield java.util.Optional.of(555);
+                }
+                case "traitFnReturningResultWithOptionBool" -> {
+                    failIfRequested((boolean) values[0]);
+                    yield java.util.Optional.of(false);
+                }
+                case "traitFnReturningResultWithOptionString" -> {
+                    failIfRequested((boolean) values[0]);
+                    yield java.util.Optional.of("Some string");
+                }
+                case "traitFnReturningResultWithOptionEnum" -> {
+                    failIfRequested((boolean) values[0]);
+                    yield java.util.Optional.of(TestStatus.Pending);
+                }
+                case "traitFnReturningResultWithOptionStruct" -> {
+                    failIfRequested((boolean) values[0]);
+                    yield java.util.Optional.of(struct(789));
+                }
                 case "traitFnReturningResultWithUnitExpression" -> {
                     failIfRequested((boolean) values[0]);
                     yield null;
@@ -849,6 +936,19 @@ public class Main {
                     throw new AssertionError("Rust trait proxy returned the wrong result struct vector");
                 }
             }
+            if (!rustTrait.traitFnReturningResultWithOptionInt(false).equals(java.util.Optional.of(555))
+                    || !rustTrait.traitFnReturningResultWithOptionBool(false).equals(java.util.Optional.of(false))
+                    || !rustTrait.traitFnReturningResultWithOptionString(false)
+                            .equals(java.util.Optional.of("Some string"))
+                    || !rustTrait.traitFnReturningResultWithOptionEnum(false)
+                            .equals(java.util.Optional.of(TestStatus.Pending))) {
+                throw new AssertionError("Rust trait proxy returned the wrong Result<Option> value");
+            }
+            try (var returned = rustTrait.traitFnReturningResultWithOptionStruct(false).orElseThrow()) {
+                if (returned.getI32Field() != 789) {
+                    throw new AssertionError("Rust trait proxy returned the wrong Result<Option> struct");
+                }
+            }
             rustTrait.traitFnReturningResultWithUnitExpression(false);
             assertVectorResultError(() -> rustTrait.traitFnReturningResultInt(true),
                     "RustException: StructError: EnumError: VariantTwo");
@@ -869,6 +969,16 @@ public class Main {
             assertVectorResultError(() -> rustTrait.traitFnReturningResultVecOfStrings(true),
                     "RustException: Error from trait object");
             assertVectorResultError(() -> rustTrait.traitFnReturningResultVecOfStructs(true),
+                    "RustException: Error from trait object");
+            assertVectorResultError(() -> rustTrait.traitFnReturningResultWithOptionInt(true),
+                    "RustException: Error from trait object");
+            assertVectorResultError(() -> rustTrait.traitFnReturningResultWithOptionBool(true),
+                    "RustException: Error from trait object");
+            assertVectorResultError(() -> rustTrait.traitFnReturningResultWithOptionString(true),
+                    "RustException: Error from trait object");
+            assertVectorResultError(() -> rustTrait.traitFnReturningResultWithOptionEnum(true),
+                    "RustException: Error from trait object");
+            assertVectorResultError(() -> rustTrait.traitFnReturningResultWithOptionStruct(true),
                     "RustException: Error from trait object");
             assertVectorResultError(() -> {
                 rustTrait.traitFnReturningResultWithUnitExpression(true);

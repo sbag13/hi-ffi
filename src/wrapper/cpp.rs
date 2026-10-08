@@ -68,7 +68,15 @@ fn gen_option_wrapper_cpp(inner: &WrapperType) -> CppFiles {
     let has_value_cast = match inner {
         WrapperType::String => "other.value().data()",
         WrapperType::Struct(_) => "other.value().self_ptr()",
+        WrapperType::Vec(_) | WrapperType::Option(_) => "inner_wrapper.raw_ptr()",
         _ => "other.value()",
+    };
+    let nested_value_conversion = match inner {
+        WrapperType::Vec(_) | WrapperType::Option(_) => format!(
+            "auto inner_wrapper = {}::from_std(other.value());",
+            cpp_wrapper_name(inner)
+        ),
+        _ => String::new(),
     };
 
     let header = format!(
@@ -127,6 +135,7 @@ bool {wrapper_name}::is_some() {{
 
 {wrapper_name} {wrapper_name}::from_std(const std::optional<{inner_cpp_type}>& other) {{
     if (other.has_value()) {{
+        {nested_value_conversion}
         auto other_value = {has_value_cast};
         return {wrapper_name}({some_ext_name}(other_value));
     }} else {{
@@ -257,23 +266,19 @@ void* {wrapper_name}::unwrap_err() {{
 fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
     let wrapper_name = format!("Rust{}Vec", inner.name());
     let inner_name = inner.name();
-    let inner_cpp_name = match inner {
-        WrapperType::String => "std::string".to_string(),
-        _ => inner_name.clone(),
-    };
+    let inner_cpp_name = cpp_type(inner);
     let push_ext_receiver = match inner {
         WrapperType::IntegerNumber(inner) | WrapperType::FloatingPointNumber(inner) => {
             format!("{inner} value")
         }
         WrapperType::Struct(inner) => format!("void* {inner}"),
-        WrapperType::Vec(_) => unimplemented!("CPP: vec of vecs unimplemented!"),
+        WrapperType::Vec(_) | WrapperType::Option(_) => "void* value".to_string(),
         WrapperType::Bool => "bool value".to_string(),
         WrapperType::String => "const char* value".to_string(), // 2nd arg, len, is ignored for now
         WrapperType::Enum(_) => "int value".to_string(),
         WrapperType::Result(_) => {
             unimplemented!("CPP: vec of Result type unimplemented!")
         }
-        WrapperType::Option(_) => todo!("option in vec push cpp"),
         WrapperType::UnitExpr => {
             panic!("Pushing () to vec not supported")
         }
@@ -300,6 +305,10 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         WrapperType::Enum(_) => {
             format!("            {push_ext_fn_name}(rust_vec_ptr, static_cast<int>(elem));")
         }
+        WrapperType::Vec(_) | WrapperType::Option(_) => format!(
+            "            auto inner_wrapper = {}::from_std(elem);\n            {push_ext_fn_name}(rust_vec_ptr, inner_wrapper.raw_ptr());",
+            cpp_wrapper_name(inner)
+        ),
         _ => panic!("Pushing to vec not supported"),
     };
 
@@ -327,8 +336,11 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         WrapperType::Enum(_) => {
             format!("auto elem = {get_ext_fn_name}(this->self, i);")
         }
-        WrapperType::Option(_) => todo!("option in vec cpp"),
-        WrapperType::Result(_) | WrapperType::Vec(_) => unreachable!(),
+        WrapperType::Vec(_) | WrapperType::Option(_) => format!(
+            "auto elem_ptr = {get_ext_fn_name}(this->self, i); {} rs(elem_ptr); auto elem = rs.to_std();",
+            cpp_wrapper_name(inner)
+        ),
+        WrapperType::Result(_) => unreachable!(),
         WrapperType::UnitExpr => unreachable!(),
         WrapperType::Trait(_) => panic!("Trait objects in cpp vec not supported"),
     };
@@ -425,6 +437,7 @@ fn inner_include(inner: &WrapperType) -> Option<String> {
         WrapperType::Struct(name) | WrapperType::Enum(name) => {
             Some(format!(r#"#include "{name}.h""#))
         }
+
         WrapperType::Vec(vec_inner) => Some(format!(r#"#include "vec_{}.h""#, vec_inner.name())),
         WrapperType::Option(opt_inner) => {
             Some(format!(r#"#include "option_{}.h""#, opt_inner.name()))
@@ -434,6 +447,14 @@ fn inner_include(inner: &WrapperType) -> Option<String> {
         }
         WrapperType::String => Some("#include <string>".to_string()),
         _ => None,
+    }
+}
+
+fn cpp_wrapper_name(wrapper_type: &WrapperType) -> String {
+    match wrapper_type {
+        WrapperType::Vec(inner) => format!("Rust{}Vec", inner.name()),
+        WrapperType::Option(inner) => format!("Rust{}Option", inner.name()),
+        _ => unreachable!("Only container wrappers have reusable C++ wrapper classes"),
     }
 }
 
@@ -555,7 +576,6 @@ struct ReturnTypes {
     return_type: String,
     return_cast: String,
     return_type_includes: HashSet<String>,
-    header_declarations: HashSet<String>,
 }
 
 fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnTypes {
@@ -569,7 +589,6 @@ fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> ReturnType
             return_type: return_type.to_token_stream().to_string(),
             return_cast: "return result;".to_string(),
             return_type_includes: HashSet::new(),
-            header_declarations: HashSet::new(),
         },
 
         Some(FunctionReturnWrapper {
@@ -583,7 +602,6 @@ auto rust_str = RustString(result);
 return rust_str.to_string();"
                 .to_string(),
             return_type_includes: HashSet::new(),
-            header_declarations: HashSet::new(),
         },
 
         Some(FunctionReturnWrapper {
@@ -600,7 +618,6 @@ return {}(result);",
                     struct_type
                 ),
                 return_type_includes: HashSet::from([format!("#include \"{struct_type}.h\"")]),
-                header_declarations: HashSet::from([format!("class {struct_type};")]),
             }
         }
 
@@ -627,7 +644,6 @@ return rust_vec.to_std();
                 return_type: cpp_type(wt),
                 return_cast,
                 return_type_includes: includes,
-                header_declarations: HashSet::new(),
             }
         }
 
@@ -641,7 +657,6 @@ return rust_vec.to_std();
                 return_type: enum_type.clone(),
                 return_cast: "return result;".to_string(),
                 return_type_includes: HashSet::from([format!("#include \"{}.h\"", enum_type)]),
-                header_declarations: HashSet::from([format!("enum class {enum_type};")]),
             }
         }
 
@@ -665,7 +680,6 @@ return rust_vec.to_std();
 return rust_opt.to_std();"#
                 ),
                 return_type_includes: includes,
-                header_declarations: HashSet::new(),
             }
         }
 
@@ -690,7 +704,6 @@ return rust_result.is_err() ? throw RustException(rust_result.unwrap_err()) : ru
                 return_type_includes: HashSet::from([format!(
                     "{inner_type_include}#include \"result_{inner_name}.h\""
                 )]),
-                header_declarations: HashSet::new(),
             }
         }
 
@@ -703,7 +716,6 @@ return rust_result.is_err() ? throw RustException(rust_result.unwrap_err()) : ru
             return_type: "void".to_string(),
             return_cast: "".to_string(),
             return_type_includes: HashSet::new(),
-            header_declarations: HashSet::new(),
         },
 
         Some(FunctionReturnWrapper {
@@ -720,9 +732,6 @@ return std::make_shared<{trait_name}RustImpl>({trait_name}RustImpl(result));"#
                 format!("#include \"{trait_name}.h\""),
                 "#include <memory>".to_string(),
             ]),
-            header_declarations: HashSet::from([format!(
-                "class {trait_name};\nstruct {trait_name}Bridge;"
-            )]),
         },
     }
 }

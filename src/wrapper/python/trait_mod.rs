@@ -167,6 +167,16 @@ return {inner_name}Option.from_python(result).leak()"#
                                 WrapperType::Struct(_) => "    rust_ok_arg = python_result.raw_ptr()".to_string(),
                                 WrapperType::Vec(inner) => format!("    rust_vec = {inner}Vec.from_list(python_result)
     rust_ok_arg = rust_vec.raw_ptr()", inner = inner.name()),
+                                WrapperType::Option(inner) => {
+                                    let option_name = inner.name();
+                                    imports.insert(
+                                        format!("{option_name}Option"),
+                                        format!(
+                                            "from .option_{option_name} import {option_name}Option"
+                                        ),
+                                    );
+                                    format!("    rust_option = {option_name}Option.from_python(python_result)\n    rust_ok_arg = rust_option.raw_ptr()")
+                                }
                                 WrapperType::UnitExpr => "".to_string(),
                                 _ => "    rust_ok_arg = python_result".to_string(),
                             };

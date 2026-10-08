@@ -63,80 +63,34 @@ class {class_name}:"#
         let mut restype_set = String::new();
         let mut local_imports = String::new();
         if let Some(ret) = &method.return_wrapper {
+            add_type_hint_imports(&ret.wrapper_type, &class_name, &mut imports);
+
             // Check if this is a vector return type and add proper imports
 
             match &ret.wrapper_type {
                 WrapperType::Vec(inner) => {
-                    insert_imports_for_vec_inner(inner.deref(), &mut imports);
+                    let vec_name = format!("{}Vec", inner.name());
+                    local_imports = format!("from .vec_{} import {vec_name}", inner.name());
                 }
                 WrapperType::Result(inner) => {
-                    let inner_name = inner.name();
-                    let result_type = format!("{inner_name}Result");
-                    match inner.deref() {
-                        // Avoid cyclic imports
-                        WrapperType::Enum(n) | WrapperType::Struct(n) if n == &class_name => {
-                            local_imports =
-                                format!("from .result_{inner_name} import {result_type}");
-                        }
-                        _ => {
-                            imports.insert(
-                                result_type.clone(),
-                                format!("from .result_{inner_name} import {result_type}"),
-                            );
-                        }
-                    }
-
+                    let result_name = format!("{}Result", inner.name());
+                    local_imports = format!("from .result_{} import {result_name}", inner.name());
                     imports.insert(
                         "RustException".to_string(),
                         "from .global_state import RustException".to_string(),
                     );
-
-                    match inner.deref() {
-                        WrapperType::Enum(inner) | WrapperType::Struct(inner)
-                            if inner != &class_name =>
-                        {
-                            imports
-                                .insert(inner.to_string(), format!("from .{inner} import {inner}"));
-                        }
-                        WrapperType::Vec(inner) => {
-                            insert_imports_for_vec_inner(inner.deref(), &mut imports);
-                        }
-                        _ => (),
-                    }
                 }
                 WrapperType::Option(inner) => {
-                    let inner_name = inner.name();
-                    let option_type = format!("{inner_name}Option");
-                    match inner.deref() {
-                        // Avoid cyclic imports
-                        WrapperType::Enum(n) | WrapperType::Struct(n) if n == &class_name => {
-                            local_imports =
-                                format!("from .option_{inner_name} import {option_type}");
-                        }
-                        _ => {
-                            imports.insert(
-                                option_type.clone(),
-                                format!("from .option_{inner_name} import {option_type}"),
-                            );
-                        }
-                    }
-
+                    let option_name = format!("{}Option", inner.name());
+                    local_imports = format!("from .option_{} import {option_name}", inner.name());
                     imports.insert(
                         "Optional".to_string(),
                         "from typing import Optional".to_string(),
                     );
-
-                    match inner.deref() {
-                        WrapperType::Enum(inner) | WrapperType::Struct(inner)
-                            if inner != &class_name =>
-                        {
-                            imports
-                                .insert(inner.to_string(), format!("from .{inner} import {inner}"));
-                        }
-                        WrapperType::Vec(inner) => {
-                            insert_imports_for_vec_inner(inner.deref(), &mut imports);
-                        }
-                        _ => (),
+                }
+                WrapperType::Struct(type_name) | WrapperType::Enum(type_name) => {
+                    if type_name != &class_name {
+                        imports.insert(type_name.clone(), format!("from . import {type_name}"));
                     }
                 }
                 WrapperType::Trait(trait_name) => {
@@ -233,6 +187,31 @@ fn insert_imports_for_vec_inner(inner: &WrapperType, imports: &mut HashMap<Strin
     }
 }
 
+fn add_type_hint_imports(
+    wrapper_type: &WrapperType,
+    current_class: &str,
+    imports: &mut HashMap<String, String>,
+) {
+    match wrapper_type {
+        WrapperType::Struct(name) | WrapperType::Enum(name) if name != current_class => {
+            imports.insert(name.clone(), format!("from . import {name}"));
+        }
+        WrapperType::Vec(inner) => {
+            imports.insert("List".to_string(), "from typing import List".to_string());
+            add_type_hint_imports(inner, current_class, imports);
+        }
+        WrapperType::Option(inner) => {
+            imports.insert(
+                "Optional".to_string(),
+                "from typing import Optional".to_string(),
+            );
+            add_type_hint_imports(inner, current_class, imports);
+        }
+        WrapperType::Result(inner) => add_type_hint_imports(inner, current_class, imports),
+        _ => {}
+    }
+}
+
 fn insert_imports_for_option_inner(inner: &WrapperType, imports: &mut HashMap<String, String>) {
     if let WrapperType::Option(inner) = inner {
         imports.insert(
@@ -279,7 +258,7 @@ pub(crate) fn call_args_and_pre_casts(
                 pre_casts.push(format!(
                     "casted_{name}_wrapper = {cast}",
                     name = arg_name,
-                    cast = arg_cast(&arg.arg_type, &arg_name)
+                    cast = arg_cast(&arg.wrapper_type, &arg_name)
                 ));
                 pre_casts.push(format!(
                     "casted_{name} = casted_{name}_wrapper.raw_ptr()",
@@ -292,7 +271,7 @@ pub(crate) fn call_args_and_pre_casts(
                 pre_casts.push(format!(
                     "casted_{name}_wrapper = {cast}",
                     name = arg_name,
-                    cast = arg_cast(&arg.arg_type, &arg_name)
+                    cast = arg_cast(&arg.wrapper_type, &arg_name)
                 ));
                 pre_casts.push(format!(
                     "casted_{name} = casted_{name}_wrapper.raw_ptr()",
@@ -307,7 +286,15 @@ pub(crate) fn call_args_and_pre_casts(
                 pre_casts.push(format!(
                     "casted_{name} = {cast}",
                     name = arg_name,
-                    cast = arg_cast(&arg.arg_type, &arg_name)
+                    cast = arg_cast(&arg.wrapper_type, &arg_name)
+                ));
+            }
+            WrapperType::FloatingPointNumber(_) => {
+                imports.insert("ctypes".to_string(), "import ctypes".to_string());
+                pre_casts.push(format!(
+                    "casted_{name} = {cast}",
+                    name = arg_name,
+                    cast = arg_cast(&arg.wrapper_type, &arg_name)
                 ));
             }
             WrapperType::Trait(trait_name) => {
@@ -334,7 +321,7 @@ casted_{arg_name} = {trait_name}.{trait_name}Bridge(
                 pre_casts.push(format!(
                     "casted_{name} = {cast}",
                     name = arg_name,
-                    cast = arg_cast(&arg.arg_type, &arg_name)
+                    cast = arg_cast(&arg.wrapper_type, &arg_name)
                 ));
             }
         }

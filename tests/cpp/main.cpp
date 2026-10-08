@@ -15,6 +15,7 @@ int main()
     assert_options();
     assert_traits();
     assert_method_taking_trait_objects();
+    assert_nested_containers();
 
     std::cout << "All assertions passed!" << std::endl;
 

@@ -5,7 +5,9 @@ use quote::{format_ident, quote};
 use syn::ItemStruct;
 
 use crate::EXPORTED_SYMBOLS_PREFIX;
-use crate::translator::{NoWrapperErr, map_wrapper_to_reusable, path_to_wrapper_type};
+use crate::translator::{
+    NoWrapperErr, map_wrapper_to_reusable, path_to_wrapper_type_without_result,
+};
 use crate::wrapper::*;
 
 pub fn translate_struct(item_struct: ItemStruct) -> Result<Wrapper, NoWrapperErr> {
@@ -49,7 +51,7 @@ fn fields_wrappers(item_struct: &ItemStruct) -> Result<Vec<FieldWrapper>, NoWrap
             let setter = generate_setter(&field_attributes, class_name, &field_name, is_public);
 
             if let syn::Type::Path(path) = &field.ty {
-                let wrapper_type = path_to_wrapper_type(&path.path)?;
+                let wrapper_type = path_to_wrapper_type_without_result(&path.path)?;
                 Ok(FieldWrapper {
                     field_name,
                     field_type: field.ty.clone(),
