@@ -103,6 +103,25 @@ auto casted_{arg_name} = tmp_casted_{arg_name}.raw_ptr();"));
 
         FunctionArgWrapper {
             arg_name,
+            wrapper_type: wt @ WrapperType::HashMap(key, value),
+            ..
+        } => {
+            let wrapper_name = cpp_hashmap_wrapper_name(key, value);
+            cpp_args.push(format!("const {}& {arg_name}", cpp_type(wt)));
+            includes.insert("#include <unordered_map>".to_string());
+            includes.insert(format!("#include \"hashmap_{}_{}.h\"", key.name(), value.name()));
+            arg_casts.push(format!(
+                "auto tmp_casted_{arg_name} = {wrapper_name}::from_std({arg_name});\nauto casted_{arg_name} = tmp_casted_{arg_name}.raw_ptr();"
+            ));
+            call_args.push(format!("casted_{arg_name}"));
+            wrapper_args.push(format!("void* {arg_name}"));
+            from_rust_casts.push(format!(
+                "auto casted_{arg_name} = {wrapper_name}({arg_name}).to_std();"
+            ));
+        }
+
+        FunctionArgWrapper {
+            arg_name,
             arg_type,
             wrapper_type: WrapperType::Enum(_),
         } => {

@@ -19,6 +19,7 @@ from python_ffi.vec_String import StringVec
 from python_ffi.vec_TestStruct2 import TestStruct2Vec
 from python_ffi.vec_TestStatus import TestStatusVec
 from python_ffi.StructWithVecs import StructWithVecs
+from python_ffi.StructWithHashMaps import StructWithHashMaps
 from python_ffi.option_i32 import i32Option
 from python_ffi.option_bool import boolOption
 from python_ffi.option_String import StringOption
@@ -390,6 +391,8 @@ def result_tests():
     assert ok_enums[0] == TestStatus.Pending
     assert ok_enums[1] == TestStatus.Active
     assert ok_enums[2] == TestStatus.Inactive
+    ok_hashmap = function_with_hashmap_result(False)
+    assert ok_hashmap == {"key": "value"}
     function_with_unit_expression_result()  # just check no exception
 
     ts1 = TestStruct()
@@ -416,6 +419,7 @@ def result_tests():
         TestStatus.Pending,
         TestStatus.Active,
     ]
+    assert ts1.method_returning_result_with_hashmap(False) == {"key": 42}
 
 
 def option_tests():
@@ -606,6 +610,36 @@ class PythonTraitImpl:
         assert vec[0].i32_field == 321
         assert vec[1].i32_field == 654
 
+    def trait_fn_with_int_hashmap(self, map: Dict[int, int]):
+        assert map == {1: 10, 2: 20}
+
+    def trait_fn_with_string_hashmap(self, map: Dict[str, str]):
+        assert map == {"alpha": "one", "beta": "two"}
+
+    def trait_fn_with_enum_hashmap(self, map: Dict[TestStatus, TestStatus]):
+        assert map == {
+            TestStatus.Active: TestStatus.Pending,
+            TestStatus.Inactive: TestStatus.Active,
+        }
+
+    def trait_fn_with_recursive_maps(
+        self,
+        map_vec: Dict[str, List[int]],
+        map_option: Dict[str, Optional[int]],
+        map_map: Dict[str, Dict[str, int]],
+        vec_map: List[Dict[str, int]],
+        option_map: Optional[Dict[str, int]],
+    ):
+        assert map_vec["values"] == [1, 2]
+        assert map_option == {"some": 3, "none": None}
+        assert map_map["inner"]["value"] == 4
+        assert vec_map[0]["value"] == 5
+        assert option_map["value"] == 6
+
+    def trait_fn_with_struct_hashmap(self, map: Dict[str, TestStruct2]):
+        assert map["alpha"].i32_field == 10
+        assert map["beta"].i32_field == 20
+
     def trait_fn_with_options(
         self,
         opt_int: Optional[int],
@@ -655,6 +689,27 @@ class PythonTraitImpl:
         s2 = TestStruct2()
         s2.i32_field = 222
         return [s1, s2]
+
+    def trait_fn_return_int_hashmap(self) -> Dict[int, int]:
+        return {3: 30, 4: 40}
+
+    def trait_fn_return_string_hashmap(self) -> Dict[str, str]:
+        return {"gamma": "three", "delta": "four"}
+
+    def trait_fn_return_enum_hashmap(self) -> Dict[TestStatus, TestStatus]:
+        return {
+            TestStatus.Active: TestStatus.Inactive,
+            TestStatus.Pending: TestStatus.Active,
+        }
+
+    def trait_fn_return_map_of_vec(self) -> Dict[str, List[int]]:
+        return {"values": [16, 17]}
+
+    def trait_fn_return_struct_hashmap(self) -> Dict[str, TestStruct2]:
+        return {
+            "alpha": TestStruct2.new_ts2(30),
+            "beta": TestStruct2.new_ts2(40),
+        }
 
     def trait_fn_returning_option_int(self, some: bool) -> Optional[int]:
         if some:
@@ -768,6 +823,14 @@ class PythonTraitImpl:
             raise Exception("Error from trait object")
         return TestStruct2.new_ts2(789)
 
+    def trait_fn_returning_result_with_hashmap(self, error: bool) -> Dict[str, TestStruct2]:
+        if error:
+            raise Exception("Error from trait object")
+        return {
+            "alpha": TestStruct2.new_ts2(30),
+            "beta": TestStruct2.new_ts2(40),
+        }
+
     def trait_fn_returning_result_with_unit_expression(self, error: bool):
         if error:
             raise Exception("Error from trait object")
@@ -820,6 +883,23 @@ def trait_tests():
     ts2_2 = TestStruct2()
     ts2_2.i32_field = 654
     rust_trait_obj.trait_fn_with_vec_of_structs([ts2_1, ts2_2])
+    rust_trait_obj.trait_fn_with_int_hashmap({1: 10, 2: 20})
+    rust_trait_obj.trait_fn_with_string_hashmap({"alpha": "one", "beta": "two"})
+    rust_trait_obj.trait_fn_with_enum_hashmap({
+        TestStatus.Active: TestStatus.Pending,
+        TestStatus.Inactive: TestStatus.Active,
+    })
+    rust_trait_obj.trait_fn_with_struct_hashmap({
+        "alpha": TestStruct2.new_ts2(10),
+        "beta": TestStruct2.new_ts2(20),
+    })
+    rust_trait_obj.trait_fn_with_recursive_maps(
+        {"values": [1, 2]},
+        {"some": 3, "none": None},
+        {"inner": {"value": 4}},
+        [{"value": 5}],
+        {"value": 6},
+    )
     
     # Test calling method with options
     ts2_opt = TestStruct2()
@@ -843,6 +923,19 @@ def trait_tests():
     assert len(vec_of_ts2) == 2
     assert vec_of_ts2[0].i32_field == 111
     assert vec_of_ts2[1].i32_field == 222
+    assert rust_trait_obj.trait_fn_return_int_hashmap() == {3: 30, 4: 40}
+    assert rust_trait_obj.trait_fn_return_string_hashmap() == {
+        "gamma": "three",
+        "delta": "four",
+    }
+    assert rust_trait_obj.trait_fn_return_enum_hashmap() == {
+        TestStatus.Active: TestStatus.Inactive,
+        TestStatus.Pending: TestStatus.Active,
+    }
+    assert rust_trait_obj.trait_fn_return_map_of_vec() == {"values": [16, 17]}
+    returned_struct_map = rust_trait_obj.trait_fn_return_struct_hashmap()
+    assert returned_struct_map["alpha"].i32_field == 30
+    assert returned_struct_map["beta"].i32_field == 40
     
     # Test option returns
     assert rust_trait_obj.trait_fn_returning_option_int(True) == 555
@@ -933,6 +1026,10 @@ def trait_tests():
     assert rust_trait_obj.trait_fn_returning_result_with_option_string(False) == "Some string"
     assert rust_trait_obj.trait_fn_returning_result_with_option_enum(False) == TestStatus.Pending
     assert rust_trait_obj.trait_fn_returning_result_with_option_struct(False).i32_field == 789
+    assert rust_trait_obj.trait_fn_returning_result_with_hashmap(False) == {
+        "alpha": TestStruct2.new_ts2(30),
+        "beta": TestStruct2.new_ts2(40),
+    }
     for method in (
         rust_trait_obj.trait_fn_returning_result_with_option_int,
         rust_trait_obj.trait_fn_returning_result_with_option_bool,
@@ -944,6 +1041,7 @@ def trait_tests():
             method(True)
             assert False
         except RustException as error:
+            print(str(error))
             assert str(error) == "Error from trait object"
 
     rust_trait_obj.trait_fn_returning_result_with_unit_expression(False)
@@ -984,6 +1082,102 @@ def method_trait_tests():
     assert static_rust_trait_obj.trait_fn_return_int() == 12345
     TestStruct.static_method_taking_trait_object(static_rust_trait_obj)
 
+def hashmap_tests():
+    nested_map = {"value": 6}
+    function_taking_recursive_maps(
+        {"values": [1, 2]},
+        {"some": 3, "none": None},
+        {"inner": {"value": 4}},
+        [{"value": 5}],
+        nested_map,
+    )
+    assert function_returning_map_of_vec() == {"values": [10, 11]}
+    assert function_returning_map_of_option() == {"some": 12, "none": None}
+    assert function_returning_map_of_hashmap() == {"inner": {"value": 13}}
+    assert function_returning_vec_of_hashmaps() == [{"value": 14}]
+    assert function_returning_option_of_hashmap() == {"value": 15}
+
+    recursive_method = TestStruct()
+    recursive_method.public_method_taking_recursive_maps(
+        {"values": [1, 2]},
+        {"some": 3, "none": None},
+        {"inner": {"value": 4}},
+        [{"value": 5}],
+        nested_map,
+    )
+    assert recursive_method.public_method_returning_vec_of_hashmaps() == [{"value": 7}]
+
+    enum_input = {
+        TestStatus.Active: TestStatus.Pending,
+        TestStatus.Inactive: TestStatus.Active,
+    }
+    function_taking_enum_hashmap(enum_input)
+    assert function_returning_enum_hashmap() == {
+        TestStatus.Active: TestStatus.Inactive,
+        TestStatus.Pending: TestStatus.Active,
+    }
+
+    enum_method_struct = TestStruct()
+    enum_method_struct.public_method_taking_enum_hashmap({
+        TestStatus.Active: TestStatus.Active,
+        TestStatus.Pending: TestStatus.Inactive,
+    })
+    assert enum_method_struct.public_method_returning_enum_hashmap() == {
+        TestStatus.Active: TestStatus.Pending,
+        TestStatus.Inactive: TestStatus.Active,
+    }
+    TestStruct.static_method_taking_enum_hashmap({
+        TestStatus.Active: TestStatus.Inactive,
+        TestStatus.Pending: TestStatus.Pending,
+    })
+    assert TestStruct.static_method_returning_enum_hashmap() == {
+        TestStatus.Inactive: TestStatus.Pending,
+        TestStatus.Pending: TestStatus.Active,
+    }
+
+    input_map = {"alpha": 10, "beta": 20}
+    function_taking_hashmap(input_map)
+    assert function_returning_hashmap() == input_map
+    assert function_returning_empty_hashmap() == {}
+
+    test_struct = TestStruct()
+    test_struct.public_method_taking_hashmap({"method": 24})
+    assert test_struct.public_method_returning_hashmap() == {"method": 25}
+    TestStruct.static_method_taking_hashmap({"static": 77})
+    assert TestStruct.static_method_returning_hashmap() == {"static": 78}
+
+    maps = StructWithHashMaps()
+    assert maps.string_to_int == {}
+    maps.string_to_int = input_map
+    assert maps.string_to_int == input_map
+
+    assert maps.int_to_string == {}
+    reverse = {1: "one", 2: "two"}
+    maps.int_to_string = reverse
+    assert maps.int_to_string == reverse
+
+    struct_input = {
+        "alpha": TestStruct2.new_ts2(10),
+        "beta": TestStruct2.new_ts2(20),
+    }
+    function_taking_struct_hashmap(struct_input)
+    struct_return = function_returning_struct_hashmap()
+    assert struct_return["alpha"].i32_field == 10
+    assert struct_return["beta"].i32_field == 20
+
+    test_struct.public_method_taking_struct_hashmap({"method": TestStruct2.new_ts2(24)})
+    method_struct_return = test_struct.public_method_returning_struct_hashmap()
+    assert method_struct_return["method"].i32_field == 25
+    TestStruct.static_method_taking_struct_hashmap({"static": TestStruct2.new_ts2(77)})
+    static_struct_return = TestStruct.static_method_returning_struct_hashmap()
+    assert static_struct_return["static"].i32_field == 78
+
+    assert maps.string_to_struct == {}
+    maps.string_to_struct = struct_input
+    struct_field = maps.string_to_struct
+    assert struct_field["alpha"].i32_field == 10
+    assert struct_field["beta"].i32_field == 20
+
 
 if __name__ == "__main__":
     struct_tests()
@@ -1000,4 +1194,5 @@ if __name__ == "__main__":
     nested_container_tests()
     trait_tests()
     method_trait_tests()
+    hashmap_tests()
     print("All tests passed!")

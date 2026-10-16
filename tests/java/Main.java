@@ -64,6 +64,12 @@ public class Main {
                     throw new AssertionError("static_method_with_vec_of_structs_result returned wrong values");
                 }
             }
+
+            var resultMap = testStruct.methodReturningResultWithHashmap(false);
+            if (!resultMap.equals(java.util.Map.of(
+                    "key", 42))) {
+                throw new AssertionError("method_returning_result_with_hashmap returned the wrong value");
+            }
         }
 
         if (!TestStruct.staticMethodWithBoolResult(false)) {
@@ -83,11 +89,12 @@ public class Main {
             }
         }
         if (!TestStruct.staticMethodWithVecOfBoolsResult().equals(
-                    java.util.List.of(true, false, false))
+                java.util.List.of(true, false, false))
                 || !TestStruct.staticMethodWithVecOfEnumResult().equals(
-                    java.util.List.of(TestStatus.Inactive, TestStatus.Pending, TestStatus.Active))) {
+                        java.util.List.of(TestStatus.Inactive, TestStatus.Pending, TestStatus.Active))) {
             throw new AssertionError("TestStruct static result method returned the wrong value");
         }
+
     }
 
     static void methodOptionTests() {
@@ -428,73 +435,73 @@ public class Main {
             FfiModule.functionTakingVecOfStructs(java.util.List.of(first, second));
         }
 
-            var one = java.util.Optional.of(1);
-            var three = java.util.Optional.of(3);
-            FfiModule.functionTakingVecOfOptions(java.util.List.of(one, java.util.Optional.empty(), three));
-            if (!FfiModule.functionReturningVecOfOptions().equals(
-                    java.util.List.of(java.util.Optional.of(2), java.util.Optional.empty(),
-                            java.util.Optional.of(4)))) {
-                throw new AssertionError("Vec<Option<i32>> function return was incorrect");
+        var one = java.util.Optional.of(1);
+        var three = java.util.Optional.of(3);
+        FfiModule.functionTakingVecOfOptions(java.util.List.of(one, java.util.Optional.empty(), three));
+        if (!FfiModule.functionReturningVecOfOptions().equals(
+                java.util.List.of(java.util.Optional.of(2), java.util.Optional.empty(),
+                        java.util.Optional.of(4)))) {
+            throw new AssertionError("Vec<Option<i32>> function return was incorrect");
+        }
+
+        var optionValue = java.util.Optional.of(java.util.List.of(
+                java.util.Optional.of(5), java.util.Optional.<Integer>empty(), java.util.Optional.of(6)));
+        FfiModule.functionTakingOptionOfVec(optionValue);
+        if (!FfiModule.functionReturningOptionOfVec().equals(java.util.Optional.of(java.util.List.of(
+                java.util.Optional.of(8), java.util.Optional.empty(), java.util.Optional.of(10))))) {
+            throw new AssertionError("Option<Vec<Option<i32>>> function return was incorrect");
+        }
+
+        var deepValue = java.util.List.of(
+                java.util.Optional.of(java.util.List.of(
+                        java.util.Optional.of(15), java.util.Optional.<Integer>empty())),
+                java.util.Optional.<java.util.List<java.util.Optional<Integer>>>empty());
+        FfiModule.functionTakingDeepNestedContainers(deepValue);
+        if (!FfiModule.functionReturningDeepNestedContainers().equals(java.util.List.of(
+                java.util.Optional.of(java.util.List.of(java.util.Optional.of(16), java.util.Optional.empty())),
+                java.util.Optional.empty()))) {
+            throw new AssertionError("Deeply nested function return was incorrect");
+        }
+
+        if (!FfiModule.functionReturningResultOfNestedContainers().equals(
+                java.util.Optional.of(java.util.List.of(java.util.Optional.of(12),
+                        java.util.Optional.empty(), java.util.Optional.of(14))))) {
+            throw new AssertionError("Nested Result return was incorrect");
+        }
+
+        try (var nested = new StructWithNestedContainers()) {
+            nested.setVecOption(java.util.List.of(
+                    java.util.Optional.of(17), java.util.Optional.empty(), java.util.Optional.of(19)));
+            if (!nested.getVecOption().equals(java.util.List.of(
+                    java.util.Optional.of(17), java.util.Optional.empty(), java.util.Optional.of(19)))) {
+                throw new AssertionError("Vec<Option<i32>> field round-trip was incorrect");
             }
 
-            var optionValue = java.util.Optional.of(java.util.List.of(
-                    java.util.Optional.of(5), java.util.Optional.<Integer>empty(), java.util.Optional.of(6)));
-            FfiModule.functionTakingOptionOfVec(optionValue);
-            if (!FfiModule.functionReturningOptionOfVec().equals(java.util.Optional.of(java.util.List.of(
-                    java.util.Optional.of(8), java.util.Optional.empty(), java.util.Optional.of(10))))) {
-                throw new AssertionError("Option<Vec<Option<i32>>> function return was incorrect");
+            nested.setOptionVec(java.util.Optional.of(java.util.List.of(
+                    java.util.Optional.of(20), java.util.Optional.empty(), java.util.Optional.of(22))));
+            if (!nested.getOptionVec().equals(java.util.Optional.of(java.util.List.of(
+                    java.util.Optional.of(20), java.util.Optional.empty(), java.util.Optional.of(22))))) {
+                throw new AssertionError("Option<Vec<Option<i32>>> field round-trip was incorrect");
             }
 
-            var deepValue = java.util.List.of(
-                    java.util.Optional.of(java.util.List.of(
-                            java.util.Optional.of(15), java.util.Optional.<Integer>empty())),
-                    java.util.Optional.<java.util.List<java.util.Optional<Integer>>>empty());
-            FfiModule.functionTakingDeepNestedContainers(deepValue);
-            if (!FfiModule.functionReturningDeepNestedContainers().equals(java.util.List.of(
-                    java.util.Optional.of(java.util.List.of(java.util.Optional.of(16), java.util.Optional.empty())),
+            nested.setDeep(java.util.List.of(
+                    java.util.Optional.of(java.util.List.of(java.util.Optional.of(23),
+                            java.util.Optional.empty())),
+                    java.util.Optional.empty()));
+            if (!nested.getDeep().equals(java.util.List.of(
+                    java.util.Optional.of(java.util.List.of(java.util.Optional.of(23),
+                            java.util.Optional.empty())),
                     java.util.Optional.empty()))) {
-                throw new AssertionError("Deeply nested function return was incorrect");
+                throw new AssertionError("Deeply nested field round-trip was incorrect");
             }
 
-            if (!FfiModule.functionReturningResultOfNestedContainers().equals(
-                    java.util.Optional.of(java.util.List.of(java.util.Optional.of(12),
-                            java.util.Optional.empty(), java.util.Optional.of(14))))) {
-                throw new AssertionError("Nested Result return was incorrect");
+            nested.takeNested(java.util.List.of(
+                    java.util.Optional.of(7), java.util.Optional.empty(), java.util.Optional.of(9)));
+            if (!nested.returnNested().equals(java.util.Optional.of(java.util.List.of(
+                    java.util.Optional.of(11), java.util.Optional.empty(), java.util.Optional.of(13))))) {
+                throw new AssertionError("Nested container method return was incorrect");
             }
-
-            try (var nested = new StructWithNestedContainers()) {
-                nested.setVecOption(java.util.List.of(
-                        java.util.Optional.of(17), java.util.Optional.empty(), java.util.Optional.of(19)));
-                if (!nested.getVecOption().equals(java.util.List.of(
-                        java.util.Optional.of(17), java.util.Optional.empty(), java.util.Optional.of(19)))) {
-                    throw new AssertionError("Vec<Option<i32>> field round-trip was incorrect");
-                }
-
-                nested.setOptionVec(java.util.Optional.of(java.util.List.of(
-                        java.util.Optional.of(20), java.util.Optional.empty(), java.util.Optional.of(22))));
-                if (!nested.getOptionVec().equals(java.util.Optional.of(java.util.List.of(
-                        java.util.Optional.of(20), java.util.Optional.empty(), java.util.Optional.of(22))))) {
-                    throw new AssertionError("Option<Vec<Option<i32>>> field round-trip was incorrect");
-                }
-
-                nested.setDeep(java.util.List.of(
-                        java.util.Optional.of(java.util.List.of(java.util.Optional.of(23),
-                                java.util.Optional.empty())),
-                        java.util.Optional.empty()));
-                if (!nested.getDeep().equals(java.util.List.of(
-                        java.util.Optional.of(java.util.List.of(java.util.Optional.of(23),
-                                java.util.Optional.empty())),
-                        java.util.Optional.empty()))) {
-                    throw new AssertionError("Deeply nested field round-trip was incorrect");
-                }
-
-                nested.takeNested(java.util.List.of(
-                        java.util.Optional.of(7), java.util.Optional.empty(), java.util.Optional.of(9)));
-                if (!nested.returnNested().equals(java.util.Optional.of(java.util.List.of(
-                        java.util.Optional.of(11), java.util.Optional.empty(), java.util.Optional.of(13))))) {
-                    throw new AssertionError("Nested container method return was incorrect");
-                }
-            }
+        }
         if (!FfiModule.functionReturningVecOfInt().equals(java.util.List.of(3, 2, 7, 8))) {
             throw new AssertionError("function_returning_vec_of_int returned the wrong value");
         }
@@ -614,6 +621,11 @@ public class Main {
             throw new AssertionError("vector result function returned the wrong value");
         }
 
+        if (!FfiModule.functionWithHashmapResult(false).equals(java.util.Map.of(
+                "key", "value"))) {
+            throw new AssertionError("function_with_hashmap_result returned the wrong value");
+        }
+
         var returnedStructs = FfiModule.functionWithVecStructResult(false);
         try (var first = returnedStructs.get(0); var second = returnedStructs.get(1)) {
             if (first.getI32Field() != 512 || second.getI32Field() != 1024) {
@@ -655,7 +667,7 @@ public class Main {
         RustTrait create() {
             return (RustTrait) java.lang.reflect.Proxy.newProxyInstance(
                     RustTrait.class.getClassLoader(),
-                    new Class<?>[] {RustTrait.class},
+                    new Class<?>[] { RustTrait.class },
                     this);
         }
 
@@ -684,9 +696,9 @@ public class Main {
                 case "traitSimpleFn" -> null;
                 case "traitFnWithSimpleArgs" -> {
                     check(values[0].equals(42)
-                                    && values[1].equals(4.2)
-                                    && values[2] == TestStatus.Pending
-                                    && values[3].equals(true),
+                            && values[1].equals(4.2)
+                            && values[2] == TestStatus.Pending
+                            && values[3].equals(true),
                             method.getName());
                     yield null;
                 }
@@ -707,7 +719,8 @@ public class Main {
                     yield null;
                 }
                 case "traitFnWithVecOfEnums" -> {
-                    check(values[0].equals(java.util.List.of(TestStatus.Active, TestStatus.Inactive)), method.getName());
+                    check(values[0].equals(java.util.List.of(TestStatus.Active, TestStatus.Inactive)),
+                            method.getName());
                     yield null;
                 }
                 case "traitFnWithVecOfStrings" -> {
@@ -721,14 +734,51 @@ public class Main {
                     }
                     yield null;
                 }
+                case "traitFnWithIntHashmap" -> {
+                    check(values[0].equals(java.util.Map.of(1, 10, 2, 20)), method.getName());
+                    yield null;
+                }
+                case "traitFnWithStringHashmap" -> {
+                    check(values[0].equals(java.util.Map.of("alpha", "one", "beta", "two")), method.getName());
+                    yield null;
+                }
+                case "traitFnWithEnumHashmap" -> {
+                    check(values[0].equals(java.util.Map.of(
+                            TestStatus.Active, TestStatus.Pending,
+                            TestStatus.Inactive, TestStatus.Active)), method.getName());
+                    yield null;
+                }
+                case "traitFnWithRecursiveMaps" -> {
+                    var mapVec = (java.util.Map<String, java.util.List<Integer>>) values[0];
+                    var mapOption = (java.util.Map<String, java.util.Optional<Integer>>) values[1];
+                    var mapMap = (java.util.Map<String, java.util.Map<String, Integer>>) values[2];
+                    var vecMap = (java.util.List<java.util.Map<String, Integer>>) values[3];
+                    var optionMap = (java.util.Optional<java.util.Map<String, Integer>>) values[4];
+                    check(mapVec.get("values").equals(java.util.List.of(1, 2))
+                            && mapOption.equals(java.util.Map.of(
+                                    "some", java.util.Optional.of(3),
+                                    "none", java.util.Optional.empty()))
+                            && mapMap.get("inner").get("value") == 4
+                            && vecMap.get(0).get("value") == 5
+                            && optionMap.orElseThrow().get("value") == 6,
+                            method.getName());
+                    yield null;
+                }
+                case "traitFnWithStructHashmap" -> {
+                    var structs = (java.util.Map<String, TestStruct2>) values[0];
+                    try (var alpha = structs.get("alpha"); var beta = structs.get("beta")) {
+                        check(alpha.getI32Field() == 10 && beta.getI32Field() == 20, method.getName());
+                    }
+                    yield null;
+                }
                 case "traitFnWithOptions" -> {
                     var optionalStruct = (java.util.Optional<TestStruct2>) values[4];
                     check(values[0].equals(java.util.Optional.of(42L))
-                                    && values[1].equals(java.util.Optional.of("Hello from trait object"))
-                                    && values[2].equals(java.util.Optional.of(false))
-                                    && values[3].equals(java.util.Optional.of(TestStatus.Pending))
-                                    && optionalStruct.isPresent()
-                                    && optionalStruct.orElseThrow().getI32Field() == 789,
+                            && values[1].equals(java.util.Optional.of("Hello from trait object"))
+                            && values[2].equals(java.util.Optional.of(false))
+                            && values[3].equals(java.util.Optional.of(TestStatus.Pending))
+                            && optionalStruct.isPresent()
+                            && optionalStruct.orElseThrow().getI32Field() == 789,
                             method.getName());
                     optionalStruct.ifPresent(TestStruct2::close);
                     yield null;
@@ -744,16 +794,29 @@ public class Main {
                         TestStatus.Active, TestStatus.Inactive, TestStatus.Pending);
                 case "traitFnReturnVecOfStrings" -> java.util.List.of("Hello", "from", "trait", "object");
                 case "traitFnReturnVecOfStructs" -> java.util.List.of(struct(111), struct(222));
+                case "traitFnReturnIntHashmap" -> java.util.Map.of(3, 30, 4, 40);
+                case "traitFnReturnStringHashmap" -> java.util.Map.of("gamma", "three", "delta", "four");
+                case "traitFnReturnEnumHashmap" -> java.util.Map.of(
+                        TestStatus.Active, TestStatus.Inactive,
+                        TestStatus.Pending, TestStatus.Active);
+                case "traitFnReturnMapOfVec" -> java.util.Map.of("values", java.util.List.of(16, 17));
+                case "traitFnReturnStructHashmap" ->
+                    java.util.Map.of("alpha", struct(30), "beta", struct(40));
                 case "traitFnReturningOptionInt" -> (boolean) values[0]
-                        ? java.util.Optional.of(555) : java.util.Optional.empty();
+                        ? java.util.Optional.of(555)
+                        : java.util.Optional.empty();
                 case "traitFnReturningOptionBool" -> (boolean) values[0]
-                        ? java.util.Optional.of(false) : java.util.Optional.empty();
+                        ? java.util.Optional.of(false)
+                        : java.util.Optional.empty();
                 case "traitFnReturningOptionString" -> (boolean) values[0]
-                        ? java.util.Optional.of("Some string") : java.util.Optional.empty();
+                        ? java.util.Optional.of("Some string")
+                        : java.util.Optional.empty();
                 case "traitFnReturningOptionEnum" -> (boolean) values[0]
-                        ? java.util.Optional.of(TestStatus.Pending) : java.util.Optional.empty();
+                        ? java.util.Optional.of(TestStatus.Pending)
+                        : java.util.Optional.empty();
                 case "traitFnReturningOptionStruct" -> (boolean) values[0]
-                        ? java.util.Optional.of(struct(789)) : java.util.Optional.empty();
+                        ? java.util.Optional.of(struct(789))
+                        : java.util.Optional.empty();
                 case "traitFnReturningResultInt" -> {
                     failIfRequested((boolean) values[0]);
                     yield 555;
@@ -818,6 +881,10 @@ public class Main {
                     failIfRequested((boolean) values[0]);
                     yield null;
                 }
+                case "traitFnReturningResultWithHashmap" -> {
+                    failIfRequested((boolean) values[0]);
+                    yield java.util.Map.of("alpha", TestStruct2.newTs2(30), "beta", TestStruct2.newTs2(40));
+                }
                 case "close" -> null;
                 default -> throw new UnsupportedOperationException(method.getName());
             };
@@ -867,6 +934,21 @@ public class Main {
             try (var first = TestStruct2.newTs2(321); var second = TestStruct2.newTs2(654)) {
                 rustTrait.traitFnWithVecOfStructs(java.util.List.of(first, second));
             }
+            rustTrait.traitFnWithIntHashmap(java.util.Map.of(1, 10, 2, 20));
+            rustTrait.traitFnWithStringHashmap(java.util.Map.of("alpha", "one", "beta", "two"));
+            rustTrait.traitFnWithEnumHashmap(java.util.Map.of(
+                    TestStatus.Active, TestStatus.Pending,
+                    TestStatus.Inactive, TestStatus.Active));
+            rustTrait.traitFnWithRecursiveMaps(
+                    java.util.Map.of("values", java.util.List.of(1, 2)),
+                    java.util.Map.of("some", java.util.Optional.of(3),
+                            "none", java.util.Optional.<Integer>empty()),
+                    java.util.Map.of("inner", java.util.Map.of("value", 4)),
+                    java.util.List.of(java.util.Map.of("value", 5)),
+                    java.util.Optional.of(java.util.Map.of("value", 6)));
+            try (var alpha = TestStruct2.newTs2(10); var beta = TestStruct2.newTs2(20)) {
+                rustTrait.traitFnWithStructHashmap(java.util.Map.of("alpha", alpha, "beta", beta));
+            }
             try (var input = TestStruct2.newTs2(789)) {
                 rustTrait.traitFnWithOptions(java.util.Optional.of(42L),
                         java.util.Optional.of("Hello from trait object"),
@@ -890,10 +972,28 @@ public class Main {
                     throw new AssertionError("Rust trait proxy returned the wrong struct");
                 }
             }
+            if (!rustTrait.traitFnReturnIntHashmap().equals(java.util.Map.of(3, 30, 4, 40))
+                    || !rustTrait.traitFnReturnStringHashmap().equals(
+                            java.util.Map.of("gamma", "three", "delta", "four"))
+                    || !rustTrait.traitFnReturnEnumHashmap().equals(java.util.Map.of(
+                            TestStatus.Active, TestStatus.Inactive,
+                            TestStatus.Pending, TestStatus.Active))) {
+                throw new AssertionError("Rust trait proxy returned the wrong primitive-valued HashMap");
+            }
+            if (!rustTrait.traitFnReturnMapOfVec().equals(
+                    java.util.Map.of("values", java.util.List.of(16, 17)))) {
+                throw new AssertionError("Rust trait proxy returned the wrong HashMap of Vec");
+            }
             var returnedStructs = rustTrait.traitFnReturnVecOfStructs();
             try (var first = returnedStructs.get(0); var second = returnedStructs.get(1)) {
                 if (first.getI32Field() != 111 || second.getI32Field() != 222) {
                     throw new AssertionError("Rust trait proxy returned the wrong struct vector");
+                }
+            }
+            var returnedStructMap = rustTrait.traitFnReturnStructHashmap();
+            try (var alpha = returnedStructMap.get("alpha"); var beta = returnedStructMap.get("beta")) {
+                if (alpha.getI32Field() != 30 || beta.getI32Field() != 40) {
+                    throw new AssertionError("Rust trait proxy returned the wrong struct-valued HashMap");
                 }
             }
             if (!rustTrait.traitFnReturningOptionInt(true).equals(java.util.Optional.of(555))
@@ -949,7 +1049,15 @@ public class Main {
                     throw new AssertionError("Rust trait proxy returned the wrong Result<Option> struct");
                 }
             }
+
             rustTrait.traitFnReturningResultWithUnitExpression(false);
+
+            var resultMap = rustTrait.traitFnReturningResultWithHashmap(false);
+            if (!resultMap
+                    .equals(java.util.Map.of("alpha", TestStruct2.newTs2(30), "beta", TestStruct2.newTs2(40)))) {
+                throw new AssertionError("traitFnReturningResultWithHashmap returned the wrong value");
+            }
+
             assertVectorResultError(() -> rustTrait.traitFnReturningResultInt(true),
                     "RustException: StructError: EnumError: VariantTwo");
             assertVectorResultError(() -> rustTrait.traitFnReturningResultBool(true),
@@ -988,6 +1096,154 @@ public class Main {
         }
     }
 
+    static void hashmapTests() {
+        var nestedMap = java.util.Map.of("value", 6);
+        FfiModule.functionTakingRecursiveMaps(
+                java.util.Map.of("values", java.util.List.of(1, 2)),
+                java.util.Map.of("some", java.util.Optional.of(3),
+                        "none", java.util.Optional.<Integer>empty()),
+                java.util.Map.of("inner", java.util.Map.of("value", 4)),
+                java.util.List.of(java.util.Map.of("value", 5)),
+                java.util.Optional.of(nestedMap));
+        if (!FfiModule.functionReturningMapOfVec().equals(
+                java.util.Map.of("values", java.util.List.of(10, 11)))
+                || !FfiModule.functionReturningMapOfOption().equals(java.util.Map.of(
+                        "some", java.util.Optional.of(12),
+                        "none", java.util.Optional.<Integer>empty()))
+                || !FfiModule.functionReturningMapOfHashmap().equals(
+                        java.util.Map.of("inner", java.util.Map.of("value", 13)))
+                || !FfiModule.functionReturningVecOfHashmaps().equals(
+                        java.util.List.of(java.util.Map.of("value", 14)))
+                || !FfiModule.functionReturningOptionOfHashmap().equals(
+                        java.util.Optional.of(java.util.Map.of("value", 15)))) {
+            throw new AssertionError("Nested HashMap free function conversion failed");
+        }
+
+        try (var recursiveMethod = new TestStruct()) {
+            recursiveMethod.publicMethodTakingRecursiveMaps(
+                    java.util.Map.of("values", java.util.List.of(1, 2)),
+                    java.util.Map.of("some", java.util.Optional.of(3),
+                            "none", java.util.Optional.<Integer>empty()),
+                    java.util.Map.of("inner", java.util.Map.of("value", 4)),
+                    java.util.List.of(java.util.Map.of("value", 5)),
+                    java.util.Optional.of(nestedMap));
+            if (!recursiveMethod.publicMethodReturningVecOfHashmaps().equals(
+                    java.util.List.of(java.util.Map.of("value", 7)))) {
+                throw new AssertionError("Vec of HashMaps instance method conversion failed");
+            }
+        }
+
+        var enumInput = java.util.Map.of(
+                TestStatus.Active, TestStatus.Pending,
+                TestStatus.Inactive, TestStatus.Active);
+        FfiModule.functionTakingEnumHashmap(enumInput);
+        if (!FfiModule.functionReturningEnumHashmap().equals(java.util.Map.of(
+                TestStatus.Active, TestStatus.Inactive,
+                TestStatus.Pending, TestStatus.Active))) {
+            throw new AssertionError("Enum-keyed HashMap free function conversion failed");
+        }
+
+        try (var enumMethodStruct = new TestStruct()) {
+            enumMethodStruct.publicMethodTakingEnumHashmap(java.util.Map.of(
+                    TestStatus.Active, TestStatus.Active,
+                    TestStatus.Pending, TestStatus.Inactive));
+            if (!enumMethodStruct.publicMethodReturningEnumHashmap().equals(java.util.Map.of(
+                    TestStatus.Active, TestStatus.Pending,
+                    TestStatus.Inactive, TestStatus.Active))) {
+                throw new AssertionError("Enum-keyed HashMap instance method conversion failed");
+            }
+        }
+        TestStruct.staticMethodTakingEnumHashmap(java.util.Map.of(
+                TestStatus.Active, TestStatus.Inactive,
+                TestStatus.Pending, TestStatus.Pending));
+        if (!TestStruct.staticMethodReturningEnumHashmap().equals(java.util.Map.of(
+                TestStatus.Inactive, TestStatus.Pending,
+                TestStatus.Pending, TestStatus.Active))) {
+            throw new AssertionError("Enum-keyed HashMap static method conversion failed");
+        }
+
+        var input = java.util.Map.of("alpha", 10, "beta", 20);
+        FfiModule.functionTakingHashmap(input);
+        if (!FfiModule.functionReturningHashmap().equals(input)
+                || !FfiModule.functionReturningEmptyHashmap().isEmpty()) {
+            throw new AssertionError("HashMap free function conversion failed");
+        }
+
+        try (var testStruct = new TestStruct()) {
+            testStruct.publicMethodTakingHashmap(java.util.Map.of("method", 24));
+            if (!testStruct.publicMethodReturningHashmap().equals(java.util.Map.of("method", 25))) {
+                throw new AssertionError("HashMap instance method conversion failed");
+            }
+        }
+        TestStruct.staticMethodTakingHashmap(java.util.Map.of("static", 77));
+        if (!TestStruct.staticMethodReturningHashmap().equals(java.util.Map.of("static", 78))) {
+            throw new AssertionError("HashMap static method conversion failed");
+        }
+
+        try (var maps = new StructWithHashMaps()) {
+            if (!maps.getStringToInt().isEmpty()) {
+                throw new AssertionError("HashMap field should start empty");
+            }
+            maps.setStringToInt(input);
+            if (!maps.getStringToInt().equals(input)) {
+                throw new AssertionError("String-keyed HashMap field conversion failed");
+            }
+
+            var reverse = java.util.Map.of(1, "one", 2, "two");
+            maps.setIntToString(reverse);
+            if (!maps.getIntToString().equals(reverse)) {
+                throw new AssertionError("Integer-keyed HashMap field conversion failed");
+            }
+        }
+
+        try (var alpha = TestStruct2.newTs2(10);
+                var beta = TestStruct2.newTs2(20)) {
+            var structInput = java.util.Map.of("alpha", alpha, "beta", beta);
+            FfiModule.functionTakingStructHashmap(structInput);
+            var structReturn = FfiModule.functionReturningStructHashmap();
+            assertStructHashmapValue(structReturn, "alpha", 10);
+            assertStructHashmapValue(structReturn, "beta", 20);
+
+            try (var methodValue = TestStruct2.newTs2(24)) {
+                testStructCallStructHashmap(methodValue);
+            }
+            try (var methodStruct = new TestStruct()) {
+                var methodReturn = methodStruct.publicMethodReturningStructHashmap();
+                assertStructHashmapValue(methodReturn, "method", 25);
+            }
+
+            try (var staticValue = TestStruct2.newTs2(77)) {
+                TestStruct.staticMethodTakingStructHashmap(java.util.Map.of("static", staticValue));
+            }
+            var staticReturn = TestStruct.staticMethodReturningStructHashmap();
+            assertStructHashmapValue(staticReturn, "static", 78);
+
+            try (var maps = new StructWithHashMaps()) {
+                if (!maps.getStringToStruct().isEmpty()) {
+                    throw new AssertionError("Struct-valued HashMap field should start empty");
+                }
+                maps.setStringToStruct(structInput);
+                var fieldValues = maps.getStringToStruct();
+                assertStructHashmapValue(fieldValues, "alpha", 10);
+                assertStructHashmapValue(fieldValues, "beta", 20);
+            }
+        }
+    }
+
+    static void testStructCallStructHashmap(TestStruct2 value) {
+        try (var testStruct = new TestStruct()) {
+            testStruct.publicMethodTakingStructHashmap(java.util.Map.of("method", value));
+        }
+    }
+
+    static void assertStructHashmapValue(java.util.Map<String, TestStruct2> values, String key, int expected) {
+        try (var value = values.get(key)) {
+            if (value == null || value.getI32Field() != expected) {
+                throw new AssertionError("Unexpected struct-valued HashMap entry for " + key);
+            }
+        }
+    }
+
     public static void main(String[] args) {
         structTests();
         statusStructTests();
@@ -1005,6 +1261,8 @@ public class Main {
         enumTests();
         resultTests();
         traitTests();
+        hashmapTests();
         System.out.println("All tests passed!");
+        System.gc();
     }
 }

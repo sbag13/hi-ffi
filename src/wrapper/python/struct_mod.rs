@@ -4,7 +4,8 @@ use std::ops::Deref;
 
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::python::{
-    ClassCode, arg_cast, set_extern_fn_resttype_field, type_hint_from_field_wrapper_type,
+    ClassCode, arg_cast, python_container_class_name, set_extern_fn_resttype_field,
+    type_hint_from_field_wrapper_type,
 };
 use crate::wrapper::{DefaultConstructor, FieldWrapper, PartialEqImpl, StructWrapper, WrapperType};
 use quote::ToTokens;
@@ -107,6 +108,25 @@ fn gen_imports(struct_wrapper: &StructWrapper) -> HashMap<String, String> {
                         );
                     } else if let WrapperType::Enum(enum_name) = &**inner {
                         acc.insert(enum_name.to_owned(), format!("from . import {enum_name}"));
+                    }
+                }
+                WrapperType::HashMap(key, value) => {
+                    let class_name = python_container_class_name(&WrapperType::HashMap(
+                        key.clone(),
+                        value.clone(),
+                    ));
+                    acc.insert("Dict".to_string(), "from typing import Dict".to_string());
+                    acc.insert(
+                        class_name.clone(),
+                        format!(
+                            "from .hashmap_{}_{} import {class_name}",
+                            key.name(),
+                            value.name()
+                        ),
+                    );
+                    acc.insert("ctypes".to_string(), "import ctypes".to_string());
+                    if let WrapperType::Struct(struct_name) = value.deref() {
+                        acc.insert(struct_name.clone(), format!("from . import {struct_name}"));
                     }
                 }
                 WrapperType::Result(_) => {
@@ -224,6 +244,10 @@ fn gen_property(field_wrapper: &FieldWrapper) -> String {
         return gen_option_property(field_wrapper, inner);
     }
 
+    if let WrapperType::HashMap(key, value) = &field_wrapper.wrapper_type {
+        return gen_hashmap_property(field_wrapper, key, value);
+    }
+
     let getter = if let Some(getter) = &field_wrapper.getter {
         let extern_fn_name = &getter.extern_fn_name;
         let type_hint = type_hint_from_field_wrapper_type(&field_wrapper.wrapper_type);
@@ -262,6 +286,51 @@ fn gen_property(field_wrapper: &FieldWrapper) -> String {
 {getter}
 {setter}"#
     )
+}
+
+fn gen_hashmap_property(
+    field_wrapper: &FieldWrapper,
+    key: &crate::wrapper::WrapperType,
+    value: &crate::wrapper::WrapperType,
+) -> String {
+    let field_name = &field_wrapper.field_name;
+    let class_name = python_container_class_name(&WrapperType::HashMap(
+        Box::new(key.clone()),
+        Box::new(value.clone()),
+    ));
+    let type_hint = type_hint_from_field_wrapper_type(&field_wrapper.wrapper_type);
+    let getter = field_wrapper
+        .getter
+        .as_ref()
+        .map(|getter| {
+            format!(
+                r#"
+    @property
+    def {field_name}(self) -> {type_hint}:
+        {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p
+        rust_map = {class_name}({PYTHON_LIB_GETTER_NAME}().{extern_fn_name}(self._self_ptr))
+        result = rust_map.to_dict()
+        rust_map.leak()
+        return result"#,
+                extern_fn_name = getter.extern_fn_name
+            )
+        })
+        .unwrap_or_default();
+    let setter = field_wrapper
+        .setter
+        .as_ref()
+        .map(|setter| {
+            format!(
+                r#"
+    @{field_name}.setter
+    def {field_name}(self, value: {type_hint}):
+        rust_map = {class_name}.from_dict(value)
+        {PYTHON_LIB_GETTER_NAME}().{extern_fn_name}(self._self_ptr, rust_map.raw_ptr())"#,
+                extern_fn_name = setter.extern_fn_name
+            )
+        })
+        .unwrap_or_default();
+    format!("{getter}\n{setter}")
 }
 
 fn prop_result_cast(ty: &Type, result_var_name: &str) -> String {

@@ -54,6 +54,12 @@ pub(crate) fn map_wrapper_to_reusable(wrapper_type: &WrapperType) -> Vec<Reusabl
             wrappers.extend(map_wrapper_to_reusable(inner_wrapper_type));
             wrappers
         }
+        WrapperType::HashMap(key, value) => {
+            let mut wrappers = vec![ReusableWrapper::HashMap(*key.clone(), *value.clone())];
+            wrappers.extend(map_wrapper_to_reusable(key));
+            wrappers.extend(map_wrapper_to_reusable(value));
+            wrappers
+        }
         _ => vec![],
     }
 }
@@ -79,6 +85,8 @@ fn path_to_wrapper_type_with_result(
             Some(segment) => {
                 if let Some(vec_wrapper_type) = segment_as_vec(segment)? {
                     Ok(vec_wrapper_type)
+                } else if let Some(hashmap_wrapper_type) = segment_as_hashmap(segment)? {
+                    Ok(hashmap_wrapper_type)
                 } else if let Some(option_wrapper_type) = segment_as_opt(segment)? {
                     Ok(option_wrapper_type)
                 } else if allow_result
@@ -94,6 +102,63 @@ fn path_to_wrapper_type_with_result(
             None => panic!("No segment found in return type"),
         }
     }
+}
+
+fn segment_as_hashmap(segment: &PathSegment) -> Result<Option<WrapperType>, NoWrapperErr> {
+    if segment.ident != "HashMap" {
+        return Ok(None);
+    }
+    let syn::PathArguments::AngleBracketed(args) = &segment.arguments else {
+        return Err(NoWrapperErr(
+            "HashMap requires key and value types".to_string(),
+        ));
+    };
+    let mut types = args.args.iter().filter_map(|arg| match arg {
+        GenericArgument::Type(Type::Path(path)) => Some(&path.path),
+        _ => None,
+    });
+    let Some(key_path) = types.next() else {
+        return Err(NoWrapperErr(
+            "HashMap requires a supported key type".to_string(),
+        ));
+    };
+    let Some(value_path) = types.next() else {
+        return Err(NoWrapperErr(
+            "HashMap requires a supported value type".to_string(),
+        ));
+    };
+    let key = path_to_wrapper_type_with_result(key_path, false)?;
+    if !matches!(
+        key,
+        WrapperType::IntegerNumber(_)
+            | WrapperType::Bool
+            | WrapperType::String
+            | WrapperType::Enum(_)
+    ) {
+        return Err(NoWrapperErr(format!(
+            "HashMap key type `{}` is not supported; use an integer, bool, String, or enum key",
+            key.rust_type()
+        )));
+    }
+    let value = path_to_wrapper_type_with_result(value_path, false)?;
+    if !matches!(
+        value,
+        WrapperType::IntegerNumber(_)
+            | WrapperType::FloatingPointNumber(_)
+            | WrapperType::Bool
+            | WrapperType::String
+            | WrapperType::Struct(_)
+            | WrapperType::Enum(_)
+            | WrapperType::Vec(_)
+            | WrapperType::Option(_)
+            | WrapperType::HashMap(_, _)
+    ) {
+        return Err(NoWrapperErr(format!(
+            "HashMap value type `{}` is not supported yet; use a primitive, String, enum, or struct value",
+            value.rust_type()
+        )));
+    }
+    Ok(Some(WrapperType::HashMap(Box::new(key), Box::new(value))))
 }
 
 fn parse_inner_wrapper_type(segment: &PathSegment) -> Result<WrapperType, NoWrapperErr> {

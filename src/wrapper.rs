@@ -54,6 +54,7 @@ pub enum ReusableWrapper {
     Vec(WrapperType),
     Result(WrapperType),
     Option(WrapperType),
+    HashMap(WrapperType, WrapperType),
 }
 
 pub(crate) fn rust_type(wrapper: &WrapperType) -> TokenStream2 {
@@ -61,6 +62,11 @@ pub(crate) fn rust_type(wrapper: &WrapperType) -> TokenStream2 {
         WrapperType::Vec(vec_inner) => {
             let vec_inner_name: TokenStream2 = rust_type(vec_inner.deref());
             quote! {Vec<#vec_inner_name>}
+        }
+        WrapperType::HashMap(key, value) => {
+            let key_type = rust_type(key);
+            let value_type = rust_type(value);
+            quote! {std::collections::HashMap<#key_type, #value_type>}
         }
         WrapperType::Result(result_inner) => {
             let result_inner_name = rust_type(result_inner.deref());
@@ -86,6 +92,13 @@ fn value_receiver(inner: &WrapperType) -> TokenStream2 {
         WrapperType::Vec(inner) => format!("value: *mut Vec<{}>", inner.rust_type())
             .parse()
             .unwrap(),
+        WrapperType::HashMap(key, value) => format!(
+            "value: *mut std::collections::HashMap<{}, {}>",
+            key.rust_type(),
+            value.rust_type()
+        )
+        .parse()
+        .unwrap(),
         WrapperType::Result(_) => {
             panic!("Vec of Result type not supported yet!")
         }
@@ -105,7 +118,8 @@ fn unwrap_clone_expr(inner: &WrapperType) -> TokenStream2 {
         WrapperType::String
         | WrapperType::Struct(_)
         | WrapperType::Vec(_)
-        | WrapperType::Option(_) => quote! {
+        | WrapperType::Option(_)
+        | WrapperType::HashMap(_, _) => quote! {
             Box::into_raw(Box::new(value.clone()))
         },
         WrapperType::Bool
@@ -146,6 +160,13 @@ fn received_value_cast(inner: &WrapperType) -> TokenStream2 {
                 let value = new_value;
             }
         }
+        WrapperType::HashMap(_, _) => {
+            quote! {
+                let mut new_value = std::collections::HashMap::new();
+                std::mem::swap(&mut new_value, unsafe { &mut (*value) });
+                let value = new_value;
+            }
+        }
         _ => quote! {},
     }
 }
@@ -156,6 +177,7 @@ impl From<&ReusableWrapper> for TokenStream2 {
             ReusableWrapper::Vec(inner) => generate_vec_wrapper(inner),
             ReusableWrapper::Result(inner) => generate_result_wrapper(inner),
             ReusableWrapper::Option(inner) => generate_option_wrapper(inner),
+            ReusableWrapper::HashMap(key, value) => generate_hashmap_wrapper(key, value),
         }
     }
 }
@@ -185,6 +207,8 @@ fn generate_option_wrapper(inner: &WrapperType) -> TokenStream2 {
         | WrapperType::Option(_) => {
             quote! {*mut #inner_type}
         }
+        WrapperType::HashMap(_, _) => quote! {*mut #inner_type},
+
         WrapperType::UnitExpr => quote! {()},
         _ => quote! {#inner_type},
     };
@@ -248,6 +272,195 @@ fn generate_option_wrapper(inner: &WrapperType) -> TokenStream2 {
     }
 }
 
+fn generate_hashmap_wrapper(key: &WrapperType, value: &WrapperType) -> TokenStream2 {
+    let map_name = format!("hashmap_{}_{}", key.name(), value.name());
+    let map_type: TokenStream2 = format!(
+        "std::collections::HashMap<{}, {}>",
+        key.rust_type(),
+        value.rust_type()
+    )
+    .parse()
+    .expect("valid HashMap type");
+    let drop_name = format_ident!("{map_name}_drop");
+    let new_name = format_ident!("{map_name}_new");
+    let insert_name = format_ident!("{map_name}_insert");
+    let len_name = format_ident!("{map_name}_len");
+    let key_at_name = format_ident!("{map_name}_key_at");
+    let value_at_name = format_ident!("{map_name}_value_at");
+    let key_receiver = hashmap_receiver(key, "key");
+    let value_receiver = hashmap_receiver(value, "value");
+    let key_cast = hashmap_value_cast(key, "key");
+    let value_cast = hashmap_value_cast(value, "value");
+    let key_return_type = hashmap_get_type(key);
+    let value_return_type = hashmap_get_type(value);
+    let key_get = hashmap_get_body(key, "key");
+    let value_get = hashmap_get_body(value, "value");
+
+    let drop_export = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{map_name}");
+    let new_export = format!("{EXPORTED_SYMBOLS_PREFIX}new_{map_name}");
+    let insert_export = format!("{EXPORTED_SYMBOLS_PREFIX}insert_{map_name}");
+    let len_export = format!("{EXPORTED_SYMBOLS_PREFIX}len_{map_name}");
+    let key_at_export = format!("{EXPORTED_SYMBOLS_PREFIX}key_at_{map_name}");
+    let value_at_export = format!("{EXPORTED_SYMBOLS_PREFIX}value_at_{map_name}");
+
+    quote! {
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #drop_export)]
+        pub unsafe extern "C" fn #drop_name(_self: *mut #map_type) {
+            unsafe {
+                if !_self.is_null() {
+                    let _ = Box::from_raw(_self);
+                }
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #new_export)]
+        pub extern "C" fn #new_name() -> *mut #map_type {
+            Box::into_raw(Box::new(std::collections::HashMap::new()))
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #insert_export)]
+        pub unsafe extern "C" fn #insert_name(
+            _self: *mut #map_type,
+            #key_receiver,
+            #value_receiver
+        ) {
+            #key_cast
+            #value_cast
+            unsafe {
+                (&mut *_self).insert(key, value);
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #len_export)]
+        pub unsafe extern "C" fn #len_name(_self: *const #map_type) -> usize {
+            unsafe { (&*_self).len() }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #key_at_export)]
+        pub unsafe extern "C" fn #key_at_name(_self: *const #map_type, index: usize) -> #key_return_type {
+            unsafe {
+                let (key, _) = (&*_self).iter().nth(index).expect("HashMap key index out of bounds");
+                let key = key.clone();
+                #key_get
+            }
+        }
+
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[unsafe(export_name = #value_at_export)]
+        pub unsafe extern "C" fn #value_at_name(_self: *const #map_type, index: usize) -> #value_return_type {
+            unsafe {
+                let (_, value) = (&*_self).iter().nth(index).expect("HashMap value index out of bounds");
+                let value = value.clone();
+                #value_get
+            }
+        }
+    }
+}
+
+fn hashmap_receiver(wrapper_type: &WrapperType, name: &str) -> TokenStream2 {
+    let signature = match wrapper_type {
+        WrapperType::IntegerNumber(ty) | WrapperType::FloatingPointNumber(ty) => {
+            format!("{name}: {ty}")
+        }
+        WrapperType::Bool => format!("{name}: bool"),
+        WrapperType::String => format!("{name}_ptr: *const i8, _{name}_len: usize"),
+        WrapperType::Struct(_)
+        | WrapperType::Vec(_)
+        | WrapperType::Option(_)
+        | WrapperType::HashMap(_, _) => {
+            format!("{name}: *mut {}", wrapper_type.rust_type())
+        }
+        WrapperType::Enum(ty) => format!("{name}: {ty}"),
+        WrapperType::Result(_) | WrapperType::UnitExpr | WrapperType::Trait(_) => {
+            panic!("Unsupported HashMap key or value type: {wrapper_type:?}")
+        }
+    };
+    signature.parse().expect("valid HashMap argument")
+}
+
+fn hashmap_value_cast(wrapper_type: &WrapperType, name: &str) -> TokenStream2 {
+    match wrapper_type {
+        WrapperType::String => {
+            let ptr = format_ident!("{name}_ptr");
+            let len = format_ident!("_{name}_len");
+            let name_ident = format_ident!("{name}");
+            quote! {
+                let #name_ident = unsafe {
+                    let bytes = std::slice::from_raw_parts(#ptr.cast::<u8>(), #len);
+                    std::str::from_utf8(bytes)
+                        .expect("valid UTF-8 HashMap string")
+                        .to_owned()
+                };
+            }
+        }
+        WrapperType::Struct(_) => {
+            let arg = format_ident!("{name}");
+            quote! {
+                let #arg = unsafe { (*#arg).clone() };
+            }
+        }
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
+            let arg = format_ident!("{name}");
+            let new_value = format_ident!("new_{name}");
+            quote! {
+                let mut #new_value = Default::default();
+                std::mem::swap(&mut #new_value, unsafe { &mut (*#arg) });
+                let #arg = #new_value;
+            }
+        }
+        WrapperType::Result(_) | WrapperType::UnitExpr | WrapperType::Trait(_) => {
+            panic!("Unsupported HashMap key or value type: {wrapper_type:?}")
+        }
+        _ => quote! {},
+    }
+}
+
+fn hashmap_get_type(wrapper_type: &WrapperType) -> TokenStream2 {
+    match wrapper_type {
+        WrapperType::IntegerNumber(ty) | WrapperType::FloatingPointNumber(ty) => {
+            ty.parse().expect("valid numeric type")
+        }
+        WrapperType::Bool => quote! { bool },
+        WrapperType::String | WrapperType::Struct(_) => quote! { *mut std::ffi::c_void },
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
+            let inner_type: TokenStream2 = wrapper_type.rust_type().parse().expect("valid type");
+            quote! { *mut #inner_type }
+        }
+        WrapperType::Enum(ty) => ty.parse().expect("valid enum type"),
+        WrapperType::Result(_) | WrapperType::UnitExpr | WrapperType::Trait(_) => {
+            panic!("Unsupported HashMap key or value type: {wrapper_type:?}")
+        }
+    }
+}
+
+fn hashmap_get_body(wrapper_type: &WrapperType, ident: &str) -> TokenStream2 {
+    let ident = format_ident!("{ident}");
+    match wrapper_type {
+        WrapperType::String
+        | WrapperType::Struct(_)
+        | WrapperType::Vec(_)
+        | WrapperType::Option(_)
+        | WrapperType::HashMap(_, _) => quote! {
+            Box::into_raw(Box::new(#ident)) as _
+        },
+        WrapperType::Result(_) | WrapperType::UnitExpr | WrapperType::Trait(_) => {
+            panic!("Unsupported HashMap key or value type: {wrapper_type:?}")
+        }
+        _ => quote! { #ident },
+    }
+}
+
 fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
     let drop_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{}_result", inner.name());
     let wrapper_fn_name_drop = format_ident!("drop_{}_result", inner.name());
@@ -272,6 +485,7 @@ fn generate_result_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::String
         | WrapperType::Struct(_)
         | WrapperType::Vec(_)
+        | WrapperType::HashMap(_, _)
         | WrapperType::Option(_) => {
             quote! {*mut #inner_type}
         }
@@ -401,7 +615,7 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
         WrapperType::Bool => "bool".parse().unwrap(),
         WrapperType::String => "*mut std::string::String".parse().unwrap(),
         WrapperType::Struct(name) => format!("*mut {name}").parse().unwrap(),
-        WrapperType::Vec(_) | WrapperType::Option(_) => {
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
             let inner_type = rust_type(inner);
             quote! {*mut #inner_type}
         }
@@ -423,7 +637,7 @@ fn generate_vec_wrapper(inner: &WrapperType) -> TokenStream2 {
             let v = (&*_self)[index].clone();
             Box::into_raw(Box::new(v))
         }},
-        WrapperType::Vec(_) | WrapperType::Option(_) => quote! {{
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => quote! {{
             let v = (&*_self)[index].clone();
             Box::into_raw(Box::new(v))
         }},

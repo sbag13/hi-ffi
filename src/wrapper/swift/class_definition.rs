@@ -271,6 +271,27 @@ fn gen_getter_and_setter_externs(field: &FieldWrapper) -> String {
         }
 
         FieldWrapper {
+            wrapper_type: WrapperType::HashMap(_, _),
+            getter,
+            setter,
+            ..
+        } => {
+            let getter_code = getter.as_ref().map(|g| {
+                format!(
+                    "void* {extern_fn_name}(void*);",
+                    extern_fn_name = g.extern_fn_name
+                )
+            });
+            let setter_code = setter.as_ref().map(|s| {
+                format!(
+                    "void {extern_fn_name}(void*, void*);",
+                    extern_fn_name = s.extern_fn_name
+                )
+            });
+            (getter_code, setter_code)
+        }
+
+        FieldWrapper {
             wrapper_type: WrapperType::Result(_) | WrapperType::Trait(_) | WrapperType::UnitExpr,
             ..
         } => panic!("Unsupported wrapper type for struct field"),
@@ -476,6 +497,32 @@ fn gen_property(field: &FieldWrapper) -> String {
                     .as_ref()
                     .map(|s| map_option_setter(s, swift_inner_type.clone(), inner)),
                 format!("{}?", swift_inner_type),
+            )
+        }
+
+        FieldWrapper {
+            wrapper_type: WrapperType::HashMap(key, value),
+            setter,
+            getter,
+            ..
+        } => {
+            let map_type =
+                super::get_swift_type_name(&WrapperType::HashMap(key.clone(), value.clone()));
+            let wrapper_name = format!("Rust{}HashMap{}", key.name(), value.name());
+            (
+                getter.as_ref().map(|g| {
+                    format!(
+                        "get {{\n            let ptr = {}(self.rawPtr())\n            let rust_map = {wrapper_name}(ptr!)\n            let result = rust_map.toSwift()\n            let _ = rust_map.leak()\n            return result\n        }}",
+                        g.extern_fn_name
+                    )
+                }),
+                setter.as_ref().map(|s| {
+                    format!(
+                        "set {{\n            let rust_map = {wrapper_name}.fromSwift(newValue)\n            {}(self.rawPtr(), rust_map.rawPtr())\n        }}",
+                        s.extern_fn_name
+                    )
+                }),
+                map_type,
             )
         }
 

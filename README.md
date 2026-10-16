@@ -20,7 +20,7 @@ Add `hi-ffi` to your `Cargo.toml`:
 
 ```toml,ignore
 [dependencies]
-hi_ffi = { version = "0.11", features = ["cpp", "swift", "python", "java"] }
+hi_ffi = { version = "0.12", features = ["cpp", "swift", "python", "java"] }
 ```
 
 **Note**: `hi-ffi` is a procedural macro crate. Enable the feature or features for your target languages: `cpp`, `swift`, `python`, and/or `java`.
@@ -154,6 +154,7 @@ hi-ffi generates bindings for Rust structs, free functions, and associated metho
 - Primitive and string values, structs, C-like enums, and vectors of supported values.
 - Struct field getters and setters, with controls for which accessors are generated.
 - Optional values (`Option<T>`) and fallible results (`Result<T, E>`) in supported function and method signatures; optional struct fields are supported as well.
+- Common collection types such as `Vec<T>` and `HashMap<K, V>`.
 - Traits and trait objects that can cross the language boundary in either direction.
 - Default construction and equality support where provided by the Rust type.
 

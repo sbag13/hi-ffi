@@ -26,6 +26,20 @@
 #include "assert_active.h"
 #include "assert_inactive.h"
 #include "StructWithVecs.h"
+#include "StructWithHashMaps.h"
+#include "function_taking_hashmap.h"
+#include "function_returning_hashmap.h"
+#include "function_returning_empty_hashmap.h"
+#include "function_taking_enum_hashmap.h"
+#include "function_returning_enum_hashmap.h"
+#include "function_taking_recursive_maps.h"
+#include "function_returning_map_of_vec.h"
+#include "function_returning_map_of_option.h"
+#include "function_returning_map_of_hashmap.h"
+#include "function_returning_vec_of_hashmaps.h"
+#include "function_returning_option_of_hashmap.h"
+#include "function_taking_struct_hashmap.h"
+#include "function_returning_struct_hashmap.h"
 #include "function_with_primitive_result.h"
 #include "function_with_bool_result.h"
 #include "function_with_string_result.h"
@@ -36,6 +50,7 @@
 #include "function_with_vec_string_result.h"
 #include "function_with_vec_struct_result.h"
 #include "function_with_vec_enum_result.h"
+#include "function_with_hashmap_result.h"
 #include "function_return_float.h"
 #include "function_return_negated_bool.h"
 #include "function_with_unit_expression_result.h"
@@ -70,6 +85,7 @@
 #include <cassert>
 #include <cstring>
 #include <optional>
+#include <unordered_map>
 
 void assert_options()
 {
@@ -255,6 +271,122 @@ void assert_vectors()
     {
         assert(returned_enums[i] == expected_enums[i]);
     }
+}
+
+void assert_hashmaps()
+{
+    using IntMap = std::unordered_map<std::string, i32>;
+    using MapOfVec = std::unordered_map<std::string, std::vector<i32>>;
+    using MapOfOption = std::unordered_map<std::string, std::optional<i32>>;
+    using MapOfMap = std::unordered_map<std::string, IntMap>;
+    const auto nested_map = IntMap{{"value", 6}};
+    std::vector<IntMap> nested_vec_map = {{{"value", 5}}};
+    std::optional<IntMap> nested_option_map = nested_map;
+    function_taking_recursive_maps(
+        {{"values", {1, 2}}},
+        {{"some", 3}, {"none", std::nullopt}},
+        {{"inner", {{"value", 4}}}},
+        nested_vec_map,
+        nested_option_map);
+    const MapOfVec expected_map_of_vec = {{"values", {10, 11}}};
+    const MapOfOption expected_map_of_option = {{"some", 12}, {"none", std::nullopt}};
+    const MapOfMap expected_map_of_map = {{"inner", {{"value", 13}}}};
+    const std::vector<IntMap> expected_vec_of_maps = {{{"value", 14}}};
+    const std::optional<IntMap> expected_option_of_map = IntMap{{"value", 15}};
+    assert(function_returning_map_of_vec() == expected_map_of_vec);
+    assert(function_returning_map_of_option() == expected_map_of_option);
+    assert(function_returning_map_of_hashmap() == expected_map_of_map);
+    assert(function_returning_vec_of_hashmaps() == expected_vec_of_maps);
+    assert(function_returning_option_of_hashmap() == expected_option_of_map);
+
+    TestStruct recursive_method;
+    recursive_method.public_method_taking_recursive_maps(
+        {{"values", {1, 2}}},
+        {{"some", 3}, {"none", std::nullopt}},
+        {{"inner", {{"value", 4}}}},
+        nested_vec_map,
+        nested_option_map);
+    const std::vector<IntMap> expected_method_vec_of_maps = {{{"value", 7}}};
+    assert(recursive_method.public_method_returning_vec_of_hashmaps() == expected_method_vec_of_maps);
+
+    const std::unordered_map<TestStatus, TestStatus> enum_input = {
+        {TestStatus::Active, TestStatus::Pending},
+        {TestStatus::Inactive, TestStatus::Active},
+    };
+    function_taking_enum_hashmap(enum_input);
+    const std::unordered_map<TestStatus, TestStatus> enum_return = {
+        {TestStatus::Active, TestStatus::Inactive},
+        {TestStatus::Pending, TestStatus::Active},
+    };
+    assert(function_returning_enum_hashmap() == enum_return);
+
+    TestStruct enum_method_struct;
+    enum_method_struct.public_method_taking_enum_hashmap({
+        {TestStatus::Active, TestStatus::Active},
+        {TestStatus::Pending, TestStatus::Inactive},
+    });
+    const std::unordered_map<TestStatus, TestStatus> enum_method_return = {
+        {TestStatus::Active, TestStatus::Pending},
+        {TestStatus::Inactive, TestStatus::Active},
+    };
+    assert(enum_method_struct.public_method_returning_enum_hashmap() == enum_method_return);
+    TestStruct::static_method_taking_enum_hashmap({
+        {TestStatus::Active, TestStatus::Inactive},
+        {TestStatus::Pending, TestStatus::Pending},
+    });
+    const std::unordered_map<TestStatus, TestStatus> enum_static_return = {
+        {TestStatus::Inactive, TestStatus::Pending},
+        {TestStatus::Pending, TestStatus::Active},
+    };
+    assert(TestStruct::static_method_returning_enum_hashmap() == enum_static_return);
+
+    const std::unordered_map<std::string, i32> input = {
+        {"alpha", 10},
+        {"beta", 20},
+    };
+    function_taking_hashmap(input);
+    assert(function_returning_hashmap() == input);
+    assert(function_returning_empty_hashmap().empty());
+
+    TestStruct test_struct;
+    test_struct.public_method_taking_hashmap({{"method", 24}});
+    const std::unordered_map<std::string, i32> method_return = {{"method", 25}};
+    assert(test_struct.public_method_returning_hashmap() == method_return);
+    TestStruct::static_method_taking_hashmap({{"static", 77}});
+    const std::unordered_map<std::string, i32> static_return = {{"static", 78}};
+    assert(TestStruct::static_method_returning_hashmap() == static_return);
+
+    StructWithHashMaps maps;
+    assert(maps.get_string_to_int().empty());
+    maps.set_string_to_int(input);
+    assert(maps.get_string_to_int() == input);
+
+    const std::unordered_map<i32, std::string> reverse = {{1, "one"}, {2, "two"}};
+    assert(maps.get_int_to_string().empty());
+    maps.set_int_to_string(reverse);
+    assert(maps.get_int_to_string() == reverse);
+
+    const std::unordered_map<std::string, TestStruct2> struct_input = {
+        {"alpha", TestStruct2::new_ts2(10)},
+        {"beta", TestStruct2::new_ts2(20)},
+    };
+    function_taking_struct_hashmap(struct_input);
+    auto struct_return = function_returning_struct_hashmap();
+    assert(struct_return.at("alpha").get_i32_field() == 10);
+    assert(struct_return.at("beta").get_i32_field() == 20);
+
+    test_struct.public_method_taking_struct_hashmap({{"method", TestStruct2::new_ts2(24)}});
+    auto method_struct_return = test_struct.public_method_returning_struct_hashmap();
+    assert(method_struct_return.at("method").get_i32_field() == 25);
+    TestStruct::static_method_taking_struct_hashmap({{"static", TestStruct2::new_ts2(77)}});
+    auto static_struct_return = TestStruct::static_method_returning_struct_hashmap();
+    assert(static_struct_return.at("static").get_i32_field() == 78);
+
+    assert(maps.get_string_to_struct().empty());
+    maps.set_string_to_struct(struct_input);
+    auto struct_field = maps.get_string_to_struct();
+    assert(struct_field.at("alpha").get_i32_field() == 10);
+    assert(struct_field.at("beta").get_i32_field() == 20);
 }
 
 void assert_structs()
@@ -568,6 +700,9 @@ void assert_results()
     assert(vec_of_enums[1] == TestStatus::Active);
     assert(vec_of_enums[2] == TestStatus::Inactive);
 
+    std::unordered_map<std::string, std::string> expected_hashmap_result = {{"key", "value"}};
+    assert(function_with_hashmap_result(false) == expected_hashmap_result);
+
     auto ts1 = TestStruct();
     try
     {
@@ -593,6 +728,8 @@ void assert_results()
     assert(ok_vec_of_structs[1].get_i32_field() == -5);
     assert(ts1.method_with_vec_of_bools_result() == std::vector<bool>({false, true, true, true}));
     assert(TestStruct::static_method_with_vec_of_enum_result() == std::vector<TestStatus>({TestStatus::Inactive, TestStatus::Pending, TestStatus::Active}));
+    auto expected_hash_map = std::unordered_map<std::string, i32>({{"key", 42}});
+    assert(ts1.method_returning_result_with_hashmap(false) == expected_hash_map);
 }
 
 class MyStructWithTrait : public RustTrait
@@ -644,6 +781,47 @@ public:
         assert(vec.size() == 2);
         assert(vec[0].get_i32_field() == 321);
         assert(vec[1].get_i32_field() == 654);
+    }
+
+    void trait_fn_with_int_hashmap(const std::unordered_map<i32, i32> &map) override
+    {
+        assert(map.at(1) == 10);
+        assert(map.at(2) == 20);
+    }
+
+    void trait_fn_with_string_hashmap(const std::unordered_map<std::string, std::string> &map) override
+    {
+        assert(map.at("alpha") == "one");
+        assert(map.at("beta") == "two");
+    }
+
+    void trait_fn_with_enum_hashmap(const std::unordered_map<TestStatus, TestStatus> &map) override
+    {
+        assert(map.at(TestStatus::Active) == TestStatus::Pending);
+        assert(map.at(TestStatus::Inactive) == TestStatus::Active);
+    }
+
+    void trait_fn_with_recursive_maps(
+        const std::unordered_map<std::string, std::vector<i32>> &map_vec,
+        const std::unordered_map<std::string, std::optional<i32>> &map_option,
+        const std::unordered_map<std::string, std::unordered_map<std::string, i32>> &map_map,
+        std::vector<std::unordered_map<std::string, i32>> &vec_map,
+        std::optional<std::unordered_map<std::string, i32>> &option_map) override
+    {
+        assert(map_vec.at("values") == std::vector<i32>({1, 2}));
+        assert(map_option.at("some") == 3);
+        assert(!map_option.at("none"));
+        assert(map_map.at("inner").at("value") == 4);
+        assert(vec_map[0].at("value") == 5);
+        assert(option_map->at("value") == 6);
+    }
+
+    void trait_fn_with_struct_hashmap(const std::unordered_map<std::string, TestStruct2> &map) override
+    {
+        auto alpha = map.at("alpha");
+        auto beta = map.at("beta");
+        assert(alpha.get_i32_field() == 10);
+        assert(beta.get_i32_field() == 20);
     }
 
     void trait_fn_with_vec_of_enums(std::vector<TestStatus> &vec) override
@@ -715,6 +893,35 @@ public:
         TestStruct2 s2;
         s2.set_i32_field(222);
         return {s1, s2};
+    }
+
+    std::unordered_map<i32, i32> trait_fn_return_int_hashmap() override
+    {
+        return {{3, 30}, {4, 40}};
+    }
+
+    std::unordered_map<std::string, std::string> trait_fn_return_string_hashmap() override
+    {
+        return {{"gamma", "three"}, {"delta", "four"}};
+    }
+
+    std::unordered_map<TestStatus, TestStatus> trait_fn_return_enum_hashmap() override
+    {
+        return {{TestStatus::Active, TestStatus::Inactive}, {TestStatus::Pending, TestStatus::Active}};
+    }
+
+    std::unordered_map<std::string, TestStruct2> trait_fn_return_struct_hashmap() override
+    {
+        TestStruct2 alpha;
+        alpha.set_i32_field(30);
+        TestStruct2 beta;
+        beta.set_i32_field(40);
+        return {{"alpha", alpha}, {"beta", beta}};
+    }
+
+    std::unordered_map<std::string, std::vector<i32>> trait_fn_return_map_of_vec() override
+    {
+        return {{"values", {16, 17}}};
     }
 
     std::optional<i32> trait_fn_returning_option_int(bool some) override
@@ -960,6 +1167,19 @@ public:
         }
     }
 
+    std::unordered_map<std::string, TestStruct2> trait_fn_returning_result_with_hashmap(bool error) override
+    {
+        if (error)
+        {
+            throw std::runtime_error("Error from trait object");
+        }
+        TestStruct2 alpha;
+        alpha.set_i32_field(30);
+        TestStruct2 beta;
+        beta.set_i32_field(40);
+        return {{"alpha", alpha}, {"beta", beta}};
+    }
+
     ~MyStructWithTrait() override
     {
         // std::cout << "MyStructWithTrait destructor called!" << std::endl;
@@ -996,6 +1216,26 @@ void assert_traits()
     ts2_2.set_i32_field(654);
     std::vector<TestStruct2> vts2 = {ts2_1, ts2_2};
     rust_trait_obj->trait_fn_with_vec_of_structs(vts2);
+    std::unordered_map<std::string, TestStruct2> struct_map = {
+        {"alpha", TestStruct2::new_ts2(10)},
+        {"beta", TestStruct2::new_ts2(20)},
+    };
+    rust_trait_obj->trait_fn_with_int_hashmap({{1, 10}, {2, 20}});
+    rust_trait_obj->trait_fn_with_string_hashmap({{"alpha", "one"}, {"beta", "two"}});
+    rust_trait_obj->trait_fn_with_enum_hashmap({
+        {TestStatus::Active, TestStatus::Pending},
+        {TestStatus::Inactive, TestStatus::Active},
+    });
+    std::vector<std::unordered_map<std::string, i32>> nested_vec_map = {{{"value", 5}}};
+    std::optional<std::unordered_map<std::string, i32>> nested_option_map =
+        std::unordered_map<std::string, i32>{{"value", 6}};
+    rust_trait_obj->trait_fn_with_recursive_maps(
+        {{"values", {1, 2}}},
+        {{"some", 3}, {"none", std::nullopt}},
+        {{"inner", {{"value", 4}}}},
+        nested_vec_map,
+        nested_option_map);
+    rust_trait_obj->trait_fn_with_struct_hashmap(struct_map);
 
     std::optional<i64> opt_int = std::optional<i64>(42);
     std::optional<std::string> opt_string = std::optional<std::string>("Hello from trait object");
@@ -1020,6 +1260,25 @@ void assert_traits()
     assert(vec_of_ts2.size() == 2);
     assert(vec_of_ts2[0].get_i32_field() == 111);
     assert(vec_of_ts2[1].get_i32_field() == 222);
+    auto returned_int_map = rust_trait_obj->trait_fn_return_int_hashmap();
+    assert(returned_int_map.size() == 2);
+    assert(returned_int_map.at(3) == 30);
+    assert(returned_int_map.at(4) == 40);
+    auto returned_string_map = rust_trait_obj->trait_fn_return_string_hashmap();
+    assert(returned_string_map.size() == 2);
+    assert(returned_string_map.at("gamma") == "three");
+    assert(returned_string_map.at("delta") == "four");
+    auto returned_enum_map = rust_trait_obj->trait_fn_return_enum_hashmap();
+    assert(returned_enum_map.size() == 2);
+    assert(returned_enum_map.at(TestStatus::Active) == TestStatus::Inactive);
+    assert(returned_enum_map.at(TestStatus::Pending) == TestStatus::Active);
+    const std::unordered_map<std::string, std::vector<i32>> expected_trait_map_of_vec = {
+        {"values", {16, 17}},
+    };
+    assert(rust_trait_obj->trait_fn_return_map_of_vec() == expected_trait_map_of_vec);
+    auto returned_struct_map = rust_trait_obj->trait_fn_return_struct_hashmap();
+    assert(returned_struct_map.at("alpha").get_i32_field() == 30);
+    assert(returned_struct_map.at("beta").get_i32_field() == 40);
 
     auto opt_int2 = rust_trait_obj->trait_fn_returning_option_int(true);
     auto opt_string2 = rust_trait_obj->trait_fn_returning_option_string(true);

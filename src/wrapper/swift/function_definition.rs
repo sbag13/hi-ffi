@@ -24,7 +24,8 @@ pub fn map_header_declaration_args(args: &[FunctionArgWrapper]) -> String {
                     | WrapperType::String
                     | WrapperType::Vec(_)
                     | WrapperType::Result(_)
-                    | WrapperType::Option(_),
+                    | WrapperType::Option(_)
+                    | WrapperType::HashMap(_, _),
                 ..
             } => {
                 format!("void* {arg_name}")
@@ -171,6 +172,23 @@ let bridge = {trait_name}Bridge(
                 args_names.push(format!("casted_{arg_name}.rawPtr()"));
                 args_casts.push(format!(
                     r#"let casted_{arg_name} = {wrapper_name}.fromSwift({arg_name})"#
+                ));
+            }
+
+            FunctionArgWrapper {
+                arg_name,
+                wrapper_type: WrapperType::HashMap(key, value),
+                ..
+            } => {
+                let swift_type = super::get_swift_type_name(&WrapperType::HashMap(
+                    key.clone(),
+                    value.clone(),
+                ));
+                let wrapper_name = format!("Rust{}HashMap{}", key.name(), value.name());
+                args_signatures.push(format!("_ {arg_name}: {swift_type}"));
+                args_names.push(format!("casted_{arg_name}.rawPtr()"));
+                args_casts.push(format!(
+                    "let casted_{arg_name} = {wrapper_name}.fromSwift({arg_name})"
                 ));
             }
 
@@ -370,6 +388,23 @@ if wrapped_rust_result.isErr() {{
                 cpp_return_type: "void*".to_string(),
                 result_cast: Some(format!(
                     "let casted_result = {wrapper_name}(result!).toSwift()"
+                )),
+            }
+        }
+
+        Some(FunctionReturnWrapper {
+            wrapper_type: WrapperType::HashMap(key, value),
+            ..
+        }) => {
+            let swift_type =
+                super::get_swift_type_name(&WrapperType::HashMap(key.clone(), value.clone()));
+            ReturnTypes {
+                return_type_sig: Some(format!(" -> {swift_type}")),
+                cpp_return_type: "void*".to_string(),
+                result_cast: Some(format!(
+                    "let casted_result = Rust{}HashMap{}(result!).toSwift()",
+                    key.name(),
+                    value.name()
                 )),
             }
         }

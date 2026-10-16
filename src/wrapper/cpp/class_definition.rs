@@ -234,6 +234,13 @@ auto rust_vec = Rust{inner_name}Vec::from_std(cpp_vec);
 return rust_vec.leak();")
                         }
 
+                        WrapperType::HashMap(key, value) => {
+                            let map_name = cpp_hashmap_wrapper_name(key, value);
+                            format!("auto cpp_map = (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args});
+auto rust_map = {map_name}::from_std(cpp_map);
+return rust_map.leak();")
+                        }
+
                         WrapperType::String => {
                             format!("std::string cpp_string = (*static_cast<std::shared_ptr<{class_name}>*>(self))->{method_name}({call_args});
 auto rust_string_ptr = {RUST_STRING_FROM_C_PTR_FN_NAME}(cpp_string.data());
@@ -262,6 +269,8 @@ return rust_option.leak();")
     auto rust_ok_arg = rust_struct.self_ptr();"),
                                 WrapperType::Vec(inner) => format!("    auto rust_vec = Rust{inner}Vec::from_std(cpp_result);
     auto rust_ok_arg = rust_vec.raw_ptr();", inner = inner.name()),
+                                WrapperType::HashMap(key, value) => format!("    auto rust_map = {}::from_std(cpp_result);
+    auto rust_ok_arg = rust_map.raw_ptr();", cpp_hashmap_wrapper_name(key, value)),
                                 WrapperType::Option(inner) => format!("    auto rust_option = Rust{inner}Option::from_std(cpp_result);
     auto rust_ok_arg = rust_option.raw_ptr();", inner = inner.name()),
                                 _ => "    auto rust_ok_arg = cpp_result;".to_string(),
@@ -359,6 +368,7 @@ fn trait_bridge_fn_ret_type(ret_wrapper: &Option<FunctionReturnWrapper>) -> Stri
             | WrapperType::Struct(_)
             | WrapperType::Vec(_)
             | WrapperType::Option(_)
+            | WrapperType::HashMap(_, _)
             | WrapperType::Result(_) => "void*".to_string(),
 
             WrapperType::UnitExpr => "void".to_string(),
@@ -979,6 +989,22 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
         }
 
         FieldWrapper {
+            wrapper_type: WrapperType::HashMap(key, value),
+            getter,
+            setter,
+            ..
+        } => {
+            let wrapper_name = cpp_hashmap_wrapper_name(key, value);
+            let getter = getter
+                .as_ref()
+                .map(|g| map_hashmap_getter(g, key, value, &wrapper_name, &class_name));
+            let setter = setter
+                .as_ref()
+                .map(|s| map_hashmap_setter(s, key, value, &wrapper_name, &class_name));
+            Methods { getter, setter }
+        }
+
+        FieldWrapper {
             wrapper_type: WrapperType::Result(_),
             ..
         } => {
@@ -998,6 +1024,66 @@ fn map_fields(field: &FieldWrapper, class_name: impl Display) -> Methods {
         } => {
             panic!("UnitExpr wrapper type is not supported for struct fields")
         }
+    }
+}
+
+fn map_hashmap_getter(
+    getter: &Getter,
+    key: &WrapperType,
+    value: &WrapperType,
+    wrapper_name: &str,
+    class_name: impl Display,
+) -> Method {
+    let name = &getter.name;
+    let extern_fn_name = &getter.extern_fn_name;
+    let includes = format!(
+        "#include <unordered_map>\n#include \"hashmap_{}_{}.h\"\n",
+        key.name(),
+        value.name()
+    );
+    Method {
+        declaration: format!(
+            "    std::unordered_map<{}, {}> {name}() const;\n",
+            cpp_type(key),
+            cpp_type(value)
+        ),
+        definition: format!(
+            "std::unordered_map<{}, {}> {class_name}::{name}() const {{\n    auto wrapped = {wrapper_name}({extern_fn_name}(this->self));\n    auto value = wrapped.to_std();\n    wrapped.leak();\n    return value;\n}}\n",
+            cpp_type(key),
+            cpp_type(value)
+        ),
+        extern_fn: format!("    void* {extern_fn_name}(void*);\n"),
+        include: includes,
+    }
+}
+
+fn map_hashmap_setter(
+    setter: &Setter,
+    key: &WrapperType,
+    value: &WrapperType,
+    wrapper_name: &str,
+    class_name: impl Display,
+) -> Method {
+    let name = &setter.name;
+    let extern_fn_name = &setter.extern_fn_name;
+    let includes = format!(
+        "#include <unordered_map>\n#include \"hashmap_{}_{}.h\"\n",
+        key.name(),
+        value.name()
+    );
+    Method {
+        declaration: format!(
+            "    void {name}(const std::unordered_map<{}, {}>& value);\n",
+            cpp_type(key),
+            cpp_type(value)
+        ),
+        definition: format!(
+            "void {class_name}::{name}(const std::unordered_map<{}, {}>& value) {{\n    auto wrapped = {wrapper_name}::from_std(value);\n    {extern_fn_name}(this->self, wrapped.raw_ptr());\n}}\n",
+            cpp_type(key),
+            cpp_type(value)
+        ),
+        extern_fn: format!("    void {extern_fn_name}(void*, void*);\n"),
+        include: includes,
     }
 }
 

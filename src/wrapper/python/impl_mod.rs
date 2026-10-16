@@ -88,6 +88,14 @@ class {class_name}:"#
                         "from typing import Optional".to_string(),
                     );
                 }
+                WrapperType::HashMap(key, value) => {
+                    let map_name = format!("{}HashMap{}", key.name(), value.name());
+                    local_imports = format!(
+                        "from .hashmap_{}_{} import {map_name}",
+                        key.name(),
+                        value.name()
+                    );
+                }
                 WrapperType::Struct(type_name) | WrapperType::Enum(type_name) => {
                     if type_name != &class_name {
                         imports.insert(type_name.clone(), format!("from . import {type_name}"));
@@ -187,7 +195,7 @@ fn insert_imports_for_vec_inner(inner: &WrapperType, imports: &mut HashMap<Strin
     }
 }
 
-fn add_type_hint_imports(
+pub(crate) fn add_type_hint_imports(
     wrapper_type: &WrapperType,
     current_class: &str,
     imports: &mut HashMap<String, String>,
@@ -208,6 +216,11 @@ fn add_type_hint_imports(
             add_type_hint_imports(inner, current_class, imports);
         }
         WrapperType::Result(inner) => add_type_hint_imports(inner, current_class, imports),
+        WrapperType::HashMap(key, value) => {
+            imports.insert("Dict".to_string(), "from typing import Dict".to_string());
+            add_type_hint_imports(key, current_class, imports);
+            add_type_hint_imports(value, current_class, imports);
+        }
         _ => {}
     }
 }
@@ -276,6 +289,27 @@ pub(crate) fn call_args_and_pre_casts(
                 pre_casts.push(format!(
                     "casted_{name} = casted_{name}_wrapper.raw_ptr()",
                     name = arg_name
+                ));
+            }
+            WrapperType::HashMap(key, value) => {
+                let map_name = format!("{}HashMap{}", key.name(), value.name());
+                imports.insert("Dict".to_string(), "from typing import Dict".to_string());
+                add_type_hint_imports(key, "", imports);
+                add_type_hint_imports(value, "", imports);
+                imports.insert(
+                    map_name.clone(),
+                    format!(
+                        "from .hashmap_{}_{} import {map_name}",
+                        key.name(),
+                        value.name()
+                    ),
+                );
+                pre_casts.push(format!(
+                    "casted_{arg_name}_wrapper = {}",
+                    arg_cast(&arg.wrapper_type, &arg_name)
+                ));
+                pre_casts.push(format!(
+                    "casted_{arg_name} = casted_{arg_name}_wrapper.raw_ptr()"
                 ));
             }
             WrapperType::Enum(inner_name) | WrapperType::Struct(inner_name) => {

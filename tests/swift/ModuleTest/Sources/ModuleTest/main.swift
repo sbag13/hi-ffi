@@ -433,6 +433,8 @@ func assert_results() {
             TestStatus.Pending, TestStatus.Active, TestStatus.Inactive,
         ]
         assert(vec_enum_ok == expected_vec_enum)
+        let hashmap_ok = try function_with_hashmap_result(false)
+        assert(hashmap_ok == ["key": "value"])
         try function_with_unit_expression_result()
     } catch {
         assert(false)
@@ -474,6 +476,8 @@ func assert_results() {
         assert(ok_vec_of_structs[1].i32_field == -5)
         let ok_vec_enum = try TestStruct.static_method_with_vec_of_enum_result()
         assert(ok_vec_enum == [TestStatus.Inactive, TestStatus.Pending, TestStatus.Active])
+        let ok_hash_map = try ts1.method_returning_result_with_hashmap(false)
+        assert(ok_hash_map == ["key": 42])
     } catch {
         assert(false)
     }
@@ -678,6 +682,41 @@ class SwiftTraitImpl: RustTrait {
         assert(vec[1].i32_field == 654)
     }
 
+    func trait_fn_with_int_hashmap(_ map: [i32: i32]) {
+        assert(map[1] == 10)
+        assert(map[2] == 20)
+    }
+
+    func trait_fn_with_string_hashmap(_ map: [String: String]) {
+        assert(map["alpha"] == "one")
+        assert(map["beta"] == "two")
+    }
+
+    func trait_fn_with_enum_hashmap(_ map: [TestStatus: TestStatus]) {
+        assert(map[.Active] == .Pending)
+        assert(map[.Inactive] == .Active)
+    }
+
+    func trait_fn_with_recursive_maps(
+        _ mapVec: [String: [i32]],
+        _ mapOption: [String: i32?],
+        _ mapMap: [String: [String: i32]],
+        _ vecMap: [[String: i32]],
+        _ optionMap: [String: i32]?
+    ) {
+        assert(mapVec["values"] == [1, 2])
+        assert(mapOption["some"] == 3)
+        assert(mapOption["none"] == .some(nil))
+        assert(mapMap["inner"]?["value"] == 4)
+        assert(vecMap[0]["value"] == 5)
+        assert(optionMap?["value"] == 6)
+    }
+
+    func trait_fn_with_struct_hashmap(_ map: [String: TestStruct2]) {
+        assert(map["alpha"]?.i32_field == 10)
+        assert(map["beta"]?.i32_field == 20)
+    }
+
     func trait_fn_with_options(
         _ opt_int: i64?, _ opt_string: String?, _ opt_bool: Bool?, _ opt_enum: TestStatus?,
         _ opt_struct: TestStruct2?
@@ -734,6 +773,29 @@ class SwiftTraitImpl: RustTrait {
         let ts2 = TestStruct2()
         ts2.i32_field = 222
         return [ts1, ts2]
+    }
+
+    func trait_fn_return_int_hashmap() -> [i32: i32] {
+        return [3: 30, 4: 40]
+    }
+
+    func trait_fn_return_string_hashmap() -> [String: String] {
+        return ["gamma": "three", "delta": "four"]
+    }
+
+    func trait_fn_return_enum_hashmap() -> [TestStatus: TestStatus] {
+        return [.Active: .Inactive, .Pending: .Active]
+    }
+
+    func trait_fn_return_map_of_vec() -> [String: [i32]] {
+        return ["values": [16, 17]]
+    }
+
+    func trait_fn_return_struct_hashmap() -> [String: TestStruct2] {
+        return [
+            "alpha": TestStruct2.new_ts2(30),
+            "beta": TestStruct2.new_ts2(40),
+        ]
     }
 
     func trait_fn_returning_option_int(_ some: bool) -> i32? {
@@ -899,6 +961,16 @@ class SwiftTraitImpl: RustTrait {
         }
     }
 
+    func trait_fn_returning_result_with_hashmap(_ error: Bool) throws -> [String: TestStruct2] {
+        if error {
+            throw RustError("Error from trait object")
+        }
+        return [
+            "alpha": TestStruct2.new_ts2(30),
+            "beta": TestStruct2.new_ts2(40),
+        ]
+    }
+
     deinit {
         print("Swift says bye!")
     }
@@ -938,6 +1010,22 @@ func assert_traits() {
     ts2_2.i32_field = 654
     let vts2 = [TestStruct2](arrayLiteral: ts2_1, ts2_2)
     rust_trait_object.trait_fn_with_vec_of_structs(vts2)
+    rust_trait_object.trait_fn_with_int_hashmap([1: 10, 2: 20])
+    rust_trait_object.trait_fn_with_string_hashmap(["alpha": "one", "beta": "two"])
+    rust_trait_object.trait_fn_with_enum_hashmap([
+        .Active: .Pending,
+        .Inactive: .Active,
+    ])
+    rust_trait_object.trait_fn_with_recursive_maps(
+        ["values": [1, 2]],
+        ["some": 3, "none": nil],
+        ["inner": ["value": 4]],
+        [["value": 5]],
+        ["value": 6])
+    rust_trait_object.trait_fn_with_struct_hashmap([
+        "alpha": TestStruct2.new_ts2(10),
+        "beta": TestStruct2.new_ts2(20),
+    ])
 
     let opt_struct_test = TestStruct2()
     opt_struct_test.i32_field = 789
@@ -980,6 +1068,22 @@ func assert_traits() {
     assert(vec_of_ts2.count == 2, "Should return 2 structs")
     assert(vec_of_ts2[0].i32_field == 111, "First struct should have i32_field=111")
     assert(vec_of_ts2[1].i32_field == 222, "Second struct should have i32_field=222")
+    assert(
+        rust_trait_object.trait_fn_return_int_hashmap() == [3: 30, 4: 40],
+        "Should return the int-keyed HashMap")
+    assert(
+        rust_trait_object.trait_fn_return_string_hashmap() == ["gamma": "three", "delta": "four"],
+        "Should return the string-valued HashMap")
+    assert(
+        rust_trait_object.trait_fn_return_enum_hashmap()
+            == [.Active: .Inactive, .Pending: .Active],
+        "Should return the enum-keyed and enum-valued HashMap")
+    assert(
+        rust_trait_object.trait_fn_return_map_of_vec() == ["values": [16, 17]],
+        "Should return HashMap of Vec from trait callback")
+    let returnedStructMap = rust_trait_object.trait_fn_return_struct_hashmap()
+    assert(returnedStructMap["alpha"]?.i32_field == 30)
+    assert(returnedStructMap["beta"]?.i32_field == 40)
 
     let opt_int = rust_trait_object.trait_fn_returning_option_int(true)
     let opt_string = rust_trait_object.trait_fn_returning_option_string(true)
@@ -1110,11 +1214,14 @@ func assert_traits() {
         let stringResult = try rust_trait_object.trait_fn_returning_result_with_option_string(false)
         let enumResult = try rust_trait_object.trait_fn_returning_result_with_option_enum(false)
         let structResult = try rust_trait_object.trait_fn_returning_result_with_option_struct(false)
+        let hashmapResult = try rust_trait_object.trait_fn_returning_result_with_hashmap(false)
         assert(intResult == 555)
         assert(boolResult == false)
         assert(stringResult == "Some string")
         assert(enumResult == TestStatus.Pending)
         assert(structResult?.i32_field == 789)
+        assert(hashmapResult["alpha"]?.i32_field == 30)
+        assert(hashmapResult["beta"]?.i32_field == 40)
         let _ = try rust_trait_object.trait_fn_returning_result_with_option_int(true)
         assert(false)  // Should not reach here
     } catch let e as RustError {
@@ -1225,6 +1332,112 @@ func assert_nested_containers() {
     assert(nested.return_nested() == [11, nil, 13])
 }
 
+func assert_hashmaps() {
+    let nestedMap: [String: i32] = ["value": 6]
+    function_taking_recursive_maps(
+        ["values": [1, 2]],
+        ["some": 3, "none": nil],
+        ["inner": ["value": 4]],
+        [["value": 5]],
+        nestedMap)
+    assert(
+        function_returning_map_of_vec() == ["values": [10, 11]],
+        "HashMap of Vec free function return failed")
+    assert(
+        function_returning_map_of_option() == ["some": 12, "none": nil],
+        "HashMap of Option free function return failed")
+    assert(
+        function_returning_map_of_hashmap() == ["inner": ["value": 13]],
+        "Nested HashMap free function return failed")
+    assert(
+        function_returning_vec_of_hashmaps() == [["value": 14]],
+        "Vec of HashMaps free function return failed")
+    assert(
+        function_returning_option_of_hashmap() == ["value": 15],
+        "Option of HashMap free function return failed")
+
+    let recursiveMethod = TestStruct()
+    recursiveMethod.public_method_taking_recursive_maps(
+        ["values": [1, 2]],
+        ["some": 3, "none": nil],
+        ["inner": ["value": 4]],
+        [["value": 5]],
+        nestedMap)
+    assert(
+        recursiveMethod.public_method_returning_vec_of_hashmaps() == [["value": 7]],
+        "Vec of HashMaps instance method return failed")
+
+    let enumInput: [TestStatus: TestStatus] = [
+        .Active: .Pending,
+        .Inactive: .Active,
+    ]
+    function_taking_enum_hashmap(enumInput)
+    assert(
+        function_returning_enum_hashmap()
+            == [.Active: .Inactive, .Pending: .Active],
+        "Enum-keyed free function HashMap conversion failed")
+
+    let enumMethodStruct = TestStruct()
+    enumMethodStruct.public_method_taking_enum_hashmap([
+        .Active: .Active,
+        .Pending: .Inactive,
+    ])
+    assert(
+        enumMethodStruct.public_method_returning_enum_hashmap()
+            == [.Active: .Pending, .Inactive: .Active],
+        "Enum-keyed instance method HashMap conversion failed")
+    TestStruct.static_method_taking_enum_hashmap([
+        .Active: .Inactive,
+        .Pending: .Pending,
+    ])
+    assert(
+        TestStruct.static_method_returning_enum_hashmap()
+            == [.Inactive: .Pending, .Pending: .Active],
+        "Enum-keyed static method HashMap conversion failed")
+
+    let input: [String: i32] = ["alpha": 10, "beta": 20]
+    function_taking_hashmap(input)
+    assert(function_returning_hashmap() == input)
+    assert(function_returning_empty_hashmap().isEmpty)
+
+    let testStruct = TestStruct()
+    testStruct.public_method_taking_hashmap(["method": 24])
+    assert(testStruct.public_method_returning_hashmap() == ["method": 25])
+    TestStruct.static_method_taking_hashmap(["static": 77])
+    assert(TestStruct.static_method_returning_hashmap() == ["static": 78])
+
+    let maps = StructWithHashMaps()
+    assert(maps.string_to_int.isEmpty)
+    maps.string_to_int = input
+    assert(maps.string_to_int == input)
+
+    assert(maps.int_to_string.isEmpty)
+    let reverse: [i32: String] = [1: "one", 2: "two"]
+    maps.int_to_string = reverse
+    assert(maps.int_to_string == reverse)
+
+    let structInput = [
+        "alpha": TestStruct2.new_ts2(10),
+        "beta": TestStruct2.new_ts2(20),
+    ]
+    function_taking_struct_hashmap(structInput)
+    let structReturn = function_returning_struct_hashmap()
+    assert(structReturn["alpha"]?.i32_field == 10)
+    assert(structReturn["beta"]?.i32_field == 20)
+
+    testStruct.public_method_taking_struct_hashmap(["method": TestStruct2.new_ts2(24)])
+    let methodStructReturn = testStruct.public_method_returning_struct_hashmap()
+    assert(methodStructReturn["method"]?.i32_field == 25)
+    TestStruct.static_method_taking_struct_hashmap(["static": TestStruct2.new_ts2(77)])
+    let staticStructReturn = TestStruct.static_method_returning_struct_hashmap()
+    assert(staticStructReturn["static"]?.i32_field == 78)
+
+    assert(maps.string_to_struct.isEmpty)
+    maps.string_to_struct = structInput
+    assert(maps.string_to_struct["alpha"]?.i32_field == 10)
+    assert(maps.string_to_struct["beta"]?.i32_field == 20)
+}
+
 func run() {
     assert_struct_basics()
     assert_default_impl()
@@ -1241,6 +1454,7 @@ func run() {
     assert_traits()
     assert_method_trait_objects()
     assert_nested_containers()
+    assert_hashmaps()
     print("All assertions passed.")
 }
 

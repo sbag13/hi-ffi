@@ -17,6 +17,7 @@ impl ReusableWrapper {
             ReusableWrapper::Vec(inner) => gen_vec_wrapper_cpp(inner),
             ReusableWrapper::Result(inner) => gen_result_wrapper_cpp(inner),
             ReusableWrapper::Option(inner) => gen_option_wrapper_cpp(inner),
+            ReusableWrapper::HashMap(key, value) => gen_hashmap_wrapper_cpp(key, value),
         }
     }
 }
@@ -68,11 +69,13 @@ fn gen_option_wrapper_cpp(inner: &WrapperType) -> CppFiles {
     let has_value_cast = match inner {
         WrapperType::String => "other.value().data()",
         WrapperType::Struct(_) => "other.value().self_ptr()",
-        WrapperType::Vec(_) | WrapperType::Option(_) => "inner_wrapper.raw_ptr()",
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
+            "inner_wrapper.raw_ptr()"
+        }
         _ => "other.value()",
     };
     let nested_value_conversion = match inner {
-        WrapperType::Vec(_) | WrapperType::Option(_) => format!(
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => format!(
             "auto inner_wrapper = {}::from_std(other.value());",
             cpp_wrapper_name(inner)
         ),
@@ -271,8 +274,11 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         WrapperType::IntegerNumber(inner) | WrapperType::FloatingPointNumber(inner) => {
             format!("{inner} value")
         }
+
         WrapperType::Struct(inner) => format!("void* {inner}"),
-        WrapperType::Vec(_) | WrapperType::Option(_) => "void* value".to_string(),
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
+            "void* value".to_string()
+        }
         WrapperType::Bool => "bool value".to_string(),
         WrapperType::String => "const char* value".to_string(), // 2nd arg, len, is ignored for now
         WrapperType::Enum(_) => "int value".to_string(),
@@ -305,7 +311,7 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         WrapperType::Enum(_) => {
             format!("            {push_ext_fn_name}(rust_vec_ptr, static_cast<int>(elem));")
         }
-        WrapperType::Vec(_) | WrapperType::Option(_) => format!(
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => format!(
             "            auto inner_wrapper = {}::from_std(elem);\n            {push_ext_fn_name}(rust_vec_ptr, inner_wrapper.raw_ptr());",
             cpp_wrapper_name(inner)
         ),
@@ -336,7 +342,7 @@ fn gen_vec_wrapper_cpp(inner: &WrapperType) -> CppFiles {
         WrapperType::Enum(_) => {
             format!("auto elem = {get_ext_fn_name}(this->self, i);")
         }
-        WrapperType::Vec(_) | WrapperType::Option(_) => format!(
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => format!(
             "auto elem_ptr = {get_ext_fn_name}(this->self, i); {} rs(elem_ptr); auto elem = rs.to_std();",
             cpp_wrapper_name(inner)
         ),
@@ -432,6 +438,125 @@ std::vector<{inner_cpp_name}> {wrapper_name}::to_std() {{
     }
 }
 
+fn gen_hashmap_wrapper_cpp(key: &WrapperType, value: &WrapperType) -> CppFiles {
+    let map_name = format!("hashmap_{}_{}", key.name(), value.name());
+    let class_name = cpp_hashmap_wrapper_name(key, value);
+    let key_type = cpp_type(key);
+    let value_type = cpp_type(value);
+    let new_fn = format!("{EXPORTED_SYMBOLS_PREFIX}new_{map_name}");
+    let drop_fn = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{map_name}");
+    let insert_fn = format!("{EXPORTED_SYMBOLS_PREFIX}insert_{map_name}");
+    let len_fn = format!("{EXPORTED_SYMBOLS_PREFIX}len_{map_name}");
+    let key_at_fn = format!("{EXPORTED_SYMBOLS_PREFIX}key_at_{map_name}");
+    let value_at_fn = format!("{EXPORTED_SYMBOLS_PREFIX}value_at_{map_name}");
+    let (key_arg_type, key_arg) = cpp_hashmap_insert_args(key, "key");
+    let (value_arg_type, value_arg) = cpp_hashmap_insert_args(value, "value");
+    let value_conversion = cpp_hashmap_insert_conversion(value, "value");
+    let key_read = cpp_hashmap_read(key, &format!("{key_at_fn}(self, index)"), "key");
+    let value_read = cpp_hashmap_read(value, &format!("{value_at_fn}(self, index)"), "value");
+    let map_includes = [key, value]
+        .iter()
+        .filter_map(|wrapper_type| inner_include(wrapper_type))
+        .map(|include| format!("{include}\n"))
+        .collect::<Vec<_>>()
+        .join("");
+    let header = format!(
+        r#"
+#ifndef {class_name}__def
+#define {class_name}__def
+#include "base.h"
+#include <string>
+#include <unordered_map>
+{map_includes}
+extern "C" {{
+    void* {new_fn}();
+    void {drop_fn}(void*);
+    void {insert_fn}(void* self, {key_arg_type}, {value_arg_type});
+    usize {len_fn}(void* self);
+    {} {key_at_fn}(void* self, usize index);
+    {} {value_at_fn}(void* self, usize index);
+}}
+class {class_name} {{
+    void* self = nullptr;
+public:
+    explicit {class_name}(void* self) : self(self) {{}}
+    ~{class_name}() {{ if (self) {drop_fn}(self); }}
+    void* raw_ptr() const {{ return self; }}
+    void* leak() {{ auto ptr = self; self = nullptr; return ptr; }}
+    static {class_name} from_std(const std::unordered_map<{key_type}, {value_type}>& values) {{
+        auto ptr = {new_fn}();
+        for (const auto& [key, value] : values) {{
+            {value_conversion}
+            {insert_fn}(ptr, {key_arg}, {value_arg});
+        }}
+        return {class_name}(ptr);
+    }}
+    std::unordered_map<{key_type}, {value_type}> to_std() {{
+        std::unordered_map<{key_type}, {value_type}> values;
+        auto len = {len_fn}(self);
+        for (usize index = 0; index < len; ++index) {{
+            {key_read}
+            {value_read}
+            values.emplace(std::move(key), std::move(value));
+        }}
+        return values;
+    }}
+}};
+#endif
+"#,
+        ext_type(key),
+        ext_type(value)
+    );
+    CppFiles {
+        header: CppHeader::Reusable(header),
+        source: Some(CppSource::Reusable(String::new())),
+    }
+}
+
+fn cpp_hashmap_insert_args(wrapper_type: &WrapperType, name: &str) -> (String, String) {
+    match wrapper_type {
+        WrapperType::String => (
+            format!("const char* {name}, usize _{name}_len"),
+            format!("{name}.data(), {name}.size()"),
+        ),
+        WrapperType::Struct(_) => (format!("void* {name}"), format!("{name}.self_ptr()")),
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
+            (format!("void* {name}"), format!("{name}_wrapper.raw_ptr()"))
+        }
+        _ => (
+            format!("{} {name}", ext_type(wrapper_type)),
+            name.to_string(),
+        ),
+    }
+}
+
+fn cpp_hashmap_insert_conversion(wrapper_type: &WrapperType, name: &str) -> String {
+    match wrapper_type {
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => format!(
+            "auto {name}_wrapper = {}::from_std({name});",
+            cpp_wrapper_name(wrapper_type)
+        ),
+        _ => String::new(),
+    }
+}
+
+fn cpp_hashmap_read(wrapper_type: &WrapperType, call: &str, name: &str) -> String {
+    match wrapper_type {
+        WrapperType::String => format!(
+            "auto {name}_ptr = {call}; RustString {name}_rust({name}_ptr); auto {name} = {name}_rust.to_string();"
+        ),
+        WrapperType::Bool => format!("bool {name} = {call};"),
+        WrapperType::Struct(struct_name) => {
+            format!("auto {name}_ptr = {call}; {struct_name} {name}({name}_ptr);")
+        }
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => format!(
+            "auto {name}_ptr = {call}; {} {name}_wrapper({name}_ptr); auto {name} = {name}_wrapper.to_std();",
+            cpp_wrapper_name(wrapper_type)
+        ),
+        _ => format!("auto {name} = {call};"),
+    }
+}
+
 fn inner_include(inner: &WrapperType) -> Option<String> {
     match inner {
         WrapperType::Struct(name) | WrapperType::Enum(name) => {
@@ -442,6 +567,11 @@ fn inner_include(inner: &WrapperType) -> Option<String> {
         WrapperType::Option(opt_inner) => {
             Some(format!(r#"#include "option_{}.h""#, opt_inner.name()))
         }
+        WrapperType::HashMap(key, value) => Some(format!(
+            r#"#include "hashmap_{}_{}.h""#,
+            key.name(),
+            value.name()
+        )),
         WrapperType::Result(result_inner) => {
             Some(format!(r#"#include "result_{}.h""#, result_inner.name()))
         }
@@ -454,8 +584,13 @@ fn cpp_wrapper_name(wrapper_type: &WrapperType) -> String {
     match wrapper_type {
         WrapperType::Vec(inner) => format!("Rust{}Vec", inner.name()),
         WrapperType::Option(inner) => format!("Rust{}Option", inner.name()),
+        WrapperType::HashMap(key, value) => cpp_hashmap_wrapper_name(key, value),
         _ => unreachable!("Only container wrappers have reusable C++ wrapper classes"),
     }
+}
+
+pub(crate) fn cpp_hashmap_wrapper_name(key: &WrapperType, value: &WrapperType) -> String {
+    format!("Rust{}HashMap{}", key.name(), value.name())
 }
 
 fn forward_class_declaration(inner: &WrapperType) -> String {
@@ -472,6 +607,7 @@ fn ext_type(inner: &WrapperType) -> String {
         | WrapperType::Struct(_)
         | WrapperType::Vec(_)
         | WrapperType::Option(_)
+        | WrapperType::HashMap(_, _)
         | WrapperType::Result(_) => "void*".to_string(),
         WrapperType::Bool
         | WrapperType::Enum(_)
@@ -495,6 +631,12 @@ fn inner_value_cast(inner: &WrapperType, ext_call: impl Display) -> String {
         WrapperType::Option(opt_inner) => {
             let opt_inner_name = opt_inner.name();
             format!("auto result = Rust{opt_inner_name}Option({ext_call}).to_std();")
+        }
+        WrapperType::HashMap(key, value) => {
+            format!(
+                "auto result = {}({ext_call}).to_std();",
+                cpp_hashmap_wrapper_name(key, value)
+            )
         }
         WrapperType::Result(result_inner) => {
             let result_inner_name = result_inner.name();
@@ -648,6 +790,22 @@ return rust_vec.to_std();
         }
 
         Some(FunctionReturnWrapper {
+            wrapper_type: wt @ WrapperType::HashMap(key, value),
+            ..
+        }) => {
+            let wrapper_name = cpp_hashmap_wrapper_name(key, value);
+            ReturnTypes {
+                ext_return_type: "void*".to_string(),
+                return_type: cpp_type(wt),
+                return_cast: format!("return {wrapper_name}(result).to_std();"),
+                return_type_includes: HashSet::from([
+                    "#include <unordered_map>".to_string(),
+                    format!("#include \"hashmap_{}_{}.h\"", key.name(), value.name()),
+                ]),
+            }
+        }
+
+        Some(FunctionReturnWrapper {
             wrapper_type: WrapperType::Enum(_),
             return_type,
         }) => {
@@ -777,6 +935,9 @@ pub(crate) fn cpp_type(wrapper: &WrapperType) -> String {
         WrapperType::String => "std::string".to_string(),
         WrapperType::Vec(inner) => format!("std::vector<{}>", cpp_type(inner)),
         WrapperType::Option(inner) => format!("std::optional<{}>", cpp_type(inner)),
+        WrapperType::HashMap(key, value) => {
+            format!("std::unordered_map<{}, {}>", cpp_type(key), cpp_type(value))
+        }
         WrapperType::Bool => "bool".to_string(),
         WrapperType::IntegerNumber(t) | WrapperType::FloatingPointNumber(t) => t.to_string(),
         WrapperType::Struct(struct_name) => struct_name.to_string(),

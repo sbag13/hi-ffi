@@ -4,8 +4,8 @@ use crate::wrapper::swift::class_definition::{
     add_equatable_constraint, gen_empty_class_definition,
 };
 use crate::wrapper::swift::{
-    SwiftCode, gen_swift_option_declarations, gen_swift_result_declarations,
-    gen_swift_vec_declarations,
+    SwiftCode, gen_swift_hashmap_declarations, gen_swift_option_declarations,
+    gen_swift_result_declarations, gen_swift_vec_declarations,
 };
 use crate::{GEN_CODE_DIR, ReusableWrapper, Wrapper, append_to_file, create_file, insert_after};
 use std::collections::HashSet;
@@ -74,6 +74,7 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
             ReusableWrapper::Vec(inner) => gen_swift_vec_declarations(inner),
             ReusableWrapper::Result(inner) => gen_swift_result_declarations(inner),
             ReusableWrapper::Option(inner) => gen_swift_option_declarations(inner),
+            ReusableWrapper::HashMap(key, value) => gen_swift_hashmap_declarations(key, value),
         };
         append_to_file(declarations, &swift_header_path);
     }
@@ -118,6 +119,9 @@ pub(crate) fn write_swift_code(wrapper: &Wrapper) {
             ReusableWrapper::Vec(inner) => format!("vec_{}.swift", inner.name()),
             ReusableWrapper::Result(inner) => format!("result_{}.swift", inner.name()),
             ReusableWrapper::Option(inner) => format!("option_{}.swift", inner.name()),
+            ReusableWrapper::HashMap(key, value) => {
+                format!("hashmap_{}_{}.swift", key.name(), value.name())
+            }
         };
         let source_full_path = ffi_module_path.join(file_name);
         if SWIFT_CLASS_GENERATED

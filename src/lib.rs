@@ -149,6 +149,9 @@ fn write_rust_code(wrapper: &Wrapper) {
             ReusableWrapper::Vec(inner) => format!("vec_{}.rs", inner.name()),
             ReusableWrapper::Result(inner) => format!("result_{}.rs", inner.name()),
             ReusableWrapper::Option(inner) => format!("option_{}.rs", inner.name()),
+            ReusableWrapper::HashMap(key, value) => {
+                format!("hashmap_{}_{}.rs", key.name(), value.name())
+            }
         };
         let full_file_path = rust_path.join(&file_name);
         if RUST_WRAPPER_FILE_GENERATED

@@ -44,6 +44,7 @@ pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
                     | WrapperType::Struct(_)
                     | WrapperType::Vec(_)
                     | WrapperType::Option(_)
+                    | WrapperType::HashMap(_, _)
                     | WrapperType::Result(_) => "void*".to_string(),
                     WrapperType::UnitExpr => "void".to_string(),
                     WrapperType::Trait(_) => {
@@ -92,6 +93,7 @@ pub(crate) fn gen_trait_bridge_header(trait_wrapper: &TraitWrapper) -> String {
                 | WrapperType::Struct(_)
                 | WrapperType::Vec(_)
                 | WrapperType::Option(_)
+                | WrapperType::HashMap(_, _)
                 | WrapperType::Result(_) => "void*".to_string(),
                 WrapperType::UnitExpr => "void".to_string(),
                 WrapperType::Trait(_) => {
@@ -218,6 +220,7 @@ fn vtable_arg_type(arg_wrapper: &WrapperType) -> String {
         WrapperType::Struct(_)
         | WrapperType::Vec(_)
         | WrapperType::Option(_)
+        | WrapperType::HashMap(_, _)
         | WrapperType::String => "UnsafeMutableRawPointer?".to_string(),
         WrapperType::Result(_) => panic!("Unsupported argument type in trait method"),
         WrapperType::UnitExpr => panic!("Unsupported argument type in trait method"),
@@ -236,6 +239,7 @@ fn get_vtable_ret_sig(return_wrapper: &Option<FunctionReturnWrapper>) -> String 
             WrapperType::Struct(_)
             | WrapperType::Vec(_)
             | WrapperType::Option(_)
+            | WrapperType::HashMap(_, _)
             | WrapperType::String => " -> UnsafeMutableRawPointer?".to_string(),
             WrapperType::Result(_) => " -> UnsafeMutableRawPointer?".to_string(),
             WrapperType::UnitExpr => " -> Void".to_string(),
@@ -298,6 +302,15 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
                 ));
                 args_names.push(format!("casted_{}", arg_wrapper.arg_name));
             }
+            WrapperType::HashMap(key, value) => {
+                let arg_name = &arg_wrapper.arg_name;
+                args_casts.push(format!(
+                    "let casted_{arg_name} = Rust{}HashMap{}({arg_name}!).toSwift()",
+                    key.name(),
+                    value.name()
+                ));
+                args_names.push(format!("casted_{arg_name}"));
+            }
             WrapperType::Result(_) => panic!("Unsupported argument type in trait method"),
             WrapperType::UnitExpr => panic!("Unsupported argument type in trait method"),
             WrapperType::Trait(_) => panic!("Trait cannot be used as argument in trait method"),
@@ -326,6 +339,11 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
                 "    return Rust{inner_name}Option.fromSwift(obj_ptr.{fn_name}({args_names})).leak()",
                 inner_name = inner.name()
             ),
+            WrapperType::HashMap(key, value) => format!(
+                "    return Rust{}HashMap{}.fromSwift(obj_ptr.{fn_name}({args_names})).leak()",
+                key.name(),
+                value.name()
+            ),
             WrapperType::String => {
                 format!(
                     "    return obj_ptr.{fn_name}({args_names}).withCString {{ cPtr in
@@ -344,6 +362,7 @@ fn gen_vtable_function(function_wrapper: &FunctionWrapper, trait_name: impl Disp
         let rust_ok_arg = rust_vec.rawPtr()", inner = inner.name()),
                                 WrapperType::Option(inner) => format!("        let rust_option = Rust{inner}Option.fromSwift(swift_result)
         let rust_ok_arg = rust_option.rawPtr()", inner = inner.name()),
+                                WrapperType::HashMap(key, value) => format!("        let rust_map = Rust{}HashMap{}.fromSwift(swift_result)\n        let rust_ok_arg = rust_map.rawPtr()", key.name(), value.name()),
                                 WrapperType::Enum(inner) => format!("        let rust_ok_arg = CFfiModule.{inner}(rawValue: UInt32(swift_result.rawValue))"),
                                 WrapperType::UnitExpr => "".to_string(),
                                 _ => "        let rust_ok_arg = swift_result".to_string(),
@@ -461,6 +480,17 @@ pub(crate) fn gen_trait_box_dyn_impl_class(trait_wrapper: &TraitWrapper) -> Stri
                     pre_call_casts.push_str(&format!(
                         "        let casted_{arg_name} = Rust{}Option.fromSwift({arg_name})",
                         inner_type.name()
+                    ));
+                    call_args.push(format!("casted_{arg_name}.rawPtr()"));
+                }
+                WrapperType::HashMap(key, value) => {
+                    if !pre_call_casts.is_empty() {
+                        pre_call_casts.push('\n');
+                    }
+                    pre_call_casts.push_str(&format!(
+                        "        let casted_{arg_name} = Rust{}HashMap{}.fromSwift({arg_name})",
+                        key.name(),
+                        value.name()
                     ));
                     call_args.push(format!("casted_{arg_name}.rawPtr()"));
                 }

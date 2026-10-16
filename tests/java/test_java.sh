@@ -15,7 +15,15 @@ javac --enable-preview --release 21 \
 	"$tests_dir/generated_code/java"/*.java \
 	"$script_dir/Main.java"
 
-java --enable-preview --enable-native-access=ALL-UNNAMED \
-	-Djava.library.path="$tests_dir/target/debug" \
-	-cp "$classes_dir" \
-	Main
+if [ "${1:-}" = "--valgrind" ]; then
+	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes \
+		java java --enable-preview --enable-native-access=ALL-UNNAMED \
+		-Djava.library.path="$tests_dir/target/debug" \
+		-cp "$classes_dir" \
+		Main
+else
+	java --enable-preview --enable-native-access=ALL-UNNAMED \
+		-Djava.library.path="$tests_dir/target/debug" \
+		-cp "$classes_dir" \
+		Main
+fi

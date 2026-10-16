@@ -11,8 +11,12 @@ use std::sync::{LazyLock, Mutex};
 
 static CPP_REUSABLE_WRAPPER_GENERATED: LazyLock<Mutex<HashSet<PathBuf>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
+static CPP_CODE_GENERATION_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 pub(crate) fn write_cpp_code(wrapper: &Wrapper) {
+    let _generation_guard = CPP_CODE_GENERATION_LOCK
+        .lock()
+        .expect("Mutex lock failed during C++ code generation");
     let cpp_path = Path::new(GEN_CODE_DIR).join(CPP_CODE_DIR);
     std::fs::create_dir_all(&cpp_path).expect("Unable to create cpp directory");
 
@@ -45,6 +49,10 @@ pub(crate) fn write_cpp_code(wrapper: &Wrapper) {
             ReusableWrapper::Option(inner) => (
                 format!("option_{}.h", inner.name()),
                 format!("option_{}.cpp", inner.name()),
+            ),
+            ReusableWrapper::HashMap(key, value) => (
+                format!("hashmap_{}_{}.h", key.name(), value.name()),
+                format!("hashmap_{}_{}.cpp", key.name(), value.name()),
             ),
         };
         let header_full_path = cpp_path.join(header_file_name);

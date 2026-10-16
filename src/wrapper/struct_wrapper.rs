@@ -40,6 +40,7 @@ impl From<&StructWrapper> for TokenStream2 {
                 WrapperType::Struct(_) => map_custom_field(field, class_name),
                 WrapperType::Vec(_) => map_vec_field(field, class_name),
                 WrapperType::Option(_) => map_option_field(field, class_name),
+                WrapperType::HashMap(_, _) => map_vec_field(field, class_name),
                 WrapperType::Result(wrapper_type) => {
                     todo!(
                         "Result wrapper type is not supported yet as struct field: {wrapper_type:?}"

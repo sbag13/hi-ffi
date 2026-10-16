@@ -25,7 +25,10 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
     match return_wrapper {
         Some(FunctionReturnWrapper {
             wrapper_type:
-                WrapperType::IntegerNumber(_) | WrapperType::Bool | WrapperType::FloatingPointNumber(_),
+                WrapperType::IntegerNumber(_)
+                | WrapperType::Bool
+                | WrapperType::FloatingPointNumber(_)
+                | WrapperType::Enum(_),
             return_type,
         }) => MappedReturnType {
             return_type_sig: quote! {-> #return_type},
@@ -33,41 +36,17 @@ pub fn map_return_type(return_wrapper: &Option<FunctionReturnWrapper>) -> Mapped
         },
 
         Some(FunctionReturnWrapper {
-            wrapper_type: WrapperType::String,
-            ..
-        }) => MappedReturnType {
-            return_type_sig: quote! {-> *mut String},
-            result_cast: quote! {
-                Box::into_raw(Box::new(result))
-            },
-        },
-
-        Some(FunctionReturnWrapper {
-            wrapper_type: WrapperType::Struct(_),
+            wrapper_type:
+                WrapperType::Vec(_)
+                | WrapperType::HashMap(_, _)
+                | WrapperType::Struct(_)
+                | WrapperType::String,
             return_type,
         }) => MappedReturnType {
             return_type_sig: quote! {-> *mut #return_type},
             result_cast: quote! {
                 Box::into_raw(Box::new(result))
             },
-        },
-
-        Some(FunctionReturnWrapper {
-            wrapper_type: WrapperType::Vec(_),
-            return_type,
-        }) => MappedReturnType {
-            return_type_sig: quote! {-> *mut #return_type},
-            result_cast: quote! {
-                Box::into_raw(Box::new(result))
-            },
-        },
-
-        Some(FunctionReturnWrapper {
-            wrapper_type: WrapperType::Enum(_),
-            return_type,
-        }) => MappedReturnType {
-            return_type_sig: quote! {-> #return_type},
-            result_cast: quote! {result},
         },
 
         Some(FunctionReturnWrapper {
@@ -196,11 +175,26 @@ pub fn map_function_arg_wrappers<'a>(
             arg_type,
             wrapper_type: WrapperType::Vec(_),
         } => {
+            let new_vec_ident = format_ident!("new_vec_{arg_name}");
             arg_signatures.push(quote! {#arg_name: *mut #arg_type});
-            arg_names.push(quote! {new_vec});
+            arg_names.push(quote! {#new_vec_ident});
             arg_casts.push(quote! {
-                let mut new_vec = Vec::new();
-                std::mem::swap(&mut new_vec, unsafe { &mut(*#arg_name)} );
+                let mut #new_vec_ident = Vec::new();
+                std::mem::swap(&mut #new_vec_ident, unsafe { &mut(*#arg_name)} );
+            });
+        }
+
+        FunctionArgWrapper {
+            arg_name,
+            arg_type,
+            wrapper_type: WrapperType::HashMap(_, _),
+        } => {
+            let new_map_ident = format_ident!("new_map_{arg_name}");
+            arg_signatures.push(quote! {#arg_name: *mut #arg_type});
+            arg_names.push(quote! {#new_map_ident});
+            arg_casts.push(quote! {
+                let mut #new_map_ident = std::collections::HashMap::new();
+                std::mem::swap(&mut #new_map_ident, unsafe { &mut(*#arg_name)} );
             });
         }
 
@@ -282,6 +276,7 @@ pub enum WrapperType {
     String,
     Struct(String),
     Vec(Box<WrapperType>),
+    HashMap(Box<WrapperType>, Box<WrapperType>),
     Enum(String),
     Result(Box<WrapperType>),
     Option(Box<WrapperType>),
@@ -298,6 +293,9 @@ impl WrapperType {
             | WrapperType::Trait(inner)
             | WrapperType::Enum(inner) => inner.to_owned(),
             WrapperType::Vec(inner) => format!("vec_of_{}", inner.name()),
+            WrapperType::HashMap(key, value) => {
+                format!("hashmap_{}_{}_map", key.name(), value.name())
+            }
             WrapperType::Bool => "bool".to_string(),
             WrapperType::String => "String".to_string(),
             WrapperType::Result(inner) => format!("{}_result", inner.name()),
@@ -314,6 +312,13 @@ impl WrapperType {
             | WrapperType::Trait(inner)
             | WrapperType::Enum(inner) => inner.to_owned(),
             WrapperType::Vec(inner) => format!("Vec<{}>", inner.rust_type()),
+            WrapperType::HashMap(key, value) => {
+                format!(
+                    "std::collections::HashMap<{}, {}>",
+                    key.rust_type(),
+                    value.rust_type()
+                )
+            }
             WrapperType::Bool => "bool".to_string(),
             WrapperType::String => "String".to_string(),
             WrapperType::Result(_) => {

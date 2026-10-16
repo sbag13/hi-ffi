@@ -132,6 +132,15 @@ bridge = {trait_name}.{trait_name}Bridge (
                     call_list.push(format!("casted_{arg_name}.raw_ptr()"));
                 }
 
+                WrapperType::HashMap(key, value) => {
+                    let arg_name = &arg_wrapper.arg_name;
+                    let class_name = format!("{}HashMap{}", key.name(), value.name());
+                    casts.push(format!(
+                        "casted_{arg_name} = {class_name}.from_dict({arg_name})"
+                    ));
+                    call_list.push(format!("casted_{arg_name}.raw_ptr()"));
+                }
+
                 WrapperType::Result(_) => {
                     panic!("Result types are not supported as function arguments in python");
                 }
@@ -172,6 +181,18 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                     acc.insert(
                         format!("{inner_type_name}Option"),
                         format!("from .option_{inner_type_name} import {inner_type_name}Option"),
+                    );
+                }
+                WrapperType::HashMap(key, value) => {
+                    let class_name = format!("{}HashMap{}", key.name(), value.name());
+                    acc.insert("Dict".to_string(), "from typing import Dict".to_string());
+                    acc.insert(
+                        class_name.clone(),
+                        format!(
+                            "from .hashmap_{}_{} import {class_name}",
+                            key.name(),
+                            value.name()
+                        ),
                     );
                 }
                 WrapperType::Trait(trait_name) => {
@@ -215,6 +236,18 @@ fn gen_imports(function: &FunctionWrapper) -> HashMap<String, String> {
                 imports.insert(
                     "Optional".to_string(),
                     "from typing import Optional".to_string(),
+                );
+            }
+            WrapperType::HashMap(key, value) => {
+                let class_name = format!("{}HashMap{}", key.name(), value.name());
+                imports.insert("Dict".to_string(), "from typing import Dict".to_string());
+                imports.insert(
+                    class_name.clone(),
+                    format!(
+                        "from .hashmap_{}_{} import {class_name}",
+                        key.name(),
+                        value.name()
+                    ),
                 );
             }
             WrapperType::Trait(trait_name) => {
@@ -277,6 +310,12 @@ fn arg_receiver(arg_wrapper: &crate::wrapper::FunctionArgWrapper) -> String {
                 type_hint_from_wrapper_type(inner)
             )
         }
+        WrapperType::HashMap(key, value) => format!(
+            "{}: Dict[{}, {}]",
+            arg_wrapper.arg_name,
+            type_hint_from_wrapper_type(key),
+            type_hint_from_wrapper_type(value)
+        ),
         WrapperType::Result(_) => {
             panic!("Result types are not supported as function arguments in python");
         }

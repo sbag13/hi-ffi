@@ -10,6 +10,7 @@ int main()
     assert_struct_methods_with_vectors();
     assert_functions();
     assert_vectors();
+    assert_hashmaps();
     assert_enums();
     assert_results();
     assert_options();

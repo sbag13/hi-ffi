@@ -27,6 +27,7 @@ fn get_c_type(wrapper_type: &WrapperType) -> String {
         WrapperType::Vec(_) => "void*".to_string(),
         WrapperType::Result(_) => panic!("Result of results not supported"),
         WrapperType::Option(_) => "void*".to_string(),
+        WrapperType::HashMap(_, _) => "void*".to_string(),
         WrapperType::Enum(name) => format!("enum {}", name),
         WrapperType::UnitExpr => "void".to_string(),
         WrapperType::Trait(_) => panic!("Trait not supported as return type"),
@@ -42,6 +43,13 @@ pub(super) fn get_swift_type_name(wrapper_type: &WrapperType) -> String {
         WrapperType::Vec(vec_inner) => format!("[{}]", get_swift_type_name(vec_inner)),
         WrapperType::Result(_) => panic!("Result of results not supported"),
         WrapperType::Option(inner) => format!("{}?", get_swift_type_name(inner)),
+        WrapperType::HashMap(key, value) => {
+            format!(
+                "[{}: {}]",
+                get_swift_type_name(key),
+                get_swift_type_name(value)
+            )
+        }
         WrapperType::Enum(name) => name.to_string(),
         WrapperType::UnitExpr => "Void".to_string(),
         WrapperType::Trait(name) => name.to_string(),
@@ -52,6 +60,9 @@ fn swift_container_class_name(wrapper_type: &WrapperType) -> String {
     match wrapper_type {
         WrapperType::Vec(inner) => format!("Rust{}Vec", inner.name()),
         WrapperType::Option(inner) => format!("Rust{}Option", inner.name()),
+        WrapperType::HashMap(key, value) => {
+            format!("Rust{}HashMap{}", key.name(), value.name())
+        }
         _ => unreachable!("Only container types have reusable Swift wrapper classes"),
     }
 }
@@ -70,6 +81,11 @@ fn generate_unwrap_cast(wrapper_type: &WrapperType, ext_call: &str) -> String {
             let opt_inner_name = opt_inner.name();
             format!("let result = Rust{opt_inner_name}Option({ext_call}).toSwift();")
         }
+        WrapperType::HashMap(key, value) => format!(
+            "let result = Rust{}HashMap{}({ext_call}).toSwift();",
+            key.name(),
+            value.name()
+        ),
         WrapperType::Bool => format!("let result = {ext_call} != 0;"),
         WrapperType::Enum(inner) => {
             format!(
@@ -88,6 +104,7 @@ impl ReusableWrapper {
             ReusableWrapper::Vec(inner) => gen_vec_wrapper_swift(inner),
             ReusableWrapper::Result(inner) => gen_result_wrapper_swift(inner),
             ReusableWrapper::Option(inner) => gen_option_wrapper_swift(inner),
+            ReusableWrapper::HashMap(key, value) => gen_hashmap_wrapper_swift(key, value),
         }
     }
 }
@@ -143,6 +160,161 @@ void {drop_ext_name}(void* self);
 u8 {is_some_ext_name}(void* self);
 void* {some_ext_name}({some_arg_type} val);
 void* {none_ext_name}();
+"#
+    )
+}
+
+pub fn gen_swift_hashmap_declarations(key: &WrapperType, value: &WrapperType) -> String {
+    let name = format!("hashmap_{}_{}", key.name(), value.name());
+    let key_arg = swift_hashmap_arg_type(key, "key");
+    let value_arg = swift_hashmap_arg_type(value, "value");
+    format!(
+        r#"
+void* {EXPORTED_SYMBOLS_PREFIX}new_{name}(void);
+void {EXPORTED_SYMBOLS_PREFIX}drop_{name}(void* self);
+void {EXPORTED_SYMBOLS_PREFIX}insert_{name}(void* self, {key_arg}, {value_arg});
+size_t {EXPORTED_SYMBOLS_PREFIX}len_{name}(void* self);
+{} {EXPORTED_SYMBOLS_PREFIX}key_at_{name}(void* self, size_t index);
+{} {EXPORTED_SYMBOLS_PREFIX}value_at_{name}(void* self, size_t index);
+"#,
+        get_c_type(key),
+        get_c_type(value)
+    )
+}
+
+fn swift_hashmap_arg_type(wrapper_type: &WrapperType, name: &str) -> String {
+    match wrapper_type {
+        WrapperType::String => format!("const char* {name}, size_t _{name}_len"),
+        _ => format!("{} {name}", get_c_type(wrapper_type)),
+    }
+}
+
+fn swift_hashmap_wrapper_swift_key_value(
+    wrapper_type: &WrapperType,
+    call: &str,
+    name: &str,
+) -> String {
+    match wrapper_type {
+        WrapperType::String => format!(
+            "let {name}Ptr = {call}\n            let {name} = RustString({name}Ptr!).to_string()"
+        ),
+        WrapperType::Struct(struct_name) => {
+            format!("let {name}Ptr = {call}\n            let {name} = {struct_name}({name}Ptr!)")
+        }
+        WrapperType::Enum(enum_name) => format!(
+            "let {name}Native = {call}\n            let {name} = {enum_name}(rawValue: Int32({name}Native.rawValue))!"
+        ),
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
+            let wrapper = swift_container_class_name(wrapper_type);
+            format!(
+                "let {name}Ptr = {call}\n            let {name} = {wrapper}({name}Ptr!).toSwift()"
+            )
+        }
+        WrapperType::Bool => format!("let {name} = {call} != 0"),
+        _ => format!("let {name} = {call}"),
+    }
+}
+
+fn gen_hashmap_wrapper_swift(key: &WrapperType, value: &WrapperType) -> String {
+    let name = format!("hashmap_{}_{}", key.name(), value.name());
+    let wrapper_name = format!("Rust{}HashMap{}", key.name(), value.name());
+    let key_type = get_swift_type_name(key);
+    let value_type = get_swift_type_name(value);
+    let new_fn = format!("{EXPORTED_SYMBOLS_PREFIX}new_{name}");
+    let drop_fn = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{name}");
+    let insert_fn = format!("{EXPORTED_SYMBOLS_PREFIX}insert_{name}");
+    let len_fn = format!("{EXPORTED_SYMBOLS_PREFIX}len_{name}");
+    let key_at_fn = format!("{EXPORTED_SYMBOLS_PREFIX}key_at_{name}");
+    let value_at_fn = format!("{EXPORTED_SYMBOLS_PREFIX}value_at_{name}");
+
+    let insert = match (key, value) {
+        (WrapperType::String, WrapperType::String) => format!(
+            r#"key.withCString {{ keyPtr in
+                value.withCString {{ valuePtr in
+                    {insert_fn}(mapPtr, keyPtr, key.utf8.count, valuePtr, value.utf8.count)
+                }}
+            }}"#
+        ),
+        (WrapperType::String, WrapperType::Struct(_)) => format!(
+            "key.withCString {{ keyPtr in\n                {insert_fn}(mapPtr, keyPtr, key.utf8.count, value.rawPtr())\n            }}"
+        ),
+        (WrapperType::Enum(key_enum), WrapperType::Enum(value_enum)) => format!(
+            "{insert_fn}(mapPtr, CFfiModule.{key_enum}(rawValue: UInt32(key.rawValue)), CFfiModule.{value_enum}(rawValue: UInt32(value.rawValue)))"
+        ),
+        (
+            WrapperType::String,
+            WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _),
+        ) => {
+            let wrapper = swift_container_class_name(value);
+            format!(
+                "key.withCString {{ keyPtr in\n                let valueWrapper = {wrapper}.fromSwift(value)\n                {insert_fn}(mapPtr, keyPtr, key.utf8.count, valueWrapper.rawPtr())\n            }}"
+            )
+        }
+        (
+            WrapperType::Enum(key_enum),
+            WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _),
+        ) => {
+            let wrapper = swift_container_class_name(value);
+            format!(
+                "let valueWrapper = {wrapper}.fromSwift(value)\n            {insert_fn}(mapPtr, CFfiModule.{key_enum}(rawValue: UInt32(key.rawValue)), valueWrapper.rawPtr())"
+            )
+        }
+        (_, WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _)) => {
+            let wrapper = swift_container_class_name(value);
+            format!(
+                "let valueWrapper = {wrapper}.fromSwift(value)\n            {insert_fn}(mapPtr, key, valueWrapper.rawPtr())"
+            )
+        }
+        (WrapperType::String, _) => format!(
+            "key.withCString {{ keyPtr in\n                {insert_fn}(mapPtr, keyPtr, key.utf8.count, value)\n            }}"
+        ),
+        (_, WrapperType::String) => format!(
+            "value.withCString {{ valuePtr in\n                {insert_fn}(mapPtr, key, valuePtr, value.utf8.count)\n            }}"
+        ),
+        (_, WrapperType::Struct(_)) => format!("{insert_fn}(mapPtr, key, value.rawPtr())"),
+        _ => format!("{insert_fn}(mapPtr, key, value)"),
+    };
+    let key_read = swift_hashmap_wrapper_swift_key_value(
+        key,
+        &format!("{key_at_fn}(self.rawPtr(), index)"),
+        "key",
+    );
+    let value_read = swift_hashmap_wrapper_swift_key_value(
+        value,
+        &format!("{value_at_fn}(self.rawPtr(), index)"),
+        "value",
+    );
+
+    format!(
+        r#"
+import Foundation
+
+open class {wrapper_name}: Opaque {{
+    public static func fromSwift(_ values: [{key_type}: {value_type}]) -> {wrapper_name} {{
+        let mapPtr = {new_fn}()
+        for (key, value) in values {{
+            {insert}
+        }}
+        return {wrapper_name}(mapPtr!)
+    }}
+
+    public func toSwift() -> [{key_type}: {value_type}] {{
+        let count = {len_fn}(self.rawPtr())
+        var values: [{key_type}: {value_type}] = [:]
+        for index in 0..<count {{
+            {key_read}
+            {value_read}
+            values[key] = value
+        }}
+        return values
+    }}
+
+    deinit {{
+        if self._self != nil {{
+            {drop_fn}(self.rawPtr())
+        }}
+    }}
+}}
 "#
     )
 }
@@ -212,7 +384,9 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::Bool => "bool value".to_string(),
         WrapperType::String => "const char* value, unsigned int len".to_string(),
         WrapperType::Struct(_) => "void* value".to_string(),
-        WrapperType::Vec(_) | WrapperType::Option(_) => "void* value".to_string(),
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
+            "void* value".to_string()
+        }
         WrapperType::Result(_) => panic!("Vec of results not supported"),
         WrapperType::Enum(name) => format!("enum {} value", name),
         WrapperType::UnitExpr => unreachable!(),
@@ -224,7 +398,9 @@ pub fn gen_swift_vec_declarations(inner: &WrapperType) -> String {
         WrapperType::Bool => "u8".to_string(),
         WrapperType::String => "void*".to_string(),
         WrapperType::Struct(_) => "void*".to_string(),
-        WrapperType::Vec(_) | WrapperType::Option(_) => "void*".to_string(),
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
+            "void*".to_string()
+        }
         WrapperType::Result(_) => panic!("Vec of results not supported"),
         WrapperType::Enum(name) => format!("enum {}", name),
         WrapperType::UnitExpr => unreachable!(),
@@ -269,7 +445,7 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
                 "            {push_ext_fn_name}(rust_vec_ptr, CFfiModule.{inner_swift_name}(rawValue: UInt32(elem.rawValue)))"
             )
         }
-        WrapperType::Vec(_) | WrapperType::Option(_) => {
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
             let class_name = swift_container_class_name(inner);
             format!(
                 "            let inner_wrapper = {class_name}.fromSwift(elem)\n            {push_ext_fn_name}(rust_vec_ptr, inner_wrapper.rawPtr())"
@@ -300,7 +476,7 @@ fn gen_vec_wrapper_swift(inner: &WrapperType) -> String {
                 "            let c_elem = {get_ext_fn_name}(self.rawPtr(), i)\n            let elem = {inner_swift_name}(rawValue: Int32(c_elem.rawValue))!"
             )
         }
-        WrapperType::Vec(_) | WrapperType::Option(_) => {
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
             let class_name = swift_container_class_name(inner);
             format!(
                 "            let elem_ptr = {get_ext_fn_name}(self.rawPtr(), i)\n            let elem = {class_name}(elem_ptr!).toSwift()"
@@ -385,7 +561,7 @@ fn gen_option_wrapper_swift(inner: &WrapperType) -> String {
                 "return {wrapper_name}({some_ext_name}(CFfiModule.{inner_swift_name}(rawValue: UInt32(some_val.rawValue))))"
             )
         }
-        WrapperType::Vec(_) | WrapperType::Option(_) => {
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
             let class_name = swift_container_class_name(inner);
             format!(
                 "let inner_wrapper = {class_name}.fromSwift(some_val)\n            return {wrapper_name}({some_ext_name}(inner_wrapper.rawPtr()))"

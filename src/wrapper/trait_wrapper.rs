@@ -64,6 +64,7 @@ impl From<&TraitWrapper> for TokenStream2 {
                     WrapperType::Struct(_)
                     | WrapperType::String
                     | WrapperType::Vec(_)
+                    | WrapperType::HashMap(_, _)
                     | WrapperType::Option(_)
                     | WrapperType::Result(_) => {
                         quote! { -> *mut std::ffi::c_void }
@@ -96,7 +97,11 @@ impl From<&TraitWrapper> for TokenStream2 {
             let arg_casts = function.args.iter().map(|arg| {
                 let arg_name = &arg.arg_name;
                 match arg.wrapper_type {
-                    WrapperType::String | WrapperType::Struct(_) | WrapperType::Vec(_) | WrapperType::Option(_) => {
+                    WrapperType::String
+                    | WrapperType::Struct(_)
+                    | WrapperType::Vec(_)
+                    | WrapperType::HashMap(_, _)
+                    | WrapperType::Option(_) => {
                         quote! {
                             let #arg_name = Box::into_raw(Box::new(#arg_name)) as *mut std::ffi::c_void;
                         }
@@ -118,6 +123,7 @@ impl From<&TraitWrapper> for TokenStream2 {
                         WrapperType::String |
                         WrapperType::Struct(_) |
                         WrapperType::Vec(_) |
+                        WrapperType::HashMap(_, _) |
                         WrapperType::Option(_)
                         => {
                               quote! { *Box::from_raw(result as *mut #original_return_type) }

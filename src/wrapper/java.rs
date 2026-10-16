@@ -8,6 +8,7 @@ impl ReusableWrapper {
             ReusableWrapper::Vec(inner) => Some(gen_vec_wrapper_java(inner)),
             ReusableWrapper::Result(inner) => Some(gen_result_wrapper_java(inner)),
             ReusableWrapper::Option(inner) => Some(gen_option_wrapper_java(inner)),
+            ReusableWrapper::HashMap(key, value) => Some(gen_hashmap_wrapper_java(key, value)),
         }
     }
 }
@@ -414,7 +415,7 @@ fn gen_option_wrapper_java(inner: &WrapperType) -> String {
         WrapperType::String => String::new(),
         WrapperType::Struct(_) => "value.orElseThrow().rawPtr()".to_string(),
         WrapperType::Enum(_) => "value.orElseThrow().toNative()".to_string(),
-        WrapperType::Vec(_) | WrapperType::Option(_) => String::new(),
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => String::new(),
         _ => unreachable!("unsupported option inner type"),
     };
     let some_call = if matches!(inner, WrapperType::String) {
@@ -435,6 +436,11 @@ fn gen_option_wrapper_java(inner: &WrapperType) -> String {
             "try (var nested = {}.fromRaw({}.fromOptional(value.orElseThrow()))) {{\n                return (MemorySegment) SOME.invokeExact(nested.rawPtr());\n            }}",
             java_option_class_name(option_inner),
             java_option_class_name(option_inner)
+        )
+    } else if let WrapperType::HashMap(key, map_value) = inner {
+        format!(
+            "try (var nested = {}.fromMap(value.orElseThrow())) {{\n                return (MemorySegment) SOME.invokeExact(nested.rawPtr());\n            }}",
+            java_hashmap_class_name(key, map_value)
         )
     } else {
         format!("return (MemorySegment) SOME.invokeExact({from_value});")
@@ -469,6 +475,10 @@ fn gen_option_wrapper_java(inner: &WrapperType) -> String {
         WrapperType::Option(option_inner) => format!(
             "{}.toOptionalAndClose((MemorySegment) UNWRAP.invokeExact(self))",
             java_option_class_name(option_inner)
+        ),
+        WrapperType::HashMap(key, value) => format!(
+            "{}.toMapAndClose((MemorySegment) UNWRAP.invokeExact(self))",
+            java_hashmap_class_name(key, value)
         ),
         _ => format!(
             "({}) UNWRAP.invokeExact(self)",
@@ -598,6 +608,10 @@ fn java_result_unwrap_body(inner: &WrapperType) -> String {
             "try {{\n    return {}.toOptionalAndClose((MemorySegment) UNWRAP.invokeExact(self));\n}} catch (Throwable error) {{\n    throw new RuntimeException(error);\n}}",
             java_option_class_name(option_inner)
         ),
+        WrapperType::HashMap(key, value) => format!(
+            "try (var resultMap = {}.fromRaw((MemorySegment) UNWRAP.invokeExact(self))) {{\n    return resultMap.toMap();\n}} catch (Throwable error) {{\n    throw new RuntimeException(error);\n}}",
+            java_hashmap_class_name(key, value)
+        ),
         _ => format!(
             "try {{\n    return ({native_type}) UNWRAP.invokeExact(self);\n}} catch (Throwable error) {{\n    throw new RuntimeException(error);\n}}"
         ),
@@ -609,6 +623,7 @@ fn java_container_imports(wrapper_type: &WrapperType) -> String {
         match wrapper_type {
             WrapperType::Vec(_) => true,
             WrapperType::Option(inner) | WrapperType::Result(inner) => contains_vec(inner),
+            WrapperType::HashMap(key, value) => contains_vec(key) || contains_vec(value),
             _ => false,
         }
     }
@@ -617,6 +632,17 @@ fn java_container_imports(wrapper_type: &WrapperType) -> String {
         match wrapper_type {
             WrapperType::Option(_) => true,
             WrapperType::Vec(inner) | WrapperType::Result(inner) => contains_option(inner),
+            WrapperType::HashMap(key, value) => contains_option(key) || contains_option(value),
+            _ => false,
+        }
+    }
+
+    fn contains_hashmap(wrapper_type: &WrapperType) -> bool {
+        match wrapper_type {
+            WrapperType::HashMap(_, _) => true,
+            WrapperType::Option(inner) | WrapperType::Result(inner) | WrapperType::Vec(inner) => {
+                contains_hashmap(inner)
+            }
             _ => false,
         }
     }
@@ -627,6 +653,9 @@ fn java_container_imports(wrapper_type: &WrapperType) -> String {
     }
     if contains_option(wrapper_type) {
         imports.push_str("import java.util.Optional;\n");
+    }
+    if contains_hashmap(wrapper_type) {
+        imports.push_str("import java.util.Map;\n");
     }
     imports
 }
@@ -705,6 +734,10 @@ fn gen_vec_wrapper_java(inner: &WrapperType) -> String {
             "{}.toOptionalAndClose((MemorySegment) GET.invokeExact(self, index))",
             java_option_class_name(option_inner)
         ),
+        WrapperType::HashMap(key, value) => format!(
+            "{}.toMapAndClose((MemorySegment) GET.invokeExact(self, index))",
+            java_hashmap_class_name(key, value)
+        ),
         _ => format!("({native_type}) GET.invokeExact(self, index)"),
     };
     let push_value = match inner {
@@ -760,6 +793,15 @@ fn gen_vec_wrapper_java(inner: &WrapperType) -> String {
 "#,
             java_option_class_name(option_inner),
             java_option_class_name(option_inner)
+        ),
+        WrapperType::HashMap(key, value) => format!(
+            r#"            for (var value : values) {{
+                try (var nested = {}.fromMap(value)) {{
+                    PUSH.invokeExact(self, nested.rawPtr());
+                }}
+            }}
+"#,
+            java_hashmap_class_name(key, value)
         ),
         _ => format!(
             r#"            for (var value : values) {{
@@ -872,6 +914,312 @@ final class {wrapper_name} implements AutoCloseable {{
     )
 }
 
+fn gen_hashmap_wrapper_java(key: &WrapperType, value: &WrapperType) -> String {
+    let name = format!("hashmap_{}_{}", key.name(), value.name());
+    let class_name = java_hashmap_class_name(key, value);
+    let key_type = java_boxed_type(key).expect("supported HashMap key");
+    let value_type = java_boxed_type(value).expect("supported HashMap value");
+    let new_fn = format!("{EXPORTED_SYMBOLS_PREFIX}new_{name}");
+    let drop_fn = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{name}");
+    let insert_fn = format!("{EXPORTED_SYMBOLS_PREFIX}insert_{name}");
+    let len_fn = format!("{EXPORTED_SYMBOLS_PREFIX}len_{name}");
+    let key_at_fn = format!("{EXPORTED_SYMBOLS_PREFIX}key_at_{name}");
+    let value_at_fn = format!("{EXPORTED_SYMBOLS_PREFIX}value_at_{name}");
+    let key_layout = java_layout(key);
+    let value_layout = java_layout(value);
+    let key_insert_desc = java_map_insert_layout(key);
+    let value_insert_desc = java_map_insert_layout(value);
+    let (key_local, key_expr) = java_map_insert_parts(key, "key", "nativeKey");
+    let (value_local, value_expr) = java_map_insert_parts(value, "value", "nativeValue");
+    let key_read = java_map_read_expression(key, "KEY_AT.invokeExact(self, index)");
+    let value_read = java_map_read_expression(value, "VALUE_AT.invokeExact(self, index)");
+    let key_string_support = matches!(key, WrapperType::String);
+    let value_string_support = matches!(value, WrapperType::String);
+    let needs_string = key_string_support || value_string_support;
+    let string_imports = if needs_string {
+        "import java.nio.charset.StandardCharsets;\n"
+    } else {
+        ""
+    };
+    let container_imports = java_container_imports(value)
+        .lines()
+        .filter(|line| *line != "import java.util.Map;")
+        .collect::<Vec<_>>()
+        .join("\n");
+    let string_handles = if needs_string {
+        r#"    private static final MethodHandle STRING_DATA;
+    private static final MethodHandle STRING_LENGTH;
+    private static final MethodHandle STRING_DROP;
+"#
+        .to_string()
+    } else {
+        String::new()
+    };
+    let string_init = if needs_string {
+        format!(
+            r#"        STRING_DATA = LINKER.downcallHandle(
+            LOOKUP.find("{RUST_STRING_DATA_FN_NAME}").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        STRING_LENGTH = LINKER.downcallHandle(
+            LOOKUP.find("{RUST_STRING_LEN_FN_NAME}").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        STRING_DROP = LINKER.downcallHandle(
+            LOOKUP.find("{RUST_STRING_DROP_FN_NAME}").orElseThrow(),
+            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+"#
+        )
+    } else {
+        String::new()
+    };
+    let read_string_helper = if needs_string {
+        r#"
+    private static String readString(MemorySegment string) throws Throwable {
+        var data = (MemorySegment) STRING_DATA.invokeExact(string);
+        long length = (long) STRING_LENGTH.invokeExact(string);
+        try {
+            return new String(data.reinterpret(length).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
+        } finally {
+            STRING_DROP.invokeExact(string);
+        }
+    }
+"#
+    } else {
+        ""
+    };
+    let call_insert = format!("INSERT.invokeExact(self, {key_expr}, {value_expr});");
+    let header = if key_string_support || value_string_support {
+        "import java.lang.foreign.Arena;\n"
+    } else {
+        ""
+    };
+    let mut entry_resources = Vec::new();
+    if needs_string {
+        entry_resources.push("var arena = Arena.ofConfined()".to_string());
+    }
+    if let Some(nested_resource) = java_map_nested_resource(value, "value") {
+        entry_resources.push(nested_resource);
+    }
+    let entry_body =
+        format!("{key_local}\n                {value_local}\n                {call_insert}");
+    let add_entry = if entry_resources.is_empty() {
+        entry_body
+    } else {
+        format!(
+            "try ({}) {{\n                {entry_body}\n            }}",
+            entry_resources.join("; ")
+        )
+    };
+    let insert_descriptor = format!(
+        "FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, {key_insert_desc}, {value_insert_desc})"
+    );
+    format!(
+        r#"{header}{string_imports}{container_imports}
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
+import java.util.HashMap;
+import java.util.Map;
+
+final class {class_name} implements AutoCloseable {{
+    private static final Linker LINKER = Linker.nativeLinker();
+    private static final SymbolLookup LOOKUP;
+    private static final MethodHandle NEW;
+    private static final MethodHandle DROP;
+    private static final MethodHandle INSERT;
+    private static final MethodHandle LEN;
+    private static final MethodHandle KEY_AT;
+    private static final MethodHandle VALUE_AT;
+{string_handles}
+    private MemorySegment self;
+
+    static {{
+        HiFfiLibrary.ensureLoaded();
+        LOOKUP = SymbolLookup.loaderLookup();
+        NEW = LINKER.downcallHandle(LOOKUP.find("{new_fn}").orElseThrow(),
+                FunctionDescriptor.of(ValueLayout.ADDRESS));
+        DROP = LINKER.downcallHandle(LOOKUP.find("{drop_fn}").orElseThrow(),
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        INSERT = LINKER.downcallHandle(LOOKUP.find("{insert_fn}").orElseThrow(),
+                {insert_descriptor});
+        LEN = LINKER.downcallHandle(LOOKUP.find("{len_fn}").orElseThrow(),
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        KEY_AT = LINKER.downcallHandle(LOOKUP.find("{key_at_fn}").orElseThrow(),
+                FunctionDescriptor.of({key_layout}, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        VALUE_AT = LINKER.downcallHandle(LOOKUP.find("{value_at_fn}").orElseThrow(),
+                FunctionDescriptor.of({value_layout}, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+{string_init}    }}
+
+    private {class_name}(MemorySegment self) {{ this.self = self; }}
+
+    static {class_name} fromRaw(MemorySegment self) {{ return new {class_name}(self); }}
+    static Map<{key_type}, {value_type}> toMapAndClose(MemorySegment self) {{
+        try (var wrapper = fromRaw(self)) {{
+            return wrapper.toMap();
+        }}
+    }}
+    MemorySegment rawPtr() {{ return self; }}
+    MemorySegment leak() {{
+        var raw = self;
+        self = null;
+        return raw;
+    }}
+
+    static {class_name} fromMap(Map<{key_type}, {value_type}> values) {{
+        try {{
+            var self = (MemorySegment) NEW.invokeExact();
+            var result = new {class_name}(self);
+            for (var entry : values.entrySet()) {{
+                var key = entry.getKey();
+                var value = entry.getValue();
+                {add_entry}
+            }}
+            return result;
+        }} catch (Throwable error) {{
+            throw new RuntimeException(error);
+        }}
+    }}
+
+    Map<{key_type}, {value_type}> toMap() {{
+        try {{
+            long size = (long) LEN.invokeExact(self);
+            var result = new HashMap<{key_type}, {value_type}>();
+            for (long index = 0; index < size; index++) {{
+                var key = {key_read};
+                var value = {value_read};
+                result.put(key, value);
+            }}
+            return result;
+        }} catch (Throwable error) {{
+            throw new RuntimeException(error);
+        }}
+    }}
+{read_string_helper}
+    @Override
+    public void close() {{
+        if (self != null) {{
+            try {{ DROP.invokeExact(self); }}
+            catch (Throwable error) {{ throw new RuntimeException(error); }}
+            self = null;
+        }}
+    }}
+}}
+"#
+    )
+}
+
+pub(crate) fn java_hashmap_class_name(key: &WrapperType, value: &WrapperType) -> String {
+    format!("RustHashMap{}{}", key.name(), value.name())
+}
+
+fn java_map_insert_layout(wrapper_type: &WrapperType) -> String {
+    match wrapper_type {
+        WrapperType::String => "ValueLayout.ADDRESS, ValueLayout.JAVA_LONG".to_string(),
+        _ => java_layout(wrapper_type),
+    }
+}
+
+fn java_map_insert_parts(wrapper_type: &WrapperType, source: &str, name: &str) -> (String, String) {
+    match wrapper_type {
+        WrapperType::String => (
+            format!(
+                "var {name} = arena.allocateUtf8String({source});\n                long {name}Length = (long) {source}.getBytes(StandardCharsets.UTF_8).length;"
+            ),
+            format!("{name}, {name}Length"),
+        ),
+        WrapperType::IntegerNumber(ty) => match ty.as_str() {
+            "i8" | "u8" => (
+                format!("byte {name} = {source}.byteValue();"),
+                name.to_string(),
+            ),
+            "i16" | "u16" => (
+                format!("short {name} = {source}.shortValue();"),
+                name.to_string(),
+            ),
+            "i32" | "u32" => (
+                format!("int {name} = {source}.intValue();"),
+                name.to_string(),
+            ),
+            _ => (
+                format!("long {name} = {source}.longValue();"),
+                name.to_string(),
+            ),
+        },
+        WrapperType::FloatingPointNumber(ty) if ty == "f32" => (
+            format!("float {name} = {source}.floatValue();"),
+            name.to_string(),
+        ),
+        WrapperType::FloatingPointNumber(_) => (
+            format!("double {name} = {source}.doubleValue();"),
+            name.to_string(),
+        ),
+        WrapperType::Bool => (
+            format!("boolean {name} = {source}.booleanValue();"),
+            name.to_string(),
+        ),
+        WrapperType::Struct(_) => (String::new(), format!("{source}.rawPtr()")),
+        WrapperType::Enum(_) => (
+            format!("int {name} = {source}.toNative();"),
+            name.to_string(),
+        ),
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
+            (String::new(), format!("{name}Wrapper.rawPtr()"))
+        }
+        _ => unreachable!("unsupported HashMap key or value"),
+    }
+}
+
+fn java_map_nested_resource(wrapper_type: &WrapperType, source: &str) -> Option<String> {
+    match wrapper_type {
+        WrapperType::Vec(inner) => Some(format!(
+            "var nativeValueWrapper = {}.fromList({source})",
+            java_vec_class_name(inner)
+        )),
+        WrapperType::Option(inner) => Some(format!(
+            "var nativeValueWrapper = {}.fromRaw({}.fromOptional({source}))",
+            java_option_class_name(inner),
+            java_option_class_name(inner)
+        )),
+        WrapperType::HashMap(key, value) => Some(format!(
+            "var nativeValueWrapper = {}.fromMap({source})",
+            java_hashmap_class_name(key, value)
+        )),
+        _ => None,
+    }
+}
+
+fn java_map_read_expression(wrapper_type: &WrapperType, call: &str) -> String {
+    match wrapper_type {
+        WrapperType::String => format!("readString((MemorySegment) {call})"),
+        WrapperType::Bool => format!("(boolean) {call}"),
+        WrapperType::IntegerNumber(ty) => {
+            format!("({}) {call}", java_argument_type(wrapper_type).expect(ty))
+        }
+        WrapperType::FloatingPointNumber(_) => {
+            format!("({}) {call}", java_argument_type(wrapper_type).unwrap())
+        }
+        WrapperType::Struct(name) => {
+            format!("{name}.fromRaw((MemorySegment) {call})")
+        }
+        WrapperType::Enum(name) => format!("{name}.fromNative((int) {call})"),
+        WrapperType::Vec(inner) => format!(
+            "{}.toList((MemorySegment) {call})",
+            java_vec_class_name(inner)
+        ),
+        WrapperType::Option(inner) => format!(
+            "{}.toOptionalAndClose((MemorySegment) {call})",
+            java_option_class_name(inner)
+        ),
+        WrapperType::HashMap(key, value) => format!(
+            "{}.toMapAndClose((MemorySegment) {call})",
+            java_hashmap_class_name(key, value)
+        ),
+        _ => unreachable!("unsupported HashMap key or value"),
+    }
+}
+
 pub(crate) fn java_argument_type(wrapper_type: &WrapperType) -> Option<String> {
     match wrapper_type {
         WrapperType::IntegerNumber(inner) => Some(
@@ -898,6 +1246,11 @@ pub(crate) fn java_argument_type(wrapper_type: &WrapperType) -> Option<String> {
         WrapperType::Enum(name) => Some(name.clone()),
         WrapperType::Vec(inner) => Some(format!("List<{}>", java_boxed_type(inner)?)),
         WrapperType::Option(inner) => Some(format!("Optional<{}>", java_boxed_type(inner)?)),
+        WrapperType::HashMap(key, value) => Some(format!(
+            "Map<{}, {}>",
+            java_boxed_type(key)?,
+            java_boxed_type(value)?
+        )),
         WrapperType::Trait(name) => Some(name.clone()),
         _ => None,
     }
@@ -938,6 +1291,11 @@ pub(crate) fn java_boxed_type(wrapper_type: &WrapperType) -> Option<String> {
         WrapperType::Enum(name) => Some(name.clone()),
         WrapperType::Vec(inner) => Some(format!("List<{}>", java_boxed_type(inner)?)),
         WrapperType::Option(inner) => Some(format!("Optional<{}>", java_boxed_type(inner)?)),
+        WrapperType::HashMap(key, value) => Some(format!(
+            "Map<{}, {}>",
+            java_boxed_type(key)?,
+            java_boxed_type(value)?
+        )),
         _ => None,
     }
 }
@@ -963,6 +1321,7 @@ pub(crate) fn java_layout(wrapper_type: &WrapperType) -> String {
         | WrapperType::Struct(_)
         | WrapperType::Vec(_)
         | WrapperType::Option(_)
+        | WrapperType::HashMap(_, _)
         | WrapperType::Result(_) => "ValueLayout.ADDRESS",
         _ => unreachable!(),
     }

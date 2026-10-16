@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::WrapperType;
@@ -19,6 +19,7 @@ impl ReusableWrapper {
             ReusableWrapper::Vec(inner) => gen_vec_wrapper_python(inner),
             ReusableWrapper::Result(inner) => gen_result_wrapper_python(inner),
             ReusableWrapper::Option(inner) => gen_option_wrapper_python(inner),
+            ReusableWrapper::HashMap(key, value) => gen_hashmap_wrapper_python(key, value),
         }
     }
 }
@@ -26,7 +27,10 @@ impl ReusableWrapper {
 pub fn gen_result_wrapper_python(inner: &WrapperType) -> String {
     let inner_name = inner.name();
     let inner_type_hint = type_hint_from_wrapper_type(inner);
-    let inner_import = inner_import(inner);
+    let inner_import = inner_imports(inner)
+        .into_iter()
+        .collect::<Vec<String>>()
+        .join("\n");
     let is_err_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_err_{inner_name}_result");
     let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_result", inner_name);
     let unwrap_ext_call = format!("{PYTHON_LIB_GETTER_NAME}().{unwrap_ext_name}(self._ptr)");
@@ -51,6 +55,10 @@ pub fn gen_result_wrapper_python(inner: &WrapperType) -> String {
         ),
         WrapperType::Option(_) => format!(
             "result = {}({unwrap_ext_call}).to_python()",
+            python_container_class_name(inner)
+        ),
+        WrapperType::HashMap(_, _) => format!(
+            "result = {}({unwrap_ext_call}).to_dict()",
             python_container_class_name(inner)
         ),
         WrapperType::Bool => format!("result = ctypes.c_byte({unwrap_ext_call}).value != 0"),
@@ -91,7 +99,10 @@ class {inner_name}Result:
 pub fn gen_option_wrapper_python(inner: &WrapperType) -> String {
     let inner_name = inner.name();
     let inner_type_hint = type_hint_from_wrapper_type(inner);
-    let inner_import = inner_import(inner);
+    let inner_import = inner_imports(inner)
+        .into_iter()
+        .collect::<Vec<String>>()
+        .join("\n");
     let is_some_ext_fn_name = format!("{EXPORTED_SYMBOLS_PREFIX}is_some_{inner_name}_option");
     let unwrap_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}unwrap_{}_option", inner_name);
     let some_ext_name = format!("{EXPORTED_SYMBOLS_PREFIX}some_{}_option", inner_name);
@@ -115,6 +126,10 @@ pub fn gen_option_wrapper_python(inner: &WrapperType) -> String {
             "result = {}({unwrap_ext_call}).to_python()",
             python_container_class_name(inner)
         ),
+        WrapperType::HashMap(_, _) => format!(
+            "result = {}({unwrap_ext_call}).to_dict()",
+            python_container_class_name(inner)
+        ),
         WrapperType::Bool => format!("result = ctypes.c_byte({unwrap_ext_call}).value != 0"),
         WrapperType::Enum(inner) => {
             format!("result = {inner}.{inner}.from_ffi({unwrap_ext_call})")
@@ -134,6 +149,10 @@ pub fn gen_option_wrapper_python(inner: &WrapperType) -> String {
         ),
         WrapperType::Option(_) => format!(
             "nested_wrapper = {}.from_python(value)\n            casted_value = nested_wrapper.raw_ptr()",
+            python_container_class_name(inner)
+        ),
+        WrapperType::HashMap(_, _) => format!(
+            "nested_wrapper = {}.from_dict(value)\n            casted_value = nested_wrapper.raw_ptr()",
             python_container_class_name(inner)
         ),
         _ => "casted_value = value".to_string(),
@@ -224,7 +243,10 @@ pub fn gen_vec_wrapper_python(inner: &WrapperType) -> String {
 
     let get_restype = gen_vec_get_restype(inner, &get_ext_fn_name);
 
-    let inner_import = inner_import(inner);
+    let inner_import = inner_imports(inner)
+        .into_iter()
+        .collect::<Vec<String>>()
+        .join("\n");
 
     format!(
         r#"
@@ -303,6 +325,10 @@ fn gen_vec_push_arg_cast(inner: &WrapperType) -> String {
             "(nested_wrapper := {}.from_python(value)).raw_ptr()",
             python_container_class_name(inner)
         ),
+        WrapperType::HashMap(_, _) => format!(
+            "(nested_wrapper := {}.from_dict(value)).raw_ptr()",
+            python_container_class_name(inner)
+        ),
         WrapperType::Enum(_) => "value.to_ffi()".to_string(),
         WrapperType::Result(_) => {
             panic!("Result types are not supported in Vec wrappers for python");
@@ -324,6 +350,9 @@ fn gen_vec_get_result_cast(inner: &WrapperType, type_name: &str) -> String {
         WrapperType::Vec(_) => format!("{}(result).to_list()", python_container_class_name(inner)),
         WrapperType::Option(_) => {
             format!("{}(result).to_python()", python_container_class_name(inner))
+        }
+        WrapperType::HashMap(_, _) => {
+            format!("{}(result).to_dict()", python_container_class_name(inner))
         }
         WrapperType::Enum(_) => {
             format!("{}.{}.from_ffi(result)", type_name, type_name)
@@ -353,7 +382,7 @@ fn gen_vec_get_restype(inner: &WrapperType, get_ext_fn_name: &str) -> String {
         WrapperType::String | WrapperType::Struct(_) => {
             format!("{PYTHON_LIB_GETTER_NAME}().{get_ext_fn_name}.restype = ctypes.c_void_p")
         }
-        WrapperType::Vec(_) | WrapperType::Option(_) => {
+        WrapperType::Vec(_) | WrapperType::Option(_) | WrapperType::HashMap(_, _) => {
             format!("{PYTHON_LIB_GETTER_NAME}().{get_ext_fn_name}.restype = ctypes.c_void_p")
         }
         WrapperType::Enum(_) | WrapperType::Bool => {
@@ -367,23 +396,71 @@ fn gen_vec_get_restype(inner: &WrapperType, get_ext_fn_name: &str) -> String {
     }
 }
 
-fn inner_import(inner: &WrapperType) -> String {
+fn inner_imports(inner: &WrapperType) -> HashSet<String> {
     match inner {
-        WrapperType::Struct(name) | WrapperType::Enum(name) => {
-            format!("from . import {name}")
+        WrapperType::Struct(name) => HashSet::from([format!("from . import {name}")]),
+        WrapperType::Enum(name) => HashSet::from([format!("from . import {name}")]),
+        WrapperType::String => HashSet::from(["from .global_state import RustString".to_string()]),
+        WrapperType::Vec(inner) => {
+            let mut imports = inner_imports(inner);
+            imports.insert(format!(
+                "from .vec_{} import {}",
+                inner.name(),
+                python_container_class_name(&WrapperType::Vec(inner.clone()))
+            ));
+            imports.insert("from typing import List".to_string());
+            imports
         }
+        WrapperType::Option(inner) => {
+            let mut imports = inner_imports(inner);
+            imports.insert(format!(
+                "from .option_{} import {}",
+                inner.name(),
+                python_container_class_name(&WrapperType::Option(inner.clone()))
+            ));
+            imports.insert("from typing import Optional".to_string());
+            imports
+        }
+        WrapperType::HashMap(key, value) => {
+            let mut imports = inner_imports(key);
+            imports.extend(inner_imports(value));
+            imports.insert(format!(
+                "from .hashmap_{}_{} import {}",
+                key.name(),
+                value.name(),
+                python_container_class_name(&WrapperType::HashMap(key.clone(), value.clone()))
+            ));
+            imports.insert("from typing import Dict".to_string());
+            imports
+        }
+        _ => HashSet::new(),
+    }
+}
+
+fn hashmap_inner_import(inner: &WrapperType) -> String {
+    match inner {
+        WrapperType::Struct(name) => format!("from . import {name}"),
+        WrapperType::Enum(name) => format!("from .{name} import {name}"),
         WrapperType::String => "from .global_state import RustString".to_string(),
         WrapperType::Vec(inner) => format!(
             "{}\nfrom .vec_{} import {}\nfrom typing import List",
-            inner_import(inner),
+            hashmap_inner_import(inner),
             inner.name(),
             python_container_class_name(&WrapperType::Vec(inner.clone()))
         ),
         WrapperType::Option(inner) => format!(
             "{}\nfrom .option_{} import {}\nfrom typing import Optional",
-            inner_import(inner),
+            hashmap_inner_import(inner),
             inner.name(),
             python_container_class_name(&WrapperType::Option(inner.clone()))
+        ),
+        WrapperType::HashMap(key, value) => format!(
+            "{}\n{}\nfrom .hashmap_{}_{} import {}\nfrom typing import Dict",
+            hashmap_inner_import(key),
+            hashmap_inner_import(value),
+            key.name(),
+            value.name(),
+            python_container_class_name(&WrapperType::HashMap(key.clone(), value.clone()))
         ),
         _ => String::new(),
     }
@@ -434,6 +511,165 @@ impl Wrapper {
     }
 }
 
+fn gen_hashmap_wrapper_python(key: &WrapperType, value: &WrapperType) -> String {
+    let name = format!("hashmap_{}_{}", key.name(), value.name());
+    let class_name = format!("{}HashMap{}", key.name(), value.name());
+    let key_hint = type_hint_from_wrapper_type(key);
+    let value_hint = type_hint_from_wrapper_type(value);
+    let new_fn = format!("{EXPORTED_SYMBOLS_PREFIX}new_{name}");
+    let drop_fn = format!("{EXPORTED_SYMBOLS_PREFIX}drop_{name}");
+    let insert_fn = format!("{EXPORTED_SYMBOLS_PREFIX}insert_{name}");
+    let len_fn = format!("{EXPORTED_SYMBOLS_PREFIX}len_{name}");
+    let key_at_fn = format!("{EXPORTED_SYMBOLS_PREFIX}key_at_{name}");
+    let value_at_fn = format!("{EXPORTED_SYMBOLS_PREFIX}value_at_{name}");
+    let key_argtypes = python_hashmap_argtypes(key);
+    let value_argtypes = python_hashmap_argtypes(value);
+    let key_call = python_hashmap_insert_args(key, "key");
+    let value_call = python_hashmap_insert_args(value, "value");
+    let key_get_type = python_hashmap_get_value(key, key_at_fn.as_str());
+    let value_get_type = python_hashmap_get_value(value, value_at_fn.as_str());
+    let key_get_expr = python_hashmap_get_expr(key, key_at_fn.as_str());
+    let value_get_expr = python_hashmap_get_expr(value, value_at_fn.as_str());
+    let value_import = if matches!(key, WrapperType::String) || matches!(value, WrapperType::String)
+    {
+        "from .global_state import RustString\n"
+    } else {
+        ""
+    };
+    let nested_imports = [key, value]
+        .iter()
+        .map(|wrapper_type| hashmap_inner_import(wrapper_type))
+        .flat_map(|imports| imports.lines().map(str::to_owned).collect::<Vec<_>>())
+        .filter(|line| !line.is_empty())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        r#"
+from typing import Dict
+import ctypes
+from .global_state import get_ffi_lib
+{value_import}
+{nested_imports}
+
+class {class_name}:
+    def __init__(self, ptr):
+        self._ptr = ptr
+
+    def raw_ptr(self):
+        return self._ptr
+
+    def leak(self):
+        ptr = self._ptr
+        self._ptr = None
+        return ptr
+
+    @staticmethod
+    def from_dict(values: Dict[{key_hint}, {value_hint}]):
+        {PYTHON_LIB_GETTER_NAME}().{new_fn}.restype = ctypes.c_void_p
+        {PYTHON_LIB_GETTER_NAME}().{insert_fn}.argtypes = [
+            ctypes.c_void_p, {key_argtypes}, {value_argtypes}
+        ]
+        ptr = {PYTHON_LIB_GETTER_NAME}().{new_fn}()
+        for key, value in values.items():
+            {PYTHON_LIB_GETTER_NAME}().{insert_fn}(ptr, {key_call}, {value_call})
+        return {class_name}(ptr)
+
+    def to_dict(self) -> Dict[{key_hint}, {value_hint}]:
+        {PYTHON_LIB_GETTER_NAME}().{len_fn}.argtypes = [ctypes.c_void_p]
+        {PYTHON_LIB_GETTER_NAME}().{len_fn}.restype = ctypes.c_size_t
+        {PYTHON_LIB_GETTER_NAME}().{key_at_fn}.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+        {PYTHON_LIB_GETTER_NAME}().{key_at_fn}.restype = ctypes.{key_get_type}
+        {PYTHON_LIB_GETTER_NAME}().{value_at_fn}.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+        {PYTHON_LIB_GETTER_NAME}().{value_at_fn}.restype = ctypes.{value_get_type}
+        result = {{}}
+        for index in range({PYTHON_LIB_GETTER_NAME}().{len_fn}(self._ptr)):
+            key = {key_get_expr}
+            value = {value_get_expr}
+            result[key] = value
+        return result
+
+    def __del__(self):
+        if getattr(self, "_ptr", None) is not None:
+            {PYTHON_LIB_GETTER_NAME}().{drop_fn}(self._ptr)
+            self._ptr = None
+"#
+    )
+}
+
+fn python_hashmap_argtypes(wrapper_type: &WrapperType) -> String {
+    match wrapper_type {
+        WrapperType::String => "ctypes.c_char_p, ctypes.c_size_t".to_string(),
+        _ => format!("ctypes.{}", c_type_from_wrapper_type(wrapper_type)),
+    }
+}
+
+fn python_hashmap_insert_args(wrapper_type: &WrapperType, name: &str) -> String {
+    match wrapper_type {
+        WrapperType::String => {
+            format!("ctypes.c_char_p({name}.encode(\"utf-8\")), len({name}.encode(\"utf-8\"))")
+        }
+        WrapperType::Bool => format!("ctypes.c_bool({name})"),
+        WrapperType::Struct(_) => format!("{name}.raw_ptr()"),
+        WrapperType::Enum(_) => format!("{name}.to_ffi()"),
+        WrapperType::Vec(_) => format!(
+            "({name}_wrapper := {}.from_list({name})).raw_ptr()",
+            python_container_class_name(wrapper_type)
+        ),
+        WrapperType::Option(_) => format!(
+            "({name}_wrapper := {}.from_python({name})).raw_ptr()",
+            python_container_class_name(wrapper_type)
+        ),
+        WrapperType::HashMap(_, _) => format!(
+            "({name}_wrapper := {}.from_dict({name})).raw_ptr()",
+            python_container_class_name(wrapper_type)
+        ),
+        WrapperType::FloatingPointNumber(inner) if inner == "f32" => {
+            format!("ctypes.c_float({name})")
+        }
+        WrapperType::FloatingPointNumber(_) => format!("ctypes.c_double({name})"),
+        _ => name.to_string(),
+    }
+}
+
+fn python_hashmap_get_value(wrapper_type: &WrapperType, _fn_name: &str) -> String {
+    match wrapper_type {
+        WrapperType::String => "c_void_p".to_string(),
+        _ => c_type_from_wrapper_type(wrapper_type).to_string(),
+    }
+}
+
+fn python_hashmap_get_expr(wrapper_type: &WrapperType, fn_name: &str) -> String {
+    match wrapper_type {
+        WrapperType::String => {
+            format!("RustString({PYTHON_LIB_GETTER_NAME}().{fn_name}(self._ptr, index)).py_str()")
+        }
+        WrapperType::Bool => {
+            format!("bool({PYTHON_LIB_GETTER_NAME}().{fn_name}(self._ptr, index))")
+        }
+        WrapperType::Struct(name) => {
+            format!("{name}.{name}({PYTHON_LIB_GETTER_NAME}().{fn_name}(self._ptr, index))")
+        }
+        WrapperType::Enum(name) => {
+            format!("{name}.from_ffi({PYTHON_LIB_GETTER_NAME}().{fn_name}(self._ptr, index))")
+        }
+        WrapperType::Vec(_) => format!(
+            "{}({PYTHON_LIB_GETTER_NAME}().{fn_name}(self._ptr, index)).to_list()",
+            python_container_class_name(wrapper_type)
+        ),
+        WrapperType::Option(_) => format!(
+            "{}({PYTHON_LIB_GETTER_NAME}().{fn_name}(self._ptr, index)).to_python()",
+            python_container_class_name(wrapper_type)
+        ),
+        WrapperType::HashMap(_, _) => format!(
+            "{}({PYTHON_LIB_GETTER_NAME}().{fn_name}(self._ptr, index)).to_dict()",
+            python_container_class_name(wrapper_type)
+        ),
+        _ => format!("{PYTHON_LIB_GETTER_NAME}().{fn_name}(self._ptr, index)"),
+    }
+}
+
 fn type_hint_from_wrapper_type(wrapper_type: &crate::wrapper::WrapperType) -> String {
     match wrapper_type {
         WrapperType::IntegerNumber(_) => "int".into(),
@@ -442,6 +678,11 @@ fn type_hint_from_wrapper_type(wrapper_type: &crate::wrapper::WrapperType) -> St
         WrapperType::String => "str".into(),
         WrapperType::Struct(name) => name.to_string(),
         WrapperType::Vec(inner) => format!("List[{}]", type_hint_from_wrapper_type(inner)),
+        WrapperType::HashMap(key, value) => format!(
+            "Dict[{}, {}]",
+            type_hint_from_wrapper_type(key),
+            type_hint_from_wrapper_type(value)
+        ),
         WrapperType::Enum(name) => name.to_string(),
         WrapperType::Result(inner) => type_hint_from_wrapper_type(inner),
         WrapperType::Option(inner) => format!("Optional[{}]", type_hint_from_wrapper_type(inner)),
@@ -454,6 +695,9 @@ pub(crate) fn python_container_class_name(wrapper_type: &WrapperType) -> String 
     match wrapper_type {
         WrapperType::Vec(inner) => format!("{}Vec", inner.name()),
         WrapperType::Option(inner) => format!("{}Option", inner.name()),
+        WrapperType::HashMap(key, value) => {
+            format!("{}HashMap{}", key.name(), value.name())
+        }
         _ => unreachable!("Only container types have Python wrapper classes"),
     }
 }
@@ -468,6 +712,11 @@ fn type_hint_from_field_wrapper_type(wrapper_type: &WrapperType) -> String {
         WrapperType::Vec(inner) => {
             format!("List[{}]", type_hint_from_wrapper_type(inner))
         }
+        WrapperType::HashMap(key, value) => format!(
+            "Dict[{}, {}]",
+            type_hint_from_wrapper_type(key),
+            type_hint_from_wrapper_type(value)
+        ),
         WrapperType::Option(inner) => {
             format!("Optional[{}]", type_hint_from_wrapper_type(inner))
         }
@@ -490,6 +739,12 @@ fn result_cast_and_return(wrapper: &WrapperType) -> String {
         WrapperType::Vec(_) => {
             format!(
                 "return {}(result).to_list()",
+                python_container_class_name(wrapper)
+            )
+        }
+        WrapperType::HashMap(_, _) => {
+            format!(
+                "return {}(result).to_dict()",
                 python_container_class_name(wrapper)
             )
         }
@@ -539,6 +794,7 @@ fn c_type_from_wrapper_type(wrapper: &WrapperType) -> &str {
         | WrapperType::Result(_)
         | WrapperType::Trait(_)
         | WrapperType::Vec(_) => "c_void_p",
+        WrapperType::HashMap(_, _) => "c_void_p",
         WrapperType::Enum(_) => "c_int",
         WrapperType::UnitExpr => "c_void",
     }
@@ -558,6 +814,10 @@ pub(crate) fn arg_cast(wrapper_type: &WrapperType, arg_name: &str) -> String {
         ),
         WrapperType::Option(_) => format!(
             "{}.from_python({arg_name})",
+            python_container_class_name(wrapper_type)
+        ),
+        WrapperType::HashMap(_, _) => format!(
+            "{}.from_dict({arg_name})",
             python_container_class_name(wrapper_type)
         ),
         WrapperType::Enum(_) => format!("{arg_name}.to_ffi()"),
@@ -582,6 +842,7 @@ fn set_extern_fn_resttype(wrapper: &WrapperType, extern_fn_name: &str) -> String
         | WrapperType::Vec(_)
         | WrapperType::Result(_)
         | WrapperType::Option(_)
+        | WrapperType::HashMap(_, _)
         | WrapperType::Struct(_) => {
             format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p")
         }
@@ -642,7 +903,8 @@ fn set_extern_fn_resttype_field(wrapper: &WrapperType, extern_fn_name: &str) -> 
         | WrapperType::Vec(_)
         | WrapperType::Result(_)
         | WrapperType::Trait(_)
-        | WrapperType::Option(_) => {
+        | WrapperType::Option(_)
+        | WrapperType::HashMap(_, _) => {
             format!("{PYTHON_LIB_GETTER_NAME}().{extern_fn_name}.restype = ctypes.c_void_p")
         }
         WrapperType::UnitExpr => {

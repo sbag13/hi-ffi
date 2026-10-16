@@ -1,8 +1,9 @@
 use crate::wrapper::enum_wrapper::EnumWrapper;
 use crate::wrapper::impl_block_wrapper::ImplBlockWrapper;
 use crate::wrapper::java::{
-    java_argument_type, java_layout, java_library_loader, java_option_class_name,
-    java_result_class_name, java_return_type, java_vec_class_name, rust_exception_java,
+    java_argument_type, java_hashmap_class_name, java_layout, java_library_loader,
+    java_option_class_name, java_result_class_name, java_return_type, java_vec_class_name,
+    rust_exception_java,
 };
 use crate::wrapper::trait_wrapper::TraitWrapper;
 use crate::wrapper::{ParsedWrapper, StructWrapper, Wrapper, WrapperType};
@@ -48,6 +49,9 @@ fn write_reusable_wrappers(wrapper: &Wrapper) {
             ReusableWrapper::Vec(inner) => format!("vec_{}.java", inner.name()),
             ReusableWrapper::Result(inner) => format!("result_{}.java", inner.name()),
             ReusableWrapper::Option(inner) => format!("option_{}.java", inner.name()),
+            ReusableWrapper::HashMap(key, value) => {
+                format!("hashmap_{}_{}.java", key.name(), value.name())
+            }
         };
         let path = java_path().join(file_name);
         if JAVA_REUSABLE_WRAPPER_GENERATED
@@ -78,6 +82,9 @@ fn insert_impl_methods(path: &Path, methods: &str) {
     }
     if methods.contains("Optional<") && !source.contains("import java.util.Optional;") {
         source = format!("import java.util.Optional;\n{source}");
+    }
+    if methods.contains("Map<") && !source.contains("import java.util.Map;") {
+        source = format!("import java.util.Map;\n{source}");
     }
     create_file(source, path);
 }
@@ -161,6 +168,12 @@ fn trait_imports(functions: &[crate::wrapper::FunctionWrapper]) -> String {
     {
         imports.push_str("import java.util.Optional;\n");
     }
+    if wrappers
+        .iter()
+        .any(|wrapper| wrapper_contains_hashmap(wrapper))
+    {
+        imports.push_str("import java.util.Map;\n");
+    }
     imports
 }
 
@@ -176,6 +189,16 @@ fn wrapper_contains_option(wrapper_type: &WrapperType) -> bool {
     match wrapper_type {
         WrapperType::Option(_) => true,
         WrapperType::Vec(inner) | WrapperType::Result(inner) => wrapper_contains_option(inner),
+        _ => false,
+    }
+}
+
+fn wrapper_contains_hashmap(wrapper_type: &WrapperType) -> bool {
+    match wrapper_type {
+        WrapperType::HashMap(_, _) => true,
+        WrapperType::Vec(inner) | WrapperType::Option(inner) | WrapperType::Result(inner) => {
+            wrapper_contains_hashmap(inner)
+        }
         _ => false,
     }
 }
@@ -302,6 +325,13 @@ fn trait_callback_arg_conversion(
             ),
             Some(format!("{name}Wrapper")),
         ),
+        WrapperType::HashMap(key, value) => (
+            format!(
+                "var {name}Wrapper = {}.fromRaw({name});\nvar {value_name} = {name}Wrapper.toMap();\n",
+                java_hashmap_class_name(key, value)
+            ),
+            Some(format!("{name}Wrapper")),
+        ),
         WrapperType::Enum(enum_name) => (
             format!("var {value_name} = {enum_name}.fromNative({name});\n"),
             None,
@@ -327,6 +357,10 @@ fn trait_result_ok_call(method_name: &str, inner: &WrapperType, value: &str) -> 
         WrapperType::Option(option_inner) => format!(
             "return (MemorySegment) {handle}.invokeExact({}.fromOptional({value}));",
             java_option_class_name(option_inner)
+        ),
+        WrapperType::HashMap(key, map_value) => format!(
+            "try (var resultMap = {}.fromMap({value})) {{\n    return (MemorySegment) {handle}.invokeExact(resultMap.rawPtr());\n}}",
+            java_hashmap_class_name(key, map_value)
         ),
         WrapperType::Struct(_) => {
             format!("return (MemorySegment) {handle}.invokeExact({value}.rawPtr());")
@@ -376,6 +410,10 @@ fn trait_callback_success(function: &crate::wrapper::FunctionWrapper) -> String 
         WrapperType::Option(inner) => format!(
             "return {}.fromOptional({call});",
             java_option_class_name(inner)
+        ),
+        WrapperType::HashMap(key, value) => format!(
+            "try (var resultMap = {}.fromMap({call})) {{\n    return resultMap.leak();\n}}",
+            java_hashmap_class_name(key, value)
         ),
         WrapperType::Enum(_) => format!("return {call}.toNative();"),
         _ => format!("return {call};"),
@@ -1050,6 +1088,12 @@ fn java_invoke_body(
             }}",
             java_option_class_name(inner)
         ),
+        Some(WrapperType::HashMap(key, value)) => format!(
+            "try (var resultMap = {}.fromRaw((MemorySegment) handle.invokeExact({call_args}))) {{
+                return resultMap.toMap();
+            }}",
+            java_hashmap_class_name(key, value)
+        ),
         Some(WrapperType::Trait(name)) => {
             format!("return {name}Object.fromRaw((MemorySegment) handle.invokeExact({call_args}));")
         }
@@ -1065,6 +1109,9 @@ fn java_native_argument(wrapper_type: &WrapperType, arg_name: &syn::Ident) -> St
         WrapperType::Vec(_) => format!("{arg_name}_vec.rawPtr()"),
         WrapperType::Option(_inner) => {
             format!("{arg_name}_option.rawPtr()")
+        }
+        WrapperType::HashMap(_, _) => {
+            format!("{arg_name}_map.rawPtr()")
         }
         WrapperType::Enum(_) => format!("{arg_name}.toNative()"),
         WrapperType::Trait(_) => format!("{arg_name}_bridge.rawPtr()"),
@@ -1150,6 +1197,10 @@ fn write_struct_code(struct_wrapper: &StructWrapper) {
         .fields
         .iter()
         .any(|field| wrapper_contains_option(&field.wrapper_type));
+    let has_map_field = struct_wrapper
+        .fields
+        .iter()
+        .any(|field| wrapper_contains_hashmap(&field.wrapper_type));
     let Some(fields) = struct_wrapper
         .fields
         .iter()
@@ -1170,6 +1221,10 @@ fn write_struct_code(struct_wrapper: &StructWrapper) {
                         WrapperType::Option(inner) => format!(
                             "return {}.toOptional((MemorySegment) GET_{suffix}.invokeExact(self))",
                             java_option_class_name(inner)
+                        ),
+                        WrapperType::HashMap(key, value) => format!(
+                            "var rustMap = {}.fromRaw((MemorySegment) GET_{suffix}.invokeExact(self));\n            var map = rustMap.toMap();\n            rustMap.leak();\n            return map",
+                            java_hashmap_class_name(key, value)
                         ),
                         _ => format!("return ({field_type}) GET_{suffix}.invokeExact(self)"),
                     };
@@ -1198,6 +1253,10 @@ fn write_struct_code(struct_wrapper: &StructWrapper) {
                             "try (var rustOption = {}.fromRaw({}.fromOptional(value))) {{\n                SET_{suffix}.invokeExact(self, rustOption.rawPtr());\n            }}",
                             java_option_class_name(inner),
                             java_option_class_name(inner)
+                        ),
+                        WrapperType::HashMap(key, value) => format!(
+                            "try (var rustMap = {}.fromMap(value)) {{\n                SET_{suffix}.invokeExact(self, rustMap.rawPtr());\n            }}",
+                            java_hashmap_class_name(key, value)
                         ),
                         _ => format!("SET_{suffix}.invokeExact(self, value);"),
                     };
@@ -1380,6 +1439,12 @@ fn write_struct_code(struct_wrapper: &StructWrapper) {
         Default::default()
     };
 
+    let map_import = if has_map_field {
+        "import java.util.Map;\n"
+    } else {
+        Default::default()
+    };
+
     let string_return_helper = if has_string_field {
         r#"    private static String readString(MemorySegment string) throws Throwable {
         var data = (MemorySegment) STRING_DATA.invokeExact(string);
@@ -1422,7 +1487,7 @@ fn write_struct_code(struct_wrapper: &StructWrapper) {
     };
 
     let source = format!(
-        r#"{arena_import}{optional_import}import java.lang.foreign.FunctionDescriptor;
+        r#"{arena_import}{optional_import}{map_import}import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
@@ -1558,11 +1623,25 @@ fn write_function_code(function_wrapper: &crate::wrapper::FunctionWrapper) {
             .return_wrapper
             .as_ref()
             .is_some_and(|return_wrapper| wrapper_contains_option(&return_wrapper.wrapper_type));
+    let has_map = function_wrapper
+        .args
+        .iter()
+        .any(|argument| wrapper_contains_hashmap(&argument.wrapper_type))
+        || function_wrapper
+            .return_wrapper
+            .as_ref()
+            .is_some_and(|return_wrapper| wrapper_contains_hashmap(&return_wrapper.wrapper_type));
 
     JAVA_MODULE_CREATED
         .call_once(|| create_file(java_module_header(has_arena, has_collections), &module_path));
 
-    ensure_java_imports(&module_path, has_arena, has_collections, has_optional);
+    ensure_java_imports(
+        &module_path,
+        has_arena,
+        has_collections,
+        has_optional,
+        has_map,
+    );
 
     let parameter_declaration = function_wrapper
         .args
@@ -1690,6 +1769,7 @@ fn ensure_java_imports(
     needs_arena: bool,
     needs_collections: bool,
     needs_optional: bool,
+    needs_map: bool,
 ) {
     let mut source = std::fs::read_to_string(path).expect("Unable to read Java module");
     let mut imports = String::new();
@@ -1701,6 +1781,9 @@ fn ensure_java_imports(
     }
     if needs_optional && !source.contains("import java.util.Optional;") {
         imports.push_str("import java.util.Optional;\n");
+    }
+    if needs_map && !source.contains("import java.util.Map;") {
+        imports.push_str("import java.util.Map;\n");
     }
     if !imports.is_empty() {
         source = format!("{imports}{source}");
@@ -1730,6 +1813,10 @@ fn wrap_java_call<'a>(
                 "var {arg_name}_option = {}.fromRaw({}.fromOptional({arg_name}))",
                 java_option_class_name(inner),
                 java_option_class_name(inner)
+            )),
+            WrapperType::HashMap(key, value) => resources.push(format!(
+                "var {arg_name}_map = {}.fromMap({arg_name})",
+                java_hashmap_class_name(key, value)
             )),
             WrapperType::Trait(name) => resources.push(format!(
                 "var {arg_name}_bridge = {name}Bridge.of({arg_name})"

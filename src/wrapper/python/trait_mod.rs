@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::wrapper::WrapperType;
 use crate::wrapper::base::RUST_STRING_FROM_C_PTR_FN_NAME;
-use crate::wrapper::python::impl_mod::call_args_and_pre_casts;
+use crate::wrapper::python::impl_mod::{add_type_hint_imports, call_args_and_pre_casts};
 use crate::wrapper::python::{
     ClassCode, PYTHON_LIB_GETTER_NAME, c_type_from_wrapper_type, type_hint_from_wrapper_type,
 };
@@ -24,6 +24,15 @@ pub(crate) fn gen_trait_class(trait_wrapper: &TraitWrapper) -> ClassCode {
             format!("from .global_state import {PYTHON_LIB_GETTER_NAME}"),
         ),
     ]);
+    for method in &trait_wrapper.functions {
+        if let Some(return_wrapper) = &method.return_wrapper {
+            add_type_hint_imports(
+                &return_wrapper.wrapper_type,
+                &trait_name.to_string(),
+                &mut imports,
+            );
+        }
+    }
 
     let methods = prepend_each_line_with_n_tabs(
         &trait_wrapper
@@ -114,6 +123,18 @@ def {method_name}({recv_and_args}){ret_hint}:
                                 let inner_name = inner.name();
                                 format!("{arg_name} = {inner_name}Option({arg_name}).to_python()")
                             }
+                            WrapperType::HashMap(key, value) => {
+                                let map_name = format!("{}HashMap{}", key.name(), value.name());
+                                imports.insert(
+                                    map_name.clone(),
+                                    format!(
+                                        "from .hashmap_{}_{} import {map_name}",
+                                        key.name(),
+                                        value.name()
+                                    ),
+                                );
+                                format!("{arg_name} = {map_name}({arg_name}).to_dict()")
+                            }
                             _ => "".to_string(),
                         }
                     })
@@ -154,6 +175,20 @@ return {inner_name}Vec.from_list(result).leak()
 result = py_obj.{method_name}({arg_names})
 return {inner_name}Option.from_python(result).leak()"#
 )
+                        }
+                        WrapperType::HashMap(key, value) => {
+                            let map_name = format!("{}HashMap{}", key.name(), value.name());
+                            imports.insert(
+                                map_name.clone(),
+                                format!(
+                                    "from .hashmap_{}_{} import {map_name}",
+                                    key.name(),
+                                    value.name()
+                                ),
+                            );
+                            format!(
+                                "result = py_obj.{method_name}({arg_names})\nreturn {map_name}.from_dict(result).leak()"
+                            )
                         }
                         WrapperType::Enum(enum_name) => {
                             imports.insert(enum_name.clone(), format!("from .{enum_name} import {enum_name}"));
@@ -354,6 +389,21 @@ class {trait_name}Impl:
                                     arg_name = arg.arg_name
                                 ))
                             }
+                            WrapperType::HashMap(key, value) => {
+                                let map_name = format!("{}HashMap{}", key.name(), value.name());
+                                imports.insert(
+                                    map_name.clone(),
+                                    format!(
+                                        "from .hashmap_{}_{} import {map_name}",
+                                        key.name(),
+                                        value.name()
+                                    ),
+                                );
+                                Some(format!(
+                                    "casted_{arg_name} = {map_name}.from_dict({arg_name})",
+                                    arg_name = arg.arg_name
+                                ))
+                            }
                             _ => None,
                         }
                     })
@@ -372,6 +422,9 @@ class {trait_name}Impl:
                         WrapperType::Struct(_) => format!("casted_{}", arg.arg_name),
                         WrapperType::Vec(_) => format!("casted_{}.raw_ptr()", arg.arg_name),
                         WrapperType::Option(_) => format!("casted_{}.raw_ptr()", arg.arg_name),
+                        WrapperType::HashMap(_, _) => {
+                            format!("casted_{}.raw_ptr()", arg.arg_name)
+                        }
                         _ => arg.arg_name.to_string(),
                     }
                 })
@@ -429,6 +482,18 @@ class {trait_name}Impl:
                         let inner_name = inner.name();
                         imports.insert(format!("{inner_name}Option"), format!("from .option_{inner_name} import {inner_name}Option"));
                         format!("return {}Option(result).to_python()", inner_name)
+                    }
+                    WrapperType::HashMap(key, value) => {
+                        let map_name = format!("{}HashMap{}", key.name(), value.name());
+                        imports.insert(
+                            map_name.clone(),
+                            format!(
+                                "from .hashmap_{}_{} import {map_name}",
+                                key.name(),
+                                value.name()
+                            ),
+                        );
+                        format!("return {map_name}(result).to_dict()")
                     }
                     WrapperType::Result(inner) => {
                         let inner_name = inner.name();

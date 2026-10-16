@@ -1,5 +1,6 @@
 use hi_ffi::ffi;
 use serde::Serialize;
+use std::collections::HashMap;
 
 #[ffi]
 pub fn take_status_before_it_is_defined(status: TestStatus) {
@@ -64,6 +65,16 @@ impl TestStruct {
         assert_eq!(s, TestStruct2 { i32_field: 55 });
     }
 
+    pub fn public_method_taking_hashmap(&self, map: HashMap<String, i32>) {
+        assert_eq!(map.get("method"), Some(&24));
+        assert_eq!(map.len(), 1);
+    }
+
+    pub fn public_method_taking_struct_hashmap(&self, map: HashMap<String, TestStruct2>) {
+        assert_eq!(map.get("method").unwrap().i32_field, 24);
+        assert_eq!(map.len(), 1);
+    }
+
     pub fn public_method_returning_primitive(&self) -> i32 {
         24
     }
@@ -78,6 +89,14 @@ impl TestStruct {
 
     pub fn public_method_returning_struct(&self) -> TestStruct2 {
         TestStruct2 { i32_field: 99 }
+    }
+
+    pub fn public_method_returning_hashmap(&self) -> HashMap<String, i32> {
+        HashMap::from([("method".to_string(), 25)])
+    }
+
+    pub fn public_method_returning_struct_hashmap(&self) -> HashMap<String, TestStruct2> {
+        HashMap::from([("method".to_string(), TestStruct2 { i32_field: 25 })])
     }
 
     pub fn combo_method(&self, str1: String, str2: String, b: bool) -> String {
@@ -97,6 +116,14 @@ impl TestStruct {
     pub fn static_method_taking_struct(s: TestStruct2) {
         assert_eq!(s, TestStruct2 { i32_field: 77 });
     }
+    pub fn static_method_taking_hashmap(map: HashMap<String, i32>) {
+        assert_eq!(map.get("static"), Some(&77));
+        assert_eq!(map.len(), 1);
+    }
+    pub fn static_method_taking_struct_hashmap(map: HashMap<String, TestStruct2>) {
+        assert_eq!(map.get("static").unwrap().i32_field, 77);
+        assert_eq!(map.len(), 1);
+    }
     pub fn static_method_returning_primitive() -> i32 {
         22
     }
@@ -106,9 +133,16 @@ impl TestStruct {
     pub fn static_method_returning_struct() -> TestStruct2 {
         TestStruct2 { i32_field: 77 }
     }
+    pub fn static_method_returning_hashmap() -> HashMap<String, i32> {
+        HashMap::from([("static".to_string(), 78)])
+    }
+    pub fn static_method_returning_struct_hashmap() -> HashMap<String, TestStruct2> {
+        HashMap::from([("static".to_string(), TestStruct2 { i32_field: 78 })])
+    }
     pub fn static_combo_method(str1: String, str2: String, b: bool) -> String {
         if b { str1 } else { str2 }
     }
+
     pub fn static_combo_struct_method(s1: TestStruct2, _s2: TestStruct2) -> TestStruct2 {
         s1
     }
@@ -235,6 +269,17 @@ impl TestStruct {
             TestStatus::Pending,
             TestStatus::Active,
         ])
+    }
+
+    pub fn method_returning_result_with_hashmap(
+        &self,
+        error: bool,
+    ) -> Result<HashMap<String, i32>, SimpleError> {
+        if error {
+            Err(SimpleError)
+        } else {
+            Ok(HashMap::from([("key".to_string(), 42)]))
+        }
     }
 
     pub fn method_taking_opt_int(&self, i: Option<i32>, assert_some: bool) {
@@ -493,13 +538,118 @@ fn function_returning_vec_of_string() -> Vec<String> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Default)]
 #[ffi]
 pub enum TestStatus {
     #[default]
     Active = 1,
     Inactive = 2,
     Pending = 3,
+}
+
+#[ffi]
+pub fn function_taking_enum_hashmap(map: HashMap<TestStatus, TestStatus>) {
+    assert_eq!(map[&TestStatus::Active], TestStatus::Pending);
+    assert_eq!(map[&TestStatus::Inactive], TestStatus::Active);
+}
+
+#[ffi]
+pub fn function_returning_enum_hashmap() -> HashMap<TestStatus, TestStatus> {
+    HashMap::from([
+        (TestStatus::Active, TestStatus::Inactive),
+        (TestStatus::Pending, TestStatus::Active),
+    ])
+}
+
+#[ffi]
+impl TestStruct {
+    pub fn public_method_taking_recursive_maps(
+        &self,
+        map_vec: HashMap<String, Vec<i32>>,
+        map_option: HashMap<String, Option<i32>>,
+        map_map: HashMap<String, HashMap<String, i32>>,
+        vec_map: Vec<HashMap<String, i32>>,
+        option_map: Option<HashMap<String, i32>>,
+    ) {
+        assert_eq!(map_vec["values"], vec![1, 2]);
+        assert_eq!(map_option["some"], Some(3));
+        assert_eq!(map_option["none"], None);
+        assert_eq!(map_map["inner"]["value"], 4);
+        assert_eq!(vec_map[0]["value"], 5);
+        assert_eq!(option_map.as_ref().unwrap()["value"], 6);
+    }
+
+    pub fn public_method_returning_vec_of_hashmaps(&self) -> Vec<HashMap<String, i32>> {
+        vec![HashMap::from([("value".to_string(), 7)])]
+    }
+
+    pub fn public_method_taking_enum_hashmap(&self, map: HashMap<TestStatus, TestStatus>) {
+        assert_eq!(map[&TestStatus::Active], TestStatus::Active);
+        assert_eq!(map[&TestStatus::Pending], TestStatus::Inactive);
+    }
+
+    pub fn public_method_returning_enum_hashmap(&self) -> HashMap<TestStatus, TestStatus> {
+        HashMap::from([
+            (TestStatus::Active, TestStatus::Pending),
+            (TestStatus::Inactive, TestStatus::Active),
+        ])
+    }
+
+    pub fn static_method_taking_enum_hashmap(map: HashMap<TestStatus, TestStatus>) {
+        assert_eq!(map[&TestStatus::Active], TestStatus::Inactive);
+        assert_eq!(map[&TestStatus::Pending], TestStatus::Pending);
+    }
+
+    pub fn static_method_returning_enum_hashmap() -> HashMap<TestStatus, TestStatus> {
+        HashMap::from([
+            (TestStatus::Inactive, TestStatus::Pending),
+            (TestStatus::Pending, TestStatus::Active),
+        ])
+    }
+}
+
+#[ffi]
+pub fn function_taking_recursive_maps(
+    map_vec: HashMap<String, Vec<i32>>,
+    map_option: HashMap<String, Option<i32>>,
+    map_map: HashMap<String, HashMap<String, i32>>,
+    vec_map: Vec<HashMap<String, i32>>,
+    option_map: Option<HashMap<String, i32>>,
+) {
+    assert_eq!(map_vec["values"], vec![1, 2]);
+    assert_eq!(map_option["some"], Some(3));
+    assert_eq!(map_option["none"], None);
+    assert_eq!(map_map["inner"]["value"], 4);
+    assert_eq!(vec_map[0]["value"], 5);
+    assert_eq!(option_map.as_ref().unwrap()["value"], 6);
+}
+
+#[ffi]
+pub fn function_returning_map_of_vec() -> HashMap<String, Vec<i32>> {
+    HashMap::from([("values".to_string(), vec![10, 11])])
+}
+
+#[ffi]
+pub fn function_returning_map_of_option() -> HashMap<String, Option<i32>> {
+    HashMap::from([("some".to_string(), Some(12)), ("none".to_string(), None)])
+}
+
+#[ffi]
+pub fn function_returning_map_of_hashmap() -> HashMap<String, HashMap<String, i32>> {
+    HashMap::from([(
+        "inner".to_string(),
+        HashMap::from([("value".to_string(), 13)]),
+    )])
+}
+
+#[ffi]
+pub fn function_returning_vec_of_hashmaps() -> Vec<HashMap<String, i32>> {
+    vec![HashMap::from([("value".to_string(), 14)])]
+}
+
+#[ffi]
+pub fn function_returning_option_of_hashmap() -> Option<HashMap<String, i32>> {
+    Some(HashMap::from([("value".to_string(), 15)]))
 }
 
 #[ffi]
@@ -546,6 +696,38 @@ pub fn function_returning_vec_of_enums() -> Vec<TestStatus> {
 }
 
 #[ffi]
+pub fn function_taking_hashmap(map: HashMap<String, i32>) {
+    assert_eq!(map.get("alpha"), Some(&10));
+    assert_eq!(map.get("beta"), Some(&20));
+    assert_eq!(map.len(), 2);
+}
+
+#[ffi]
+pub fn function_returning_hashmap() -> HashMap<String, i32> {
+    HashMap::from([("alpha".to_string(), 10), ("beta".to_string(), 20)])
+}
+
+#[ffi]
+pub fn function_returning_empty_hashmap() -> HashMap<String, i32> {
+    HashMap::new()
+}
+
+#[ffi]
+pub fn function_taking_struct_hashmap(map: HashMap<String, TestStruct2>) {
+    assert_eq!(map.get("alpha").unwrap().i32_field, 10);
+    assert_eq!(map.get("beta").unwrap().i32_field, 20);
+    assert_eq!(map.len(), 2);
+}
+
+#[ffi]
+pub fn function_returning_struct_hashmap() -> HashMap<String, TestStruct2> {
+    HashMap::from([
+        ("alpha".to_string(), TestStruct2 { i32_field: 10 }),
+        ("beta".to_string(), TestStruct2 { i32_field: 20 }),
+    ])
+}
+
+#[ffi]
 #[derive(Debug, Clone, Default)]
 pub struct StructWithVecs {
     pub vec_of_ints: Vec<i32>,
@@ -553,6 +735,14 @@ pub struct StructWithVecs {
     pub vec_of_strings: Vec<String>,
     pub vec_of_structs: Vec<TestStruct2>,
     pub vec_of_enums: Vec<TestStatus>,
+}
+
+#[ffi]
+#[derive(Debug, Clone, Default)]
+pub struct StructWithHashMaps {
+    pub string_to_int: HashMap<String, i32>,
+    pub int_to_string: HashMap<i32, String>,
+    pub string_to_struct: HashMap<String, TestStruct2>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -725,6 +915,15 @@ pub fn function_with_vec_enum_result(error: bool) -> Result<Vec<TestStatus>, Enu
     }
 }
 
+#[ffi]
+pub fn function_with_hashmap_result(error: bool) -> Result<HashMap<String, String>, SimpleError> {
+    if error {
+        Err(SimpleError)
+    } else {
+        Ok(HashMap::from([("key".to_string(), "value".to_string())]))
+    }
+}
+
 // Optionals
 
 #[ffi]
@@ -888,6 +1087,18 @@ pub trait RustTrait {
     fn trait_fn_with_vec_of_enums(&self, vec: Vec<TestStatus>);
     fn trait_fn_with_vec_of_strings(&self, vec: Vec<String>);
     fn trait_fn_with_vec_of_structs(&self, vec: Vec<TestStruct2>);
+    fn trait_fn_with_int_hashmap(&self, map: HashMap<i32, i32>);
+    fn trait_fn_with_string_hashmap(&self, map: HashMap<String, String>);
+    fn trait_fn_with_enum_hashmap(&self, map: HashMap<TestStatus, TestStatus>);
+    fn trait_fn_with_struct_hashmap(&self, map: HashMap<String, TestStruct2>);
+    fn trait_fn_with_recursive_maps(
+        &self,
+        map_vec: HashMap<String, Vec<i32>>,
+        map_option: HashMap<String, Option<i32>>,
+        map_map: HashMap<String, HashMap<String, i32>>,
+        vec_map: Vec<HashMap<String, i32>>,
+        option_map: Option<HashMap<String, i32>>,
+    );
 
     fn trait_fn_with_options(
         &self,
@@ -909,6 +1120,11 @@ pub trait RustTrait {
     fn trait_fn_return_vec_of_enums(&self) -> Vec<TestStatus>;
     fn trait_fn_return_vec_of_strings(&self) -> Vec<String>;
     fn trait_fn_return_vec_of_structs(&self) -> Vec<TestStruct2>;
+    fn trait_fn_return_int_hashmap(&self) -> HashMap<i32, i32>;
+    fn trait_fn_return_string_hashmap(&self) -> HashMap<String, String>;
+    fn trait_fn_return_enum_hashmap(&self) -> HashMap<TestStatus, TestStatus>;
+    fn trait_fn_return_struct_hashmap(&self) -> HashMap<String, TestStruct2>;
+    fn trait_fn_return_map_of_vec(&self) -> HashMap<String, Vec<i32>>;
 
     fn trait_fn_returning_option_int(&self, some: bool) -> Option<i32>;
     fn trait_fn_returning_option_bool(&self, some: bool) -> Option<bool>;
@@ -963,6 +1179,11 @@ pub trait RustTrait {
         &self,
         error: bool,
     ) -> Result<(), SimpleError>;
+
+    fn trait_fn_returning_result_with_hashmap(
+        &self,
+        error: bool,
+    ) -> Result<HashMap<String, TestStruct2>, SimpleError>;
 }
 
 #[ffi]
@@ -987,6 +1208,29 @@ pub fn function_taking_trait_object(obj: Box<dyn RustTrait>) {
         TestStruct2 { i32_field: 321 },
         TestStruct2 { i32_field: 654 },
     ]);
+    obj.trait_fn_with_int_hashmap(HashMap::from([(1, 10), (2, 20)]));
+    obj.trait_fn_with_string_hashmap(HashMap::from([
+        ("alpha".to_string(), "one".to_string()),
+        ("beta".to_string(), "two".to_string()),
+    ]));
+    obj.trait_fn_with_enum_hashmap(HashMap::from([
+        (TestStatus::Active, TestStatus::Pending),
+        (TestStatus::Inactive, TestStatus::Active),
+    ]));
+    obj.trait_fn_with_struct_hashmap(HashMap::from([
+        ("alpha".to_string(), TestStruct2 { i32_field: 10 }),
+        ("beta".to_string(), TestStruct2 { i32_field: 20 }),
+    ]));
+    obj.trait_fn_with_recursive_maps(
+        HashMap::from([("values".to_string(), vec![1, 2])]),
+        HashMap::from([("some".to_string(), Some(3)), ("none".to_string(), None)]),
+        HashMap::from([(
+            "inner".to_string(),
+            HashMap::from([("value".to_string(), 4)]),
+        )]),
+        vec![HashMap::from([("value".to_string(), 5)])],
+        Some(HashMap::from([("value".to_string(), 6)])),
+    );
 
     obj.trait_fn_with_options(
         Some(42i64),
@@ -1033,6 +1277,31 @@ pub fn function_taking_trait_object(obj: Box<dyn RustTrait>) {
             TestStruct2 { i32_field: 111 },
             TestStruct2 { i32_field: 222 }
         ]
+    );
+    assert_eq!(
+        obj.trait_fn_return_int_hashmap(),
+        HashMap::from([(3, 30), (4, 40)])
+    );
+    assert_eq!(
+        obj.trait_fn_return_string_hashmap(),
+        HashMap::from([
+            ("gamma".to_string(), "three".to_string()),
+            ("delta".to_string(), "four".to_string()),
+        ])
+    );
+    assert_eq!(
+        obj.trait_fn_return_enum_hashmap(),
+        HashMap::from([
+            (TestStatus::Active, TestStatus::Inactive),
+            (TestStatus::Pending, TestStatus::Active),
+        ])
+    );
+    let returned_map = obj.trait_fn_return_struct_hashmap();
+    assert_eq!(returned_map["alpha"].i32_field, 30);
+    assert_eq!(returned_map["beta"].i32_field, 40);
+    assert_eq!(
+        obj.trait_fn_return_map_of_vec(),
+        HashMap::from([("values".to_string(), vec![16, 17])])
     );
 
     assert_eq!(obj.trait_fn_returning_option_int(true), Some(555));
@@ -1249,6 +1518,46 @@ impl RustTrait for TestTraitObject {
         );
     }
 
+    fn trait_fn_with_int_hashmap(&self, map: HashMap<i32, i32>) {
+        assert_eq!(map, HashMap::from([(1, 10), (2, 20)]));
+    }
+
+    fn trait_fn_with_string_hashmap(&self, map: HashMap<String, String>) {
+        assert_eq!(
+            map,
+            HashMap::from([
+                ("alpha".to_string(), "one".to_string()),
+                ("beta".to_string(), "two".to_string()),
+            ])
+        );
+    }
+
+    fn trait_fn_with_enum_hashmap(&self, map: HashMap<TestStatus, TestStatus>) {
+        assert_eq!(map[&TestStatus::Active], TestStatus::Pending);
+        assert_eq!(map[&TestStatus::Inactive], TestStatus::Active);
+    }
+
+    fn trait_fn_with_struct_hashmap(&self, map: HashMap<String, TestStruct2>) {
+        assert_eq!(map["alpha"].i32_field, 10);
+        assert_eq!(map["beta"].i32_field, 20);
+    }
+
+    fn trait_fn_with_recursive_maps(
+        &self,
+        map_vec: HashMap<String, Vec<i32>>,
+        map_option: HashMap<String, Option<i32>>,
+        map_map: HashMap<String, HashMap<String, i32>>,
+        vec_map: Vec<HashMap<String, i32>>,
+        option_map: Option<HashMap<String, i32>>,
+    ) {
+        assert_eq!(map_vec["values"], vec![1, 2]);
+        assert_eq!(map_option["some"], Some(3));
+        assert_eq!(map_option["none"], None);
+        assert_eq!(map_map["inner"]["value"], 4);
+        assert_eq!(vec_map[0]["value"], 5);
+        assert_eq!(option_map.as_ref().unwrap()["value"], 6);
+    }
+
     fn trait_fn_with_options(
         &self,
         opt_int: Option<i64>,
@@ -1306,6 +1615,30 @@ impl RustTrait for TestTraitObject {
             TestStruct2 { i32_field: 111 },
             TestStruct2 { i32_field: 222 },
         ]
+    }
+    fn trait_fn_return_int_hashmap(&self) -> HashMap<i32, i32> {
+        HashMap::from([(3, 30), (4, 40)])
+    }
+    fn trait_fn_return_string_hashmap(&self) -> HashMap<String, String> {
+        HashMap::from([
+            ("gamma".to_string(), "three".to_string()),
+            ("delta".to_string(), "four".to_string()),
+        ])
+    }
+    fn trait_fn_return_enum_hashmap(&self) -> HashMap<TestStatus, TestStatus> {
+        HashMap::from([
+            (TestStatus::Active, TestStatus::Inactive),
+            (TestStatus::Pending, TestStatus::Active),
+        ])
+    }
+    fn trait_fn_return_struct_hashmap(&self) -> HashMap<String, TestStruct2> {
+        HashMap::from([
+            ("alpha".to_string(), TestStruct2 { i32_field: 30 }),
+            ("beta".to_string(), TestStruct2 { i32_field: 40 }),
+        ])
+    }
+    fn trait_fn_return_map_of_vec(&self) -> HashMap<String, Vec<i32>> {
+        HashMap::from([("values".to_string(), vec![16, 17])])
     }
 
     fn trait_fn_returning_option_int(&self, some: bool) -> Option<i32> {
@@ -1482,6 +1815,20 @@ impl RustTrait for TestTraitObject {
         error: bool,
     ) -> Result<(), SimpleError> {
         if error { Err(SimpleError) } else { Ok(()) }
+    }
+
+    fn trait_fn_returning_result_with_hashmap(
+        &self,
+        error: bool,
+    ) -> Result<HashMap<String, TestStruct2>, SimpleError> {
+        if error {
+            Err(SimpleError)
+        } else {
+            Ok(HashMap::from([
+                ("alpha".to_string(), TestStruct2 { i32_field: 30 }),
+                ("beta".to_string(), TestStruct2 { i32_field: 40 }),
+            ]))
+        }
     }
 }
 
