@@ -1,4 +1,12 @@
-cd cpp && ./test_cpp.sh --valgrind || echo "C++ tests failed"; cd -
-cd swift && ./test_swift.sh || echo "Swift tests failed"; cd -
-cd python && python3 main.py || echo "Python tests failed"; cd -
-cd java && ./test_java.sh || echo "Java tests failed"; cd -
+#!/usr/bin/env bash
+set -euo pipefail
+
+tests_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+cargo build --manifest-path "$tests_dir/Cargo.toml"
+
+(cd "$tests_dir/cpp" && ./test_cpp.sh --valgrind)
+(cd "$tests_dir/swift" && ./test_swift.sh)
+(cd "$tests_dir/python" && python3 "$tests_dir/python/main.py")
+(cd "$tests_dir/java" && ./test_java.sh)
+(cd "$tests_dir/c_sharp" && ./test_c_sharp.sh)

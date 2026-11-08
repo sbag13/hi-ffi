@@ -40,8 +40,8 @@ func assert_struct_basics() {
     assert(s.i32_field == 42)
 
     assert(s.f32_field == 0.0)
-    s.f32_field = 3.14
-    assert(s.f32_field == 3.14)
+    s.f32_field = 4.20
+    assert(s.f32_field == 4.20)
 
     assert(s.bool_field == false)
     s.bool_field = true
@@ -126,13 +126,15 @@ func assert_functions() {
     assert(take_struct_and_return_status_before_they_are_defined(ts1) == TestStatus.Pending)
     simple_function()
     function_with_primitive_args(100, true)
-    function_with_string_arg("Hello, World!")
+    function_with_string_arg("Hello, 世界!")
     function_with_primitive_and_string_arg(42, false, "Complex function!")
     assert(function_return_primitive() == 42, "function_return_primitive should return 42")
     assert(function_return_float() == 5.21, "function_return_float should return 5.21")
+    assert(function_return_float_32() == 4.20, "function_return_float_32 should return 4.20")
     assert(
-        function_return_string() == "String returned from Rust",
+        function_return_string() == "String returned from Rust: こんにちは",
         "function_return_string should return correct string")
+    function_with_integer_args(-8, 8, -16, 16, -32, 32, -64, 64, 128)
     assert(
         function_return_negated_bool(true) == false,
         "function_return_negated_bool should return false when input is true")
@@ -161,6 +163,9 @@ func assert_struct_methods() {
     assert(
         s.public_method_returning_primitive() == 24,
         "public_method_returning_primitive should return 24")
+    assert(
+        s.public_method_returning_bool(),
+        "public_method_returning_bool should return true")
     assert(
         s.public_method_returning_string() == "String returned from Rust method",
         "public_method_returning_string should return correct string")
@@ -330,6 +335,11 @@ func assert_enums() {
 
     assert_active(TestStatus.Active)
     assert_inactive(TestStatus.Inactive)
+
+    let statusStruct = StructWithStatus.inactivate()
+    assert(statusStruct.status == TestStatus.Inactive, "StructWithStatus should start inactive")
+    statusStruct.status = TestStatus.Active
+    assert(statusStruct.status == TestStatus.Active, "StructWithStatus status setter should work")
 }
 
 func assert_struct_vector_fields() {

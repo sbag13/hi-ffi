@@ -1,10 +1,13 @@
 #include "assertions.h"
+#include "TestStruct.h"
 #include "simple_function.h"
 #include "function_with_primitive_and_string_arg.h"
 #include "function_with_primitive_args.h"
+#include "function_with_integer_args.h"
 #include "function_with_string_arg.h"
 #include "function_return_primitive.h"
 #include "function_return_string.h"
+#include "function_return_float_32.h"
 #include "function_taking_struct.h"
 #include "function_returning_struct.h"
 #include "combo_function.h"
@@ -398,8 +401,8 @@ void assert_structs()
     assert(test_struct.get_i32_field() == 42);
 
     assert(test_struct.get_f32_field() == 0.0f);
-    test_struct.set_f32_field(3.14f);
-    assert(test_struct.get_f32_field() == 3.14f);
+    test_struct.set_f32_field(4.20f);
+    assert(test_struct.get_f32_field() == 4.20f);
 
     assert(test_struct.get_bool_field() == false);
     test_struct.set_bool_field(true);
@@ -525,6 +528,7 @@ void assert_struct_impl_block()
     assert(test_struct.public_method_returning_bool() == true);
     assert(test_struct.public_method_returning_string() == "String returned from Rust method");
     assert(test_struct.combo_method("str1", "str2", true) == "str1");
+    assert(TestStruct::static_combo_method("first", "second", false) == "second");
     test_struct.public_method_taking_string("Test string from caller");
     TestStruct::static_method_taking_string("static method string");
     assert(TestStruct::static_method_returning_primitive() == 22);
@@ -630,12 +634,14 @@ void assert_functions()
     assert(take_struct_and_return_status_before_they_are_defined(ts1) == TestStatus::Pending);
     simple_function();
     function_with_primitive_args(100, true);
-    function_with_string_arg("Hello, World!");
+    function_with_string_arg("Hello, 世界!");
     function_with_primitive_and_string_arg(42, false, "Complex function!");
     assert(function_return_primitive() == 42);
     assert(function_return_float() == 5.21);
-    assert(function_return_string() == "String returned from Rust");
+    assert(function_return_float_32() == 4.20f);
+    assert(function_return_string() == "String returned from Rust: こんにちは");
     assert(function_return_negated_bool(true) == false);
+    function_with_integer_args(-8, 8, -16, 16, -32, 32, -64, 64, 128);
     auto ts2 = TestStruct2();
     ts2.set_i32_field(55);
     function_taking_struct(ts2);

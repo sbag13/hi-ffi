@@ -128,8 +128,8 @@ def struct_tests():
     assert s.i32_field == 42
 
     assert s.f32_field == 0.0
-    s.f32_field = 3.14
-    assert abs(s.f32_field - 3.14) < 0.0001
+    s.f32_field = 4.20
+    assert abs(s.f32_field - 4.20) < 0.0001
 
     assert s.bool_field == False
     s.bool_field = True
@@ -198,7 +198,7 @@ def functions_tests():
     # check if doesn't crash
     simple_function()
     function_with_primitive_args(100, True)
-    function_with_string_arg("Hello, World!")
+    function_with_string_arg("Hello, 世界!")
     function_with_primitive_and_string_arg(42, False, "Complex function!")
     ts2 = TestStruct2()
     ts2.i32_field = 55
@@ -207,9 +207,11 @@ def functions_tests():
     # assert return values
     assert function_return_primitive() == 42
     assert function_return_float() == 5.21
-    assert function_return_string() == "String returned from Rust"
+    assert abs(function_return_float_32() - 4.20) < 0.000001
+    assert function_return_string() == "String returned from Rust: こんにちは"
     assert function_return_negated_bool(True) == False
     assert function_return_negated_bool(False) == True
+    function_with_integer_args(-8, 8, -16, 16, -32, 32, -64, 64, 128)
     assert combo_function("str1", "str2", True, TestStruct()) == "str1"
     struct2_from_function = function_returning_struct()
     assert struct2_from_function.i32_field == 48
@@ -376,6 +378,13 @@ def result_tests():
         assert source_of_source.source() is None
 
     assert function_with_primitive_result(False) == 123
+    assert function_with_bool_result(False) is True
+    try:
+        function_with_bool_result(True)
+    except Exception as e:
+        assert str(e) == "SimpleError"
+    else:
+        assert False, "function_with_bool_result should raise SimpleError"
     assert function_with_string_result(False) == "No error"
     assert function_with_struct_result(False).i32_field == 256
     assert function_with_enum_result(False) == TestStatus.Pending

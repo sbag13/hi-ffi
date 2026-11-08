@@ -16,25 +16,20 @@ pub fn take_struct_and_return_status_before_they_are_defined(s: TestStruct) -> T
 #[ffi]
 #[derive(Default, Clone, Serialize, Debug, PartialEq)]
 pub struct TestStruct {
-    // generate getter and setter
     #[ffi(setter, getter)]
-    #[serde(skip_serializing)] // check if other attributes are preserved
+    #[serde(skip_serializing)]
     i32_field: i32,
 
-    // generate getter only
     #[ffi(getter, setter)]
     bool_field: bool,
 
-    // generate getter and setter
     pub string_field: String,
 
-    // skip setter
     #[ffi(getter)]
     _no_setter: i32,
 
     pub f32_field: f32,
 
-    // don't generate getter and setter
     #[ffi(skip)]
     _skip_field: i32,
 
@@ -44,13 +39,7 @@ pub struct TestStruct {
 
 #[ffi]
 impl TestStruct {
-    pub fn public_method(&self) {
-        // println!("Rust: Public method called");
-    }
-
-    // private method is skipped
-    #[allow(dead_code)]
-    fn private_method(&self) {}
+    pub fn public_method(&self) {}
 
     pub fn public_method_taking_primitives(&self, i: i32, b: bool) {
         assert_eq!(i, 10);
@@ -73,6 +62,22 @@ impl TestStruct {
     pub fn public_method_taking_struct_hashmap(&self, map: HashMap<String, TestStruct2>) {
         assert_eq!(map.get("method").unwrap().i32_field, 24);
         assert_eq!(map.len(), 1);
+    }
+
+    pub fn public_method_taking_recursive_maps(
+        &self,
+        map_vec: HashMap<String, Vec<i32>>,
+        map_option: HashMap<String, Option<i32>>,
+        map_map: HashMap<String, HashMap<String, i32>>,
+        vec_map: Vec<HashMap<String, i32>>,
+        option_map: Option<HashMap<String, i32>>,
+    ) {
+        assert_eq!(map_vec["values"], vec![1, 2]);
+        assert_eq!(map_option["some"], Some(3));
+        assert_eq!(map_option["none"], None);
+        assert_eq!(map_map["inner"]["value"], 4);
+        assert_eq!(vec_map[0]["value"], 5);
+        assert_eq!(option_map.as_ref().unwrap()["value"], 6);
     }
 
     pub fn public_method_returning_primitive(&self) -> i32 {
@@ -99,46 +104,83 @@ impl TestStruct {
         HashMap::from([("method".to_string(), TestStruct2 { i32_field: 25 })])
     }
 
+    pub fn public_method_returning_enum_hashmap(&self) -> HashMap<TestStatus, TestStatus> {
+        HashMap::from([
+            (TestStatus::Active, TestStatus::Pending),
+            (TestStatus::Inactive, TestStatus::Active),
+        ])
+    }
+
+    pub fn public_method_returning_vec_of_hashmaps(&self) -> Vec<HashMap<String, i32>> {
+        vec![HashMap::from([("value".to_string(), 7)])]
+    }
+
+    pub fn public_method_taking_enum_hashmap(&self, map: HashMap<TestStatus, TestStatus>) {
+        assert_eq!(map[&TestStatus::Active], TestStatus::Active);
+        assert_eq!(map[&TestStatus::Pending], TestStatus::Inactive);
+    }
+
     pub fn combo_method(&self, str1: String, str2: String, b: bool) -> String {
         if b { str1 } else { str2 }
     }
 
-    // static method
     pub fn static_method() {}
 
     pub fn static_method_taking_primitives(i: i32, b: bool) {
         assert_eq!(i, 20);
         assert!(b);
     }
+
     pub fn static_method_taking_string(s: String) {
         assert_eq!(s, "static method string");
     }
+
     pub fn static_method_taking_struct(s: TestStruct2) {
         assert_eq!(s, TestStruct2 { i32_field: 77 });
     }
+
     pub fn static_method_taking_hashmap(map: HashMap<String, i32>) {
         assert_eq!(map.get("static"), Some(&77));
         assert_eq!(map.len(), 1);
     }
+
     pub fn static_method_taking_struct_hashmap(map: HashMap<String, TestStruct2>) {
         assert_eq!(map.get("static").unwrap().i32_field, 77);
         assert_eq!(map.len(), 1);
     }
+
+    pub fn static_method_taking_enum_hashmap(map: HashMap<TestStatus, TestStatus>) {
+        assert_eq!(map[&TestStatus::Active], TestStatus::Inactive);
+        assert_eq!(map[&TestStatus::Pending], TestStatus::Pending);
+    }
+
     pub fn static_method_returning_primitive() -> i32 {
         22
     }
+
     pub fn static_method_returning_string() -> String {
         "String returned from Rust static method".to_string()
     }
+
     pub fn static_method_returning_struct() -> TestStruct2 {
         TestStruct2 { i32_field: 77 }
     }
+
     pub fn static_method_returning_hashmap() -> HashMap<String, i32> {
         HashMap::from([("static".to_string(), 78)])
     }
+
     pub fn static_method_returning_struct_hashmap() -> HashMap<String, TestStruct2> {
         HashMap::from([("static".to_string(), TestStruct2 { i32_field: 78 })])
     }
+
+    pub fn static_method_returning_enum_hashmap() -> HashMap<TestStatus, TestStatus> {
+        HashMap::from([
+            (TestStatus::Inactive, TestStatus::Pending),
+            (TestStatus::Pending, TestStatus::Active),
+        ])
+    }
+
     pub fn static_combo_method(str1: String, str2: String, b: bool) -> String {
         if b { str1 } else { str2 }
     }
@@ -214,20 +256,8 @@ impl TestStruct {
         ]
     }
 
-    pub fn method_with_int_result(&self, error: bool) -> Result<i64, StructError> {
-        if error {
-            Err(StructError(EnumError::VariantTwo(SimpleError)))
-        } else {
-            Ok(16)
-        }
-    }
-
     pub fn static_method_with_bool_result(error: bool) -> Result<bool, SimpleError> {
         if error { Err(SimpleError) } else { Ok(true) }
-    }
-
-    pub fn method_with_string_result(&self) -> Result<String, SimpleError> {
-        Ok("Ok!".to_string())
     }
 
     pub fn static_method_with_struct_result() -> Result<TestStruct, SimpleError> {
@@ -237,30 +267,16 @@ impl TestStruct {
         })
     }
 
+    pub fn method_with_int_result(&self, error: bool) -> Result<i64, StructError> {
+        if error {
+            Err(StructError(EnumError::VariantTwo(SimpleError)))
+        } else {
+            Ok(16)
+        }
+    }
+
     pub fn method_with_enum_result(&self) -> Result<TestStatus, SimpleError> {
         Ok(TestStatus::Pending)
-    }
-
-    pub fn method_with_vec_of_ints_result(&self) -> Result<Vec<i8>, SimpleError> {
-        Ok(vec![1, 2, 7])
-    }
-
-    pub fn static_method_with_vec_of_bools_result() -> Result<Vec<bool>, SimpleError> {
-        Ok(vec![true, false, false])
-    }
-
-    pub fn method_with_vec_of_strings_result(&self) -> Result<Vec<String>, SimpleError> {
-        Ok(vec!["some".to_string(), "string".to_string()])
-    }
-
-    pub fn static_method_with_vec_of_structs_result() -> Result<Vec<TestStruct2>, SimpleError> {
-        let s1 = TestStruct2 { i32_field: 2 };
-        let s2 = TestStruct2 { i32_field: -5 };
-        Ok(vec![s1, s2])
-    }
-
-    pub fn method_with_vec_of_bools_result(&self) -> Result<Vec<bool>, SimpleError> {
-        Ok(vec![false, true, true, true])
     }
 
     pub fn static_method_with_vec_of_enum_result() -> Result<Vec<TestStatus>, SimpleError> {
@@ -298,19 +314,19 @@ impl TestStruct {
         }
     }
 
-    pub fn method_taking_opt_bool(&self, b: Option<bool>, assert_some: bool) {
-        if assert_some {
-            assert_eq!(Some(false), b);
-        } else {
-            assert!(b.is_none());
-        }
-    }
-
     pub fn static_method_taking_opt_enum(e: Option<TestStatus>, assert_some: bool) {
         if assert_some {
             assert_eq!(Some(TestStatus::Active), e);
         } else {
             assert!(e.is_none());
+        }
+    }
+
+    pub fn method_taking_opt_bool(&self, b: Option<bool>, assert_some: bool) {
+        if assert_some {
+            assert_eq!(Some(false), b);
+        } else {
+            assert!(b.is_none());
         }
     }
 
@@ -338,6 +354,14 @@ impl TestStruct {
         }
     }
 
+    pub fn method_returning_opt_struct(&self, some: bool) -> Option<TestStruct2> {
+        if some {
+            Some(TestStruct2 { i32_field: 654 })
+        } else {
+            None
+        }
+    }
+
     pub fn static_method_returning_opt_enum(some: bool) -> Option<TestStatus> {
         if some {
             Some(TestStatus::Inactive)
@@ -346,12 +370,30 @@ impl TestStruct {
         }
     }
 
-    pub fn method_returning_opt_struct(&self, some: bool) -> Option<TestStruct2> {
-        if some {
-            Some(TestStruct2 { i32_field: 654 })
-        } else {
-            None
-        }
+    pub fn method_with_string_result(&self) -> Result<String, SimpleError> {
+        Ok("Ok!".to_string())
+    }
+
+    pub fn method_with_vec_of_ints_result(&self) -> Result<Vec<i8>, SimpleError> {
+        Ok(vec![1, 2, 7])
+    }
+
+    pub fn static_method_with_vec_of_bools_result() -> Result<Vec<bool>, SimpleError> {
+        Ok(vec![true, false, false])
+    }
+
+    pub fn method_with_vec_of_strings_result(&self) -> Result<Vec<String>, SimpleError> {
+        Ok(vec!["some".to_string(), "string".to_string()])
+    }
+
+    pub fn static_method_with_vec_of_structs_result() -> Result<Vec<TestStruct2>, SimpleError> {
+        let s1 = TestStruct2 { i32_field: 2 };
+        let s2 = TestStruct2 { i32_field: -5 };
+        Ok(vec![s1, s2])
+    }
+
+    pub fn method_with_vec_of_bools_result(&self) -> Result<Vec<bool>, SimpleError> {
+        Ok(vec![false, true, true, true])
     }
 
     pub fn method_taking_trait_object(&self, obj: Box<dyn RustTrait>) {
@@ -397,7 +439,6 @@ impl Default for TestStruct3 {
     }
 }
 
-// Test that `impl Default` works when it appears BEFORE the struct definition
 #[ffi]
 impl Default for TestStruct4 {
     fn default() -> Self {
@@ -428,11 +469,6 @@ fn function_with_primitive_args(i: i32, b: bool) {
 }
 
 #[ffi]
-fn function_with_string_arg(s: String) {
-    assert_eq!(s, "Hello, World!");
-}
-
-#[ffi]
 fn function_with_primitive_and_string_arg(i: i32, b: bool, s: String) {
     assert_eq!(i, 42);
     assert!(!b);
@@ -450,13 +486,47 @@ fn function_return_float() -> f64 {
 }
 
 #[ffi]
+fn function_return_float_32() -> f32 {
+    4.20
+}
+
+#[ffi]
 fn function_return_negated_bool(input: bool) -> bool {
     !input
 }
 
 #[ffi]
+fn function_with_string_arg(s: String) {
+    assert_eq!(s, "Hello, 世界!");
+}
+
+#[ffi]
 fn function_return_string() -> String {
-    "String returned from Rust".to_string()
+    "String returned from Rust: こんにちは".to_string()
+}
+
+#[ffi]
+#[allow(clippy::too_many_arguments)]
+fn function_with_integer_args(
+    signed_8: i8,
+    unsigned_8: u8,
+    signed_16: i16,
+    unsigned_16: u16,
+    signed_32: i32,
+    unsigned_32: u32,
+    signed_64: i64,
+    unsigned_64: u64,
+    pointer_sized_unsigned: usize,
+) {
+    assert_eq!(signed_8, -8);
+    assert_eq!(unsigned_8, 8);
+    assert_eq!(signed_16, -16);
+    assert_eq!(unsigned_16, 16);
+    assert_eq!(signed_32, -32);
+    assert_eq!(unsigned_32, 32);
+    assert_eq!(signed_64, -64);
+    assert_eq!(unsigned_64, 64);
+    assert_eq!(pointer_sized_unsigned, 128);
 }
 
 #[ffi]
@@ -548,6 +618,49 @@ pub enum TestStatus {
 }
 
 #[ffi]
+pub fn get_status() -> TestStatus {
+    TestStatus::Active
+}
+
+#[ffi]
+pub fn get_inactive_status() -> TestStatus {
+    TestStatus::Inactive
+}
+
+#[ffi]
+pub fn assert_active(status: TestStatus) {
+    assert_eq!(status, TestStatus::Active);
+}
+
+#[ffi]
+pub fn assert_inactive(status: TestStatus) {
+    assert_eq!(status, TestStatus::Inactive);
+}
+
+#[ffi]
+pub fn function_taking_vec_of_enums(vec: Vec<TestStatus>) {
+    assert_eq!(
+        vec![
+            TestStatus::Active,
+            TestStatus::Inactive,
+            TestStatus::Pending,
+            TestStatus::Active
+        ],
+        vec
+    );
+}
+
+#[ffi]
+pub fn function_returning_vec_of_enums() -> Vec<TestStatus> {
+    vec![
+        TestStatus::Pending,
+        TestStatus::Active,
+        TestStatus::Inactive,
+        TestStatus::Active,
+    ]
+}
+
+#[ffi]
 pub fn function_taking_enum_hashmap(map: HashMap<TestStatus, TestStatus>) {
     assert_eq!(map[&TestStatus::Active], TestStatus::Pending);
     assert_eq!(map[&TestStatus::Inactive], TestStatus::Active);
@@ -559,53 +672,6 @@ pub fn function_returning_enum_hashmap() -> HashMap<TestStatus, TestStatus> {
         (TestStatus::Active, TestStatus::Inactive),
         (TestStatus::Pending, TestStatus::Active),
     ])
-}
-
-#[ffi]
-impl TestStruct {
-    pub fn public_method_taking_recursive_maps(
-        &self,
-        map_vec: HashMap<String, Vec<i32>>,
-        map_option: HashMap<String, Option<i32>>,
-        map_map: HashMap<String, HashMap<String, i32>>,
-        vec_map: Vec<HashMap<String, i32>>,
-        option_map: Option<HashMap<String, i32>>,
-    ) {
-        assert_eq!(map_vec["values"], vec![1, 2]);
-        assert_eq!(map_option["some"], Some(3));
-        assert_eq!(map_option["none"], None);
-        assert_eq!(map_map["inner"]["value"], 4);
-        assert_eq!(vec_map[0]["value"], 5);
-        assert_eq!(option_map.as_ref().unwrap()["value"], 6);
-    }
-
-    pub fn public_method_returning_vec_of_hashmaps(&self) -> Vec<HashMap<String, i32>> {
-        vec![HashMap::from([("value".to_string(), 7)])]
-    }
-
-    pub fn public_method_taking_enum_hashmap(&self, map: HashMap<TestStatus, TestStatus>) {
-        assert_eq!(map[&TestStatus::Active], TestStatus::Active);
-        assert_eq!(map[&TestStatus::Pending], TestStatus::Inactive);
-    }
-
-    pub fn public_method_returning_enum_hashmap(&self) -> HashMap<TestStatus, TestStatus> {
-        HashMap::from([
-            (TestStatus::Active, TestStatus::Pending),
-            (TestStatus::Inactive, TestStatus::Active),
-        ])
-    }
-
-    pub fn static_method_taking_enum_hashmap(map: HashMap<TestStatus, TestStatus>) {
-        assert_eq!(map[&TestStatus::Active], TestStatus::Inactive);
-        assert_eq!(map[&TestStatus::Pending], TestStatus::Pending);
-    }
-
-    pub fn static_method_returning_enum_hashmap() -> HashMap<TestStatus, TestStatus> {
-        HashMap::from([
-            (TestStatus::Inactive, TestStatus::Pending),
-            (TestStatus::Pending, TestStatus::Active),
-        ])
-    }
 }
 
 #[ffi]
@@ -650,49 +716,6 @@ pub fn function_returning_vec_of_hashmaps() -> Vec<HashMap<String, i32>> {
 #[ffi]
 pub fn function_returning_option_of_hashmap() -> Option<HashMap<String, i32>> {
     Some(HashMap::from([("value".to_string(), 15)]))
-}
-
-#[ffi]
-pub fn get_status() -> TestStatus {
-    TestStatus::Active
-}
-
-#[ffi]
-pub fn get_inactive_status() -> TestStatus {
-    TestStatus::Inactive
-}
-
-#[ffi]
-pub fn assert_active(status: TestStatus) {
-    assert_eq!(status, TestStatus::Active);
-}
-
-#[ffi]
-pub fn assert_inactive(status: TestStatus) {
-    assert_eq!(status, TestStatus::Inactive);
-}
-
-#[ffi]
-pub fn function_taking_vec_of_enums(vec: Vec<TestStatus>) {
-    assert_eq!(
-        vec![
-            TestStatus::Active,
-            TestStatus::Inactive,
-            TestStatus::Pending,
-            TestStatus::Active
-        ],
-        vec
-    );
-}
-
-#[ffi]
-pub fn function_returning_vec_of_enums() -> Vec<TestStatus> {
-    vec![
-        TestStatus::Pending,
-        TestStatus::Active,
-        TestStatus::Inactive,
-        TestStatus::Active,
-    ]
 }
 
 #[ffi]
@@ -924,7 +947,7 @@ pub fn function_with_hashmap_result(error: bool) -> Result<HashMap<String, Strin
     }
 }
 
-// Optionals
+// // Optionals
 
 #[ffi]
 pub fn function_taking_some_int(i: Option<i32>, assert_some: bool) {

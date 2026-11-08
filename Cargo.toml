@@ -1,9 +1,9 @@
 [package]
 name = "hi-ffi"
-version = "0.12.0"
+version = "0.13.0"
 edition = "2024"
 license = "MIT"
-description = "Procedural macro that automatically generates FFI for C++, Python, Swift and Java"
+description = "Procedural macro that automatically generates FFI for C++, Python, Swift, Java, and C#"
 repository = "https://github.com/sbag13/hi-ffi"
 keywords = ["ffi", "c++", "python", "java", "bindings"]
 
@@ -16,6 +16,7 @@ cpp = []
 swift = []
 python = []
 java = []
+c_sharp = []
 
 [dependencies]
 syn = { version = "2.0", features = ["full"] }

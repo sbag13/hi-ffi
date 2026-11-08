@@ -31,6 +31,9 @@ mod java;
 #[cfg(feature = "swift")]
 mod swift;
 
+#[cfg(feature = "c_sharp")]
+mod c_sharp;
+
 mod translator;
 
 mod wrapper;
@@ -81,6 +84,8 @@ fn handle_ffi(input: TokenStream) -> TokenStream {
     python::write_python_code(&wrapper);
     #[cfg(feature = "java")]
     java::write_java_code(&wrapper);
+    #[cfg(feature = "c_sharp")]
+    c_sharp::write_c_sharp_code(&wrapper);
 
     // Process items that were waiting for this wrapper (e.g. impl blocks
     // defined BEFORE the struct). This must happen AFTER the current

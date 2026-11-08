@@ -39,3 +39,9 @@ jobs:
         java-version: 21
     - name: Run Java example
       run: cd ./tests/java && bash test_java.sh
+    - name: Set up .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+    - name: Run C# example
+      run: cd ./tests/c_sharp && bash test_c_sharp.sh

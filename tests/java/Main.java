@@ -152,6 +152,16 @@ public class Main {
                 throw new AssertionError("TestStruct static struct method returned the wrong value");
             }
         }
+        if (!TestStruct.staticComboMethod("first", "second", false).equals("second")) {
+            throw new AssertionError("TestStruct static combo method returned the wrong value");
+        }
+        try (var first = TestStruct2.newTs2(300);
+                var second = TestStruct2.newTs2(400);
+                var combined = TestStruct.staticComboStructMethod(first, second)) {
+            if (combined.getI32Field() != 300) {
+                throw new AssertionError("TestStruct static struct combo method returned the wrong value");
+            }
+        }
 
         // TestStruct4 has `impl TestStruct4` appearing BEFORE the struct definition
         // (tests the WAITING_FOR_WRAPPERS mechanism)
@@ -170,6 +180,21 @@ public class Main {
             if (!testStruct.publicMethodReturningVecOfPrimitives().equals(java.util.List.of(10, 20, 30, 40, 50))) {
                 throw new AssertionError("TestStruct primitive vector method returned the wrong value");
             }
+            try (var first = new TestStruct2(); var second = new TestStruct2()) {
+                first.setI32Field(42);
+                second.setI32Field(24);
+                testStruct.publicMethodTakingVecOfStructs(java.util.List.of(first, second));
+            }
+            if (!testStruct.publicMethodReturningVecOfStrings().equals(
+                    java.util.List.of("Method", "Vector", "Return"))) {
+                throw new AssertionError("TestStruct string vector method returned the wrong value");
+            }
+            var returnedMethodStructs = testStruct.publicMethodReturningVecOfStructs();
+            try (var first = returnedMethodStructs.get(0); var second = returnedMethodStructs.get(1)) {
+                if (first.getI32Field() != 300 || second.getI32Field() != 400) {
+                    throw new AssertionError("TestStruct struct vector method returned the wrong value");
+                }
+            }
         }
 
         // static method with/returning vectors
@@ -186,6 +211,12 @@ public class Main {
         }
         if (!TestStruct.staticMethodReturningVecOfStrings().equals(java.util.List.of("Static", "Method", "Vector"))) {
             throw new AssertionError("TestStruct static String vector method returned the wrong value");
+        }
+        var returnedStaticStructs = TestStruct.staticMethodReturningVecOfStructs();
+        try (var first = returnedStaticStructs.get(0); var second = returnedStaticStructs.get(1)) {
+            if (first.getI32Field() != 500 || second.getI32Field() != 600) {
+                throw new AssertionError("TestStruct static struct vector method returned the wrong value");
+            }
         }
 
         // struct with vector fields
@@ -211,8 +242,8 @@ public class Main {
                 second.setI32Field(8);
                 vectors.setVecOfStructs(java.util.List.of(first, second));
             }
-            var returnedStructs = vectors.getVecOfStructs();
-            try (var first = returnedStructs.get(0); var second = returnedStructs.get(1)) {
+            var returnedFieldStructs = vectors.getVecOfStructs();
+            try (var first = returnedFieldStructs.get(0); var second = returnedFieldStructs.get(1)) {
                 if (first.getI32Field() != 7 || second.getI32Field() != 8) {
                     throw new AssertionError("StructWithVecs struct vector field failed");
                 }
@@ -294,7 +325,7 @@ public class Main {
         FfiModule.takeStatusBeforeItIsDefined(TestStatus.Pending);
 
         FfiModule.functionWithPrimitiveArgs(100, true);
-        FfiModule.functionWithStringArg("Hello, World!");
+        FfiModule.functionWithStringArg("Hello, 世界!");
         FfiModule.functionWithPrimitiveAndStringArg(42, false, "Complex function!");
 
         try (var input = new TestStruct2()) {
@@ -320,9 +351,14 @@ public class Main {
         if (!FfiModule.functionReturnNegatedBool(false)) {
             throw new AssertionError("function_return_negated_bool returned the wrong value");
         }
-        if (!FfiModule.functionReturnString().equals("String returned from Rust")) {
+        if (FfiModule.functionReturnFloat32() != 4.20f) {
+            throw new AssertionError("function_return_float_32 returned the wrong value");
+        }
+        if (!FfiModule.functionReturnString().equals("String returned from Rust: こんにちは")) {
             throw new AssertionError("function_return_string returned the wrong value");
         }
+        FfiModule.functionWithIntegerArgs(
+                (byte) -8, (byte) 8, (short) -16, (short) 16, -32, 32, -64L, 64L, 128L);
         if (!FfiModule.comboFunction("first", "second", true, new TestStruct()).equals("first")) {
             throw new AssertionError("combo_function returned the wrong value");
         }

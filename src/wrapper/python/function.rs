@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use crate::prepend_each_line_with_n_tabs;
 use crate::python::PYTHON_LIB_GETTER_NAME;
 use crate::wrapper::python::{
-    FunctionCode, result_cast_and_return, set_extern_fn_resttype, type_hint_from_wrapper_type,
+    FunctionCode, arg_cast, result_cast_and_return, set_extern_fn_resttype,
+    type_hint_from_wrapper_type,
 };
 use crate::wrapper::{FunctionWrapper, WrapperType};
 use quote::ToTokens;
@@ -77,7 +78,13 @@ bridge = {trait_name}.{trait_name}Bridge (
                 }
 
                 WrapperType::IntegerNumber(_) | WrapperType::Bool => {
-                    call_list.push(arg_wrapper.arg_name.to_string())
+                    let arg_name = &arg_wrapper.arg_name;
+                    let arg_name_str = arg_name.to_string();
+                    casts.push(format!(
+                        "casted_{arg_name} = {}",
+                        arg_cast(&arg_wrapper.wrapper_type, &arg_name_str)
+                    ));
+                    call_list.push(format!("casted_{arg_name}"));
                 }
 
                 WrapperType::FloatingPointNumber(name) => {

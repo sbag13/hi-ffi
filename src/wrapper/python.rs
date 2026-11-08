@@ -802,7 +802,10 @@ fn c_type_from_wrapper_type(wrapper: &WrapperType) -> &str {
 
 pub(crate) fn arg_cast(wrapper_type: &WrapperType, arg_name: &str) -> String {
     match wrapper_type {
-        WrapperType::IntegerNumber(_) | WrapperType::Bool => arg_name.to_string(),
+        WrapperType::IntegerNumber(r_int) => {
+            format!("ctypes.{}({arg_name})", rust_int_to_c_types(r_int))
+        }
+        WrapperType::Bool => format!("ctypes.c_bool({arg_name})"),
         WrapperType::FloatingPointNumber(inner) if inner == "f32" => {
             format!("ctypes.c_float({arg_name})")
         }
@@ -877,6 +880,8 @@ fn rust_int_to_c_types(r_int: &str) -> &'static str {
         "u16" => "c_uint16",
         "u32" => "c_uint",
         "u64" => "c_uint64",
+        "isize" => "c_ssize_t",
+        "usize" => "c_size_t",
         _ => panic!("Int type not supported: {r_int}"),
     }
 }

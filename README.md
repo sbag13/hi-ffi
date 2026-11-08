@@ -3,13 +3,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 
-**hi-ffi** is a Rust procedural macro that automatically generates Foreign Function Interface (FFI) bindings for your Rust code, enabling seamless integration with C++, Swift, Python, and Java applications. With minimal annotations, you can expose Rust structs, functions, and methods to other languages without writing boilerplate FFI code.
+**hi-ffi** is a Rust procedural macro that automatically generates Foreign Function Interface (FFI) bindings for your Rust code, enabling seamless integration with C++, Swift, Python, Java, and C# applications. With minimal annotations, you can expose Rust structs, functions, and methods to other languages without writing boilerplate FFI code.
 
 ## Features
 
 - 🚀 **Zero Boilerplate**: Generate FFI bindings with a single `#[ffi]` attribute
 - 🔧 **Flexible Configuration**: Control getter/setter generation with field-level attributes
-- 🌐 **Multi-Language Support**: Generate bindings for C++, Swift, Python, and Java
+- 🌐 **Multi-Language Support**: Generate bindings for C++, Swift, Python, Java, and C#
 - 📦 **Type Safety**: Maintain type safety across language boundaries
 - 🎯 **Selective Export**: Choose which fields and methods to expose
 - 🔒 **Memory Safe**: Automatic memory management for cross-language calls
@@ -20,10 +20,10 @@ Add `hi-ffi` to your `Cargo.toml`:
 
 ```toml,ignore
 [dependencies]
-hi_ffi = { version = "0.12", features = ["cpp", "swift", "python", "java"] }
+hi_ffi = { version = "0.13", features = ["cpp", "swift", "python", "java", "c_sharp"] }
 ```
 
-**Note**: `hi-ffi` is a procedural macro crate. Enable the feature or features for your target languages: `cpp`, `swift`, `python`, and/or `java`.
+**Note**: `hi-ffi` is a procedural macro crate. Enable the feature or features for your target languages: `cpp`, `swift`, `python`, `java`, and/or `c_sharp`.
 
 ## Quick Start
 
@@ -134,7 +134,7 @@ fn greet(names: Vec<String>) -> Result<String, SimpleError> {
 }
 ```
 
-After building your Rust project, FFI bindings are generated in the `generated_code` directory, ready to be integrated into your C++, Swift, Python, or Java projects.
+After building your Rust project, FFI bindings are generated in the `generated_code` directory, ready to be integrated into your C++, Swift, Python, C#, or Java projects.
 
 ## Language-Specific Examples
 
@@ -144,6 +144,7 @@ Complete working examples are available in the `tests` directory:
 - **Swift**: See [tests/swift/README.md](tests/swift/README.md) and [tests/swift/ModuleTest/Sources/ModuleTest/main.swift](tests/swift/ModuleTest/Sources/ModuleTest/main.swift)
 - **Python**: See [tests/python/README.md](tests/python/README.md) and [tests/python/main.py](tests/python/main.py)
 - **Java**: See [tests/java/Main.java](tests/java/Main.java) and [tests/java/test_java.sh](tests/java/test_java.sh)
+- **C#**: See [tests/c_sharp/Program.cs](tests/c_sharp/Program.cs) and [tests/c_sharp/test_c_sharp.sh](tests/c_sharp/test_c_sharp.sh)
 
 These examples demonstrate how to use the generated bindings in real applications.
 
@@ -167,14 +168,14 @@ Generated bindings expose idiomatic native types in the target language. For exa
 - **`lib.rs`** - Main entry point that orchestrates code generation
 - **`translator`** - Parses Rust code into a language-agnostic intermediate representation
 - **`wrapper`** - Generates Rust glue code and target language bindings
-- **Language modules** (`cpp`, `swift`, `python`, `java`) - Generate language-specific code
+- **Language modules** (`cpp`, `swift`, `python`, `java`, `c_sharp`) - Generate language-specific code
 
 The translation process:
 
 1. Parse Rust code marked with `#[ffi]`
 2. Extract type information and method signatures
 3. Generate Rust FFI wrapper functions
-4. Generate target language bindings (C++, Swift, Python, and Java code)
+4. Generate target language bindings (C++, Swift, Python, Java, and C# code)
 
 ## Generated Code Location
 
@@ -186,6 +187,7 @@ generated_code/
 ├── cpp/           # C++ headers and implementations
 ├── swift/         # Swift package structure
 ├── java/          # Java package structure
+├── c_sharp/       # C# package structure
 └── python_ffi/    # python package
 ```
 
